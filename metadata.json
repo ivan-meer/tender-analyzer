@@ -1,0 +1,6 @@
+{
+  "name": "Анализатор Заявок 223-ФЗ",
+  "description": "Интеллектуальный анализатор закупочной документации и проектов договоров по 223-ФЗ с оценкой рисков и автоматической генерацией документов",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
