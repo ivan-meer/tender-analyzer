@@ -72,7 +72,7 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
     </div>
 
     <!-- Executive Summary Box -->
-    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
       <h2 style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; text-transform: uppercase; tracking: 0.05em;">
         1. ОБЩЕЕ ЗАКЛЮЧЕНИЕ ПО ЗАКУПКЕ: ${result.summary.procurementTitle}
       </h2>
@@ -80,6 +80,21 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
         ${result.summary.keyTakeaway}
       </p>
     </div>
+
+    <!-- Delivery & Logistics Box if present -->
+    ${result.deliveryInfo ? `
+      <div style="background-color: #eef2ff; border: 1.5px solid #c7d2fe; border-radius: 12px; padding: 14px; margin-bottom: 20px;">
+        <h2 style="font-size: 12px; font-weight: 800; color: #312e81; margin: 0 0 8px 0; text-transform: uppercase;">
+          🚚 2. СРОКИ, ГРАФИК И АДРЕСА ПОСТАВКИ
+        </h2>
+        <div style="font-size: 10px; color: #1e1b4b; line-height: 1.5;">
+          <div style="margin-bottom: 4px;"><b>Срок поставки:</b> ${result.deliveryInfo.deliveryPeriod}</div>
+          ${result.deliveryInfo.deliveryScheduleNotice ? `<div style="margin-bottom: 4px;"><b>Порядок графика:</b> ${result.deliveryInfo.deliveryScheduleNotice}</div>` : ''}
+          <div style="margin-bottom: 4px;"><b>Адреса и пункты назначения:</b> ${result.deliveryInfo.deliveryAddresses.join('; ')}</div>
+          ${result.deliveryInfo.unloadingAndAccessConditions ? `<div><b>Условия разгрузки:</b> ${result.deliveryInfo.unloadingAndAccessConditions}</div>` : ''}
+        </div>
+      </div>
+    ` : ''}
 
     <!-- Contract Risks Table -->
     <div style="margin-bottom: 24px;">

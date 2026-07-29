@@ -76,6 +76,15 @@ export interface SupplierSearchResult {
   webSearchQueries?: string[];
 }
 
+export interface DeliveryInfo {
+  deliveryPeriod: string; // Сроки и регламент поставки (напр. "В течение 15 рабочих дней с даты заключения Договора, но не позднее 14.05.2024")
+  deliveryScheduleNotice?: string; // Порядок и график поставки (напр. "Поставка осуществляется строго по письменным заявкам Заказчика за 5 рабочих дней")
+  deliveryAddresses: string[]; // Адреса и места поставки (напр. ["141000, Московская обл., г. Мытищи, ул. Промышленная, д. 12, склад № 4"])
+  unloadingAndAccessConditions?: string; // Условия разгрузки и доступа (напр. "Разгрузка силами Поставщика. Оформление пропусков на АТС за 24 часа")
+  consigneeDetails?: string; // Грузополучатель (напр. "ГУП 'Центр материально-технического обеспечения'")
+  riskWarning?: string; // Оценка рисков просрочки поставки
+}
+
 export interface ProductItem {
   id: string;
   name: string; // Наименование товара/работы/услуги
@@ -86,6 +95,8 @@ export interface ProductItem {
   okpd2OrGvin?: string; // Код ОКПД2 / КТРУ
   pp1875Status: 'RUSSIAN_REQUIRED' | 'RESTRICTED' | 'NOT_APPLICABLE' | 'UNKNOWN';
   registryNumberNote?: string; // Описание реестровых номеров / баллов по ПП 1875
+  deliveryAddress?: string; // Конкретный адрес поставки для данной позиции (если отличается)
+  deliveryDeadline?: string; // Конкретный срок поставки для данной позиции
 }
 
 export interface AnalysisResult {
@@ -96,6 +107,7 @@ export interface AnalysisResult {
     keyTakeaway: string;
     is223FZ: boolean;
   };
+  deliveryInfo?: DeliveryInfo; // Извлеченные и акцентированные данные о логистике, сроках и адресах
   contractRisks: ContractRiskItem[];
   submissionRulesCheck: SubmissionRulesCheck;
   postAwardWorkflow: PostAwardWorkflow;

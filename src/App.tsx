@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { GuideModal } from './components/GuideModal';
 import { DocumentUploader } from './components/DocumentUploader';
 import { RiskSummaryCard } from './components/RiskSummaryCard';
+import { DeliveryLogisticsCard } from './components/DeliveryLogisticsCard';
 import { ContractRisksTable } from './components/ContractRisksTable';
 import { ProductListTable } from './components/ProductListTable';
 import { SubmissionChecklist } from './components/SubmissionChecklist';
@@ -208,6 +209,9 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
             {/* Risk Summary Card */}
             <RiskSummaryCard summary={analysisResult.summary} />
+
+            {/* Delivery Terms & Addresses Card (High Accent) */}
+            <DeliveryLogisticsCard deliveryInfo={analysisResult.deliveryInfo} />
 
             {/* Extracted Product Specification Table */}
             <ProductListTable products={analysisResult.productList || []} />

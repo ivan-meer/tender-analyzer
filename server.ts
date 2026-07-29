@@ -71,6 +71,11 @@ app.post("/api/analyze", async (req, res) => {
      - **Габариты и размеры** (например "1200х800х600 мм", "Диаметр 50 мм" или "Не указаны").
      - **Структурированный список параметров (parameters)**: точные физико-технические характеристики из ТЗ (напр. {"name": "Габариты/Размеры", "value": "..."}, {"name": "Материал", "value": "..."}, {"name": "Масса/Вес", "value": "..."}, {"name": "Мощность", "value": "..."}, {"name": "Цвет/Покрытие", "value": "..."}).
      - Код ОКПД2/КТРУ (если есть), статус требования по ПП РФ 1875 ("RUSSIAN_REQUIRED", "RESTRICTED", "NOT_APPLICABLE", "UNKNOWN") и примечания по реестровым номерам/баллам.
+7. **Извлечение Сроков Поставки и Адресов Объектов (deliveryInfo):**
+   - Найди и детально выпиши сроки поставки (deliveryPeriod), например: "В течение 15 рабочих дней с даты заключения Договора, но не позднее 14.05.2024г.".
+   - Извлеки порядок подачи заявок (deliveryScheduleNotice), например: "Поставка по письменным заявкам Заказчика за 5 рабочих дней".
+   - Найди Все точные адреса складов и объектов поставки (deliveryAddresses), включая почтовые индексы, города, улицы, номера строений и складов.
+   - Извлеки условия разгрузки, пропусков и подъема на этаж (unloadingAndAccessConditions) и грузополучателя (consigneeDetails).
 
 Сформируй полнейший, объективный, структурированный юридический и операционный отчет в строго JSON формате.
 Автоматически сгенерируй ГОТОВЫЕ ТЕКСТЫ ДОКУМЕНТОВ и писем (Запрос закрывающих документов, Требование мотивированного отказа, Запрос денег на ЭТП, Запрос в бухгалтерию, Карточка задачи в Юджайл, Шаблон ответа на претензию).`;
@@ -108,6 +113,21 @@ ${tzText || "Не предоставлен"}
                 is223FZ: { type: Type.BOOLEAN },
               },
               required: ["procurementTitle", "overallRiskScore", "riskLevel", "keyTakeaway", "is223FZ"],
+            },
+            deliveryInfo: {
+              type: Type.OBJECT,
+              properties: {
+                deliveryPeriod: { type: Type.STRING },
+                deliveryScheduleNotice: { type: Type.STRING },
+                deliveryAddresses: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
+                unloadingAndAccessConditions: { type: Type.STRING },
+                consigneeDetails: { type: Type.STRING },
+                riskWarning: { type: Type.STRING },
+              },
+              required: ["deliveryPeriod", "deliveryAddresses"],
             },
             contractRisks: {
               type: Type.ARRAY,
