@@ -56,6 +56,9 @@ export interface SuggestedModel {
   description: string;
   gispRegistryStatus?: string;
   url?: string;
+  imageUrl?: string; // Прямая ссылка на изображение товара
+  productUrl?: string; // Прямая ссылка на карточку/страницу товара
+  productFeatures?: string[];
 }
 
 export interface SupplierItem {
@@ -64,6 +67,8 @@ export interface SupplierItem {
   specialization: string;
   contactsOrWebsite: string;
   inGispRegistry?: boolean;
+  websiteUrl?: string; // Прямой веб-сайт компании
+  logoUrl?: string; // Логотип или фото фабрики
 }
 
 export interface SupplierSearchResult {

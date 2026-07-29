@@ -21,6 +21,7 @@ import {
 import { AnalysisInput, ProcedureType } from '../types';
 import { SAMPLE_PROCUREMENTS } from '../data/sampleProcurements';
 import { parseDocumentFile, ParsedDocument, formatFileSize } from '../utils/documentParser';
+import { DocumentViewerModal } from './DocumentViewerModal';
 
 interface DocumentUploaderProps {
   onAnalyze: (input: AnalysisInput) => void;
@@ -37,6 +38,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ onAnalyze, i
   const [pastedText, setPastedText] = useState('');
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [previewingFileId, setPreviewingFileId] = useState<string | null>(null);
+  const [modalDocument, setModalDocument] = useState<ParsedDocument | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -434,15 +436,12 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ onAnalyze, i
 
                         <button
                           type="button"
-                          onClick={() => setPreviewingFileId(previewingFileId === file.id ? null : file.id)}
-                          className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                            previewingFileId === file.id
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                          }`}
-                          title="Посмотреть извлеченный текст"
+                          onClick={() => setModalDocument(file)}
+                          className="px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 shadow-2xs"
+                          title="Открыть полноэкранный ридер с поиском и таблицами"
                         >
-                          {previewingFileId === file.id ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Просмотр</span>
                         </button>
 
                         <button
@@ -456,12 +455,22 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ onAnalyze, i
                       </div>
                     </div>
 
-                    {/* Extracted Text Preview Drawer */}
+                    {/* Quick Extracted Text Preview Drawer */}
                     {previewingFileId === file.id && (
-                      <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs space-y-1.5 shadow-inner">
-                        <span className="font-bold text-slate-700 block text-[11px] uppercase tracking-wider">
-                          Предпросмотр извлеченного текста ({file.fileName}):
-                        </span>
+                      <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs space-y-2 shadow-inner">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-700 block text-[11px] uppercase tracking-wider">
+                            Предпросмотр извлеченного текста ({file.fileName}):
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setModalDocument(file)}
+                            className="text-[11px] font-bold text-indigo-600 hover:underline flex items-center gap-1"
+                          >
+                            <span>Открыть в полноэкранном ридере</span>
+                            <Eye className="w-3 h-3" />
+                          </button>
+                        </div>
                         <pre className="font-mono text-slate-800 text-[11px] whitespace-pre-wrap max-h-48 overflow-y-auto p-2 bg-slate-50 rounded-lg border border-slate-200">
                           {file.content || '[Пустой или распознанный формат]'}
                         </pre>
@@ -540,6 +549,14 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ onAnalyze, i
           </button>
         </div>
       </form>
+
+      {/* Interactive Document Viewer Modal */}
+      <DocumentViewerModal
+        document={modalDocument}
+        isOpen={!!modalDocument}
+        onClose={() => setModalDocument(null)}
+        onCategoryChange={handleCategoryChange}
+      />
     </div>
   );
 };

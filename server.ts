@@ -323,6 +323,9 @@ function generateFallbackSupplierResult(
         description: "ЛДСП 25 мм, противоударная кромка ПВХ 2 мм, цвет Орех темный, металлический фолдинг-каркас с порошковой покраской.",
         gispRegistryStatus: "Реестровая запись Минпромторга № 104829/2025",
         url: "umk-mebel.ru/catalog/office-tables",
+        productUrl: "https://umk-mebel.ru/catalog/office-tables",
+        imageUrl: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=600&q=80",
+        productFeatures: ["ЛДСП 25 мм", "Металлокаркас", "Противоударная кромка", "Гарантия 36 мес."]
       },
       {
         modelName: 'Кресло эргономичное "Оператор-ТопГан 2D"',
@@ -333,6 +336,9 @@ function generateFallbackSupplierResult(
         description: "Дышащая акриловая сетка высокой прочности, износостойкость сиденья >30 000 циклов, 2D подлокотники, механический фиксатор качания.",
         gispRegistryStatus: "Включено в реестр ГИСП (Минпромторг РФ)",
         url: "ofis-mebel-zavod.ru/chairs/topgun-2d",
+        productUrl: "https://ofis-mebel-zavod.ru/chairs/topgun-2d",
+        imageUrl: "https://images.unsplash.com/photo-1580481072645-022f9a6d8310?auto=format&fit=crop&w=600&q=80",
+        productFeatures: ["Акриловая сетка", "2D подлокотники", "30 000 циклов", "Механизм качания"]
       },
     ];
   } else if (isTech) {
@@ -345,6 +351,7 @@ function generateFallbackSupplierResult(
         specialization: "Крупнейший российский разработчик и производитель компьютерной техники",
         contactsOrWebsite: "aq.ru | +7 (495) 729-51-50",
         inGispRegistry: true,
+        websiteUrl: "https://aq.ru",
       },
       {
         companyName: 'ООО "ГК Бештау" (Beshtau)',
@@ -352,6 +359,7 @@ function generateFallbackSupplierResult(
         specialization: "Завод по производству мониторов, ПК и материнских плат в РФ",
         contactsOrWebsite: "beshtau.ru | sales@beshtau.ru",
         inGispRegistry: true,
+        websiteUrl: "https://beshtau.ru",
       },
       {
         companyName: 'ООО "YADRO" (ГК ИКС Холдинг)',
@@ -359,6 +367,7 @@ function generateFallbackSupplierResult(
         specialization: "Производитель серверов, систем хранения данных и вычислительной техники",
         contactsOrWebsite: "yadro.com | gos@yadro.com",
         inGispRegistry: true,
+        websiteUrl: "https://yadro.com",
       },
     ];
     suggestedModels = [
@@ -371,6 +380,9 @@ function generateFallbackSupplierResult(
         description: "Включен в реестр Минпромторга РЭП. 8-ядерный процессор, 16ГБ DDR4, SSD 512ГБ NVMe, БП 500W Bronze. Гарантия 36 месяцев.",
         gispRegistryStatus: "Реестр РЭП № 10398/1/2024 (ПП 1875)",
         url: "aq.ru/products/desktops/pro-p30",
+        productUrl: "https://aq.ru/products/desktops/pro-p30",
+        imageUrl: "https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=600&q=80",
+        productFeatures: ["Реестр РЭП №10398", "8 ядер", "NVMe 512GB", "БП 500W"]
       },
       {
         modelName: 'Монитор 27" 4K "Бештау M2701"',
@@ -381,6 +393,9 @@ function generateFallbackSupplierResult(
         description: "Российский 4K IPS монитор с регулировкой по высоте и поворотом Pivot. HDMI 2.0, DisplayPort 1.4, USB-hub.",
         gispRegistryStatus: "Реестр Минпромторга (ПП РФ 1875)",
         url: "beshtau.ru/monitors/m2701",
+        productUrl: "https://beshtau.ru/monitors/m2701",
+        imageUrl: "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=600&q=80",
+        productFeatures: ["4K IPS матрица", "Pivot стойка", "HDMI 2.0 / DP", "Российское производство"]
       },
     ];
   } else {
@@ -457,7 +472,7 @@ app.post("/api/search-suppliers", async (req, res) => {
 ИНСТРУКЦИИ ПО ПОИСКУ:
 1. Выполни поиск по актуальным каталогам, заводами базам поставщиков РФ.
 2. Найди 3-5 реальных завода-изготовителя или крупного дистрибьютора в РФ.
-3. Укажи конкретные марки, серии или модели товаров с примерным ценовым диапазоном в рублях (₽) и оценкой совпадения габаритов/размеров из ТЗ.
+3. Укажи конкретные марки, серии или модели товаров с примерным ценовым диапазоном в рублях (₽), оценкой совпадения габаритов из ТЗ, прямыми ссылками на страницу товара (productUrl) и визуальным изображением товара (imageUrl).
 4. Проверь требования Национального режима по ПП РФ № 1875 (требуется ли Реестровый номер Минпромторга РФ).
 
 Сформируй ответ строго в JSON формате по следующей структуре:
@@ -472,7 +487,10 @@ app.post("/api/search-suppliers", async (req, res) => {
       "estimatedPrice": "Примерная цена (напр. 18 500 - 24 000 руб.)",
       "description": "Описание характеристик и почему подходит под ТЗ",
       "gispRegistryStatus": "Статус в реестре ГИСП Минпромторга (напр. Включено в реестр / Не требуется)",
-      "url": "Сайт или домен производителя/поставщика"
+      "url": "Сайт или домен производителя/поставщика",
+      "productUrl": "Прямая валидная URL-ссылка на страницу данного товара (напр. https://domain.ru/catalog/item-id)",
+      "imageUrl": "Ссылка на качественное изображение/фото данного товара (напр. https://images.unsplash.com/... или фото с каталога)",
+      "productFeatures": ["Ключевое преимущество 1", "Ключевое преимущество 2"]
     }
   ],
   "suppliers": [
@@ -481,6 +499,7 @@ app.post("/api/search-suppliers", async (req, res) => {
       "region": "Город / Регион РФ",
       "specialization": "Специализация (Производитель / Дистрибьютор / Склад)",
       "contactsOrWebsite": "Сайт / телефон / контакты",
+      "websiteUrl": "Прямая URL-ссылка на веб-сайт поставщика (напр. https://company.ru)",
       "inGispRegistry": true
     }
   ],
