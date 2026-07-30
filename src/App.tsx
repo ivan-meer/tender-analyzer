@@ -14,7 +14,22 @@ import { TemplatesSection } from './components/TemplatesSection';
 import { AnalysisInput, AnalysisResult } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
 import { getPresetAnalysisResult } from './data/presetResults';
-import { Download, AlertCircle, FileText, CheckCircle2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
+import { 
+  Download, 
+  AlertCircle, 
+  FileText, 
+  CheckCircle2, 
+  RefreshCw, 
+  ShieldCheck, 
+  Sparkles,
+  Layers,
+  BarChart3,
+  Package,
+  ShieldAlert,
+  Truck,
+  FileCheck,
+  ChevronRight
+} from 'lucide-react';
 
 export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -22,6 +37,8 @@ export default function App() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'overview' | 'spec' | 'risks' | 'workflow' | 'templates'>('all');
+
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('theme') === 'dark' || 
       (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -61,6 +78,7 @@ export default function App() {
 
       const data: AnalysisResult = await response.json();
       setAnalysisResult(data);
+      setActiveTab('all');
 
       // Smooth scroll to analysis results
       setTimeout(() => {
@@ -81,6 +99,7 @@ export default function App() {
     setTimeout(() => {
       const data = getPresetAnalysisResult(presetId || 'sample-furniture-223fz');
       setAnalysisResult(data);
+      setActiveTab('all');
       setIsAnalyzing(false);
       setTimeout(() => {
         const el = document.getElementById('analysis-results-section');
@@ -151,8 +170,15 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
     URL.revokeObjectURL(url);
   };
 
+  // Quick Metrics
+  const productsCount = analysisResult?.productList?.length || 0;
+  const risksCount = analysisResult?.contractRisks?.length || 0;
+  const criticalRisksCount = analysisResult?.contractRisks?.filter(r => r.severity === 'CRITICAL' || r.severity === 'HIGH').length || 0;
+  const templatesCount = analysisResult?.generatedTemplates?.length || 0;
+
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white transition-colors duration-200">
+      {/* Top Header */}
       <Header
         onOpenGuide={() => setIsGuideOpen(true)}
         isDarkMode={isDarkMode}
@@ -160,23 +186,10 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         isAnalyzing={isAnalyzing}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Intro Section */}
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            Интеллектуальная система юридического и операционного аудита
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Единое окно загрузки и анализа документации
-          </h2>
-          <p className="text-slate-600 dark:text-slate-300 text-sm max-w-3xl font-medium">
-            Загрузите файлы в единое окно (Excel-сметы, PDF, Word, тексты). ИИ-ассистент извлечет спецификацию продукции, проверит кабальные штрафы по 223-ФЗ, правила подачи файлов и сгенерирует отчет в PDF.
-          </p>
-        </div>
-
-        {/* User Flow Steps Map */}
-        <UserFlowSteps />
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 sm:space-y-8 flex-1 w-full">
+        {/* Step-by-Step User Flow Banner */}
+        <UserFlowSteps currentStep={analysisResult ? 4 : 1} />
 
         {/* Document Uploader Form */}
         <DocumentUploader
@@ -198,7 +211,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
         {/* Analysis Loading Indicator */}
         {isAnalyzing && (
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center space-y-4 shadow-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs">
             <div className="w-12 h-12 rounded-full border-4 border-indigo-100 dark:border-indigo-950 border-t-indigo-600 dark:border-t-indigo-400 animate-spin mx-auto"></div>
             <div className="space-y-1">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -213,27 +226,28 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
         {/* Analysis Results Display */}
         {analysisResult && !isAnalyzing && (
-          <div id="analysis-results-section" className="space-y-8 animate-fade-in pt-2">
-            {/* Top Toolbar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs">
+          <div id="analysis-results-section" className="space-y-6 animate-fade-in pt-2">
+            
+            {/* Top Toolbar with Export Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-3xl shadow-xs">
               <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>Анализ успешно завершен! Сформирован комплексный отчет.</span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   id="export-pdf-report-btn"
                   onClick={handleExportPdf}
                   disabled={isExportingPdf}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg cursor-pointer active:scale-95 disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg cursor-pointer active:scale-95 disabled:opacity-50"
                 >
                   {isExportingPdf ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
                   ) : (
                     <Download className="w-4 h-4" />
                   )}
-                  <span>Сформировать и скачать PDF отчет</span>
+                  <span>Скачать PDF отчет</span>
                 </button>
 
                 <button
@@ -248,32 +262,171 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
               </div>
             </div>
 
-            {/* Risk Summary Card */}
-            <RiskSummaryCard summary={analysisResult.summary} />
+            {/* Quick Metrics & Dynamic Screen Switcher Bar */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3 shadow-xs space-y-3">
+              {/* Quick Summary Pill Badges */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-1 pt-1">
+                <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-2.5 rounded-2xl flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-xl">
+                    <BarChart3 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none">Индекс риска</span>
+                    <span className="text-sm font-black font-mono text-slate-900 dark:text-white mt-0.5 block">{analysisResult.summary.overallRiskScore} / 100</span>
+                  </div>
+                </div>
 
-            {/* Interactive Recharts Risk Map Card (Red/Yellow/Green categories & severity) */}
-            <RiskMapCard 
-              summary={analysisResult.summary} 
-              contractRisks={analysisResult.contractRisks} 
-            />
+                <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-2.5 rounded-2xl flex items-center gap-2.5">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded-xl">
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none">Позиции ТЗ</span>
+                    <span className="text-sm font-black font-mono text-slate-900 dark:text-white mt-0.5 block">{productsCount} товаров</span>
+                  </div>
+                </div>
 
-            {/* Delivery Terms & Addresses Card (High Accent) */}
-            <DeliveryLogisticsCard deliveryInfo={analysisResult.deliveryInfo} />
+                <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-2.5 rounded-2xl flex items-center gap-2.5">
+                  <div className="p-2 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-xl">
+                    <ShieldAlert className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none">Критичные риски</span>
+                    <span className="text-sm font-black font-mono text-rose-700 dark:text-rose-400 mt-0.5 block">{criticalRisksCount} из {risksCount}</span>
+                  </div>
+                </div>
 
-            {/* Extracted Product Specification Table */}
-            <ProductListTable products={analysisResult.productList || []} />
+                <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-2.5 rounded-2xl flex items-center gap-2.5">
+                  <div className="p-2 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-xl">
+                    <FileCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none">Готовые документы</span>
+                    <span className="text-sm font-black font-mono text-slate-900 dark:text-white mt-0.5 block">{templatesCount} шаблонов</span>
+                  </div>
+                </div>
+              </div>
 
-            {/* Contract Risks Table */}
-            <ContractRisksTable risks={analysisResult.contractRisks} />
+              {/* Dynamic Navigation Screens Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none border-t border-slate-100 dark:border-slate-800/80 pt-2 px-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('all')}
+                  className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    activeTab === 'all'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Все разделы</span>
+                </button>
 
-            {/* Bid Submission Rules Checklist */}
-            <SubmissionChecklist check={analysisResult.submissionRulesCheck} />
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('overview')}
+                  className={`px-3 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    activeTab === 'overview'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>Аналитика & Риски</span>
+                </button>
 
-            {/* Post Award Execution & Primary Docs Workflow */}
-            <PostAwardWorkflow workflow={analysisResult.postAwardWorkflow} />
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('spec')}
+                  className={`px-3 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    activeTab === 'spec'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  <span>Спецификация ({productsCount})</span>
+                </button>
 
-            {/* Templates & Letters Section */}
-            <TemplatesSection templates={analysisResult.generatedTemplates} />
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('risks')}
+                  className={`px-3 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    activeTab === 'risks'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Реестр рисков & Чек-лист</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('workflow')}
+                  className={`px-3 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    activeTab === 'workflow'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>Логистика & Исполнение</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('templates')}
+                  className={`px-3 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    activeTab === 'templates'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Шаблоны писем ({templatesCount})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* SCREEN 1: Overview & Risk Analysis */}
+            {(activeTab === 'all' || activeTab === 'overview') && (
+              <div className="space-y-6">
+                <RiskSummaryCard summary={analysisResult.summary} />
+                <RiskMapCard 
+                  summary={analysisResult.summary} 
+                  contractRisks={analysisResult.contractRisks} 
+                />
+              </div>
+            )}
+
+            {/* SCREEN 2: Delivery & Logistics */}
+            {(activeTab === 'all' || activeTab === 'overview' || activeTab === 'workflow') && (
+              <DeliveryLogisticsCard deliveryInfo={analysisResult.deliveryInfo} />
+            )}
+
+            {/* SCREEN 3: Product Specification Table */}
+            {(activeTab === 'all' || activeTab === 'spec') && (
+              <ProductListTable products={analysisResult.productList || []} />
+            )}
+
+            {/* SCREEN 4: Contract Risks & Submission Checklist */}
+            {(activeTab === 'all' || activeTab === 'risks') && (
+              <div className="space-y-6">
+                <ContractRisksTable risks={analysisResult.contractRisks} />
+                <SubmissionChecklist check={analysisResult.submissionRulesCheck} />
+              </div>
+            )}
+
+            {/* SCREEN 5: Post Award Execution Workflow */}
+            {(activeTab === 'all' || activeTab === 'workflow') && (
+              <PostAwardWorkflow workflow={analysisResult.postAwardWorkflow} />
+            )}
+
+            {/* SCREEN 6: Generated Templates & Letters */}
+            {(activeTab === 'all' || activeTab === 'templates') && (
+              <TemplatesSection templates={analysisResult.generatedTemplates} />
+            )}
           </div>
         )}
       </main>
@@ -285,7 +438,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
       />
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6 mt-12">
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6 mt-12 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 dark:text-slate-400 space-y-1 font-medium">
           <p>Интерфейс анализатора заявки по регламенту 223-ФЗ | ИИ-ассистент тендерного отдела</p>
           <p className="text-[11px] text-slate-400 dark:text-slate-500">Все расчёты и выводы формируются с учётом неисполняемого списания штрафов по 223-ФЗ</p>
@@ -294,4 +447,3 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
     </div>
   );
 }
-
