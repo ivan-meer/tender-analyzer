@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email"]
+    },
+    "Analysis": {
+      "title": "Analysis",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "title": { "type": "string" },
+        "procurementNumber": { "type": "string" },
+        "riskScore": { "type": "number" },
+        "riskLevel": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "analysisResult": { "type": "object" },
+        "isFavorite": { "type": "boolean" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "riskScore", "createdAt"]
+    }
+  }
+}

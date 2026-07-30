@@ -11,6 +11,12 @@ import { ProductListTable } from './components/ProductListTable';
 import { SubmissionChecklist } from './components/SubmissionChecklist';
 import { PostAwardWorkflow } from './components/PostAwardWorkflow';
 import { TemplatesSection } from './components/TemplatesSection';
+import { TenderChatModal } from './components/TenderChatModal';
+import { LegalSearchModal } from './components/LegalSearchModal';
+import { DeepAuditModal } from './components/DeepAuditModal';
+import { ScanAnalyzerModal } from './components/ScanAnalyzerModal';
+import { AuthAndHistoryDrawer } from './components/AuthAndHistoryDrawer';
+import { auth, saveAnalysisToDb } from './lib/firebase';
 import { AnalysisInput, AnalysisResult } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
 import { getPresetAnalysisResult } from './data/presetResults';
@@ -38,6 +44,13 @@ export default function App() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'overview' | 'spec' | 'risks' | 'workflow' | 'templates'>('all');
+
+  // Interactive AI & Firebase Modals State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isDeepAuditOpen, setIsDeepAuditOpen] = useState(false);
+  const [isScanOpen, setIsScanOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('theme') === 'dark' || 
@@ -79,6 +92,20 @@ export default function App() {
       const data: AnalysisResult = await response.json();
       setAnalysisResult(data);
       setActiveTab('all');
+
+      // Auto-save analysis result to Firestore database
+      if (auth.currentUser) {
+        try {
+          await saveAnalysisToDb(
+            auth.currentUser.uid,
+            auth.currentUser.email || 'Пользователь',
+            data,
+            data.summary?.procurementTitle || 'Анализ закупки 223-ФЗ'
+          );
+        } catch (dbErr) {
+          console.warn('Auto-save notice:', dbErr);
+        }
+      }
 
       // Smooth scroll to analysis results
       setTimeout(() => {
@@ -184,6 +211,10 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
         isAnalyzing={isAnalyzing}
+        onOpenChat={() => setIsChatOpen(true)}
+        onOpenSearch={() => setIsSearchOpen(true)}
+        onOpenDeepAudit={() => setIsDeepAuditOpen(true)}
+        onOpenHistory={() => setIsHistoryOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -196,6 +227,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
           onAnalyze={handleAnalyze}
           onLoadPresetResult={handleLoadPresetResult}
           isAnalyzing={isAnalyzing}
+          onOpenScanModal={() => setIsScanOpen(true)}
         />
 
         {/* Error Alert */}
@@ -435,6 +467,59 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
       <GuideModal
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
+      />
+
+      {/* AI Tender Chatbot Modal */}
+      <TenderChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        activeAnalysisContext={
+          analysisResult
+            ? `Закупка: ${analysisResult.summary.procurementTitle}. Индекс риска: ${analysisResult.summary.overallRiskScore}/100. Резюме: ${analysisResult.summary.keyTakeaway}`
+            : undefined
+        }
+      />
+
+      {/* Legal Search Grounding Modal */}
+      <LegalSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
+
+      {/* High Thinking Deep Legal Audit Modal */}
+      <DeepAuditModal
+        isOpen={isDeepAuditOpen}
+        onClose={() => setIsDeepAuditOpen(false)}
+        procurementContext={analysisResult?.summary.procurementTitle}
+      />
+
+      {/* Multimodal Scan / Photo OCR Modal */}
+      <ScanAnalyzerModal
+        isOpen={isScanOpen}
+        onClose={() => setIsScanOpen(false)}
+        onExtractedTextReady={(extractedText) => {
+          handleAnalyze({
+            procedureType: '223_FZ_QUOTATION',
+            contractText: extractedText,
+            documentationText: '',
+            tzText: '',
+          });
+        }}
+      />
+
+      {/* Firestore DB & Auth Drawer */}
+      <AuthAndHistoryDrawer
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        currentAnalysisResult={analysisResult}
+        onSelectAnalysis={(savedResult) => {
+          setAnalysisResult(savedResult);
+          setActiveTab('all');
+          setTimeout(() => {
+            const el = document.getElementById('analysis-results-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }}
       />
 
       {/* Footer */}

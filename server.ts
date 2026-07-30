@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -537,6 +537,170 @@ app.post("/api/search-suppliers", async (req, res) => {
     console.warn("Gemini API call failed or rate limited in /api/search-suppliers, returning intelligent fallback:", error?.message);
     const fallback = generateFallbackSupplierResult(productName, dimensions, specification, parameters, okpd2OrGvin, pp1875Status);
     res.json(fallback);
+  }
+});
+
+// 1. Multi-turn AI Tender Chatbot Endpoint
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { messages, context } = req.body;
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      res.status(400).json({ error: "Массив сообщений не передан" });
+      return;
+    }
+
+    const ai = getGeminiClient();
+
+    const systemInstruction = `Ты — ведущий ИИ-юрист и эксперт тендерного отдела по закупкам 223-ФЗ и 44-ФЗ в РФ.
+Твоя цель — давать точные, сжатые, юридически выверенные рекомендации по участию в закупках, рискам договора, штрафам 3%, закупкам у 3-х лиц, постановлению ПП РФ № 1875, аккредитации на ЭТП и формированию заявок.
+Отвечай профессионально, четко, с пунктами, ссылками на законы РФ и судебную/ФАС практику.
+
+${context ? `ТЕКУЩИЙ КОНТЕКСТ АНАЛИЗИРУЕМОЙ ЗАКУПКИ:\n${context}` : ''}`;
+
+    // Convert message history for Gemini SDK
+    const formattedContents = messages.map((m: any) => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.text || m.content || '' }],
+    }));
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: formattedContents,
+      config: {
+        systemInstruction,
+        temperature: 0.3,
+      },
+    });
+
+    res.json({ reply: response.text || "Извините, не удалось сформировать ответ." });
+  } catch (error: any) {
+    console.error("Chat API error:", error);
+    res.status(500).json({ error: "Ошибка ИИ-чата: " + (error?.message || "Внутренняя ошибка") });
+  }
+});
+
+// 2. High Thinking Mode Deep Legal Audit Endpoint
+app.post("/api/deep-audit", async (req, res) => {
+  try {
+    const { clauseText, procurementContext } = req.body;
+    if (!clauseText) {
+      res.status(400).json({ error: "Не передан текст пункта договора для углубленного анализа" });
+      return;
+    }
+
+    const ai = getGeminiClient();
+
+    const prompt = `Проведи САМЫЙ ГЛУБОКИЙ, МНОГОУРОВНЕВЫЙ ЮРИДИЧЕСКИЙ АУДИТ спорного пункта договора/документации закупки 223-ФЗ.
+
+ТЕКСТ ПУНКТА/УСЛОВИЯ:
+«${clauseText}»
+
+${procurementContext ? `КОНТЕКСТ ЗАКУПКИ: ${procurementContext}` : ''}
+
+Включи режим максимального логического мышления и проанализируй:
+1. Скрытые подводные камни, фин. риски и неопределенности.
+2. Практику ФАС РФ и Арбитражных судов по аналогичным формулировкам.
+3. Как Заказчик может использовать это условие против Поставщика.
+4. Пошаговый алгоритм защиты поставщика и формулировку протокола разногласий / официального запроса разъяснений.
+
+Сформируй подробный структурированный ответ с визуальным разделением.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-pro-preview",
+      contents: prompt,
+      config: {
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.HIGH,
+        },
+      },
+    });
+
+    res.json({ auditResult: response.text || "Анализ не дал результатов." });
+  } catch (error: any) {
+    console.error("Deep Audit API error:", error);
+    // Fallback using standard model if high-thinking model is temporary busy
+    try {
+      const ai = getGeminiClient();
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `Проведи глубокий юридический аудит пункта договора по 223-ФЗ:\n«${req.body.clauseText}»`,
+      });
+      res.json({ auditResult: response.text });
+    } catch (e: any) {
+      res.status(500).json({ error: "Ошибка глубокого анализа: " + error?.message });
+    }
+  }
+});
+
+// 3. Image & Document Scan OCR Understanding Endpoint
+app.post("/api/analyze-image", async (req, res) => {
+  try {
+    const { imageBase64, mimeType, prompt } = req.body;
+    if (!imageBase64) {
+      res.status(400).json({ error: "Изображение или скан не переданы" });
+      return;
+    }
+
+    const ai = getGeminiClient();
+
+    const userPrompt = prompt || "Тщательно проанализируй этот скан/фотографию документа закупки. Распознай весь текст, технические характеристики, таблицы, печати, подписи и выдели все риски для поставщика.";
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-pro-preview",
+      contents: [
+        {
+          inlineData: {
+            data: imageBase64.replace(/^data:image\/\w+;base64,/, ""),
+            mimeType: mimeType || "image/png",
+          },
+        },
+        { text: userPrompt },
+      ],
+    });
+
+    res.json({ analysisText: response.text || "Текст не удалось распознать." });
+  } catch (error: any) {
+    console.error("Analyze image API error:", error);
+    res.status(500).json({ error: "Ошибка анализа скана: " + (error?.message || "Не удалось обработать изображение") });
+  }
+});
+
+// 4. Search Grounding Endpoint for 223-FZ Regulations & Precedents
+app.post("/api/search-grounding", async (req, res) => {
+  try {
+    const { query: searchQuery } = req.body;
+    if (!searchQuery) {
+      res.status(400).json({ error: "Поисковый запрос не указан" });
+      return;
+    }
+
+    const ai = getGeminiClient();
+
+    const prompt = `Используй поиск в интернете и официальные правовые реестры РФ (Консультант+, Гарант, ЕИС Закупки, ГИСП Минпромторг, ФАС РФ).
+Найди самую свежую, актуальную информацию и нормативные акты по запросу:
+"${searchQuery}"
+
+Дай четкий, юридически подкрепленный ответ со ссылками на источники.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+      },
+    });
+
+    const candidate = response.candidates?.[0];
+    const groundingMetadata = candidate?.groundingMetadata;
+
+    res.json({
+      answer: response.text || "Результаты поиска не найдены.",
+      sources: groundingMetadata?.groundingChunks || [],
+      queries: groundingMetadata?.webSearchQueries || [],
+    });
+  } catch (error: any) {
+    console.error("Search Grounding API error:", error);
+    res.status(500).json({ error: "Ошибка поиска: " + (error?.message || "Внутренняя ошибка") });
   }
 });
 

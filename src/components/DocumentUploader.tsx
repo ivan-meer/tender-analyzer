@@ -22,17 +22,20 @@ import { AnalysisInput, ProcedureType } from '../types';
 import { SAMPLE_PROCUREMENTS } from '../data/sampleProcurements';
 import { parseDocumentFile, ParsedDocument, formatFileSize } from '../utils/documentParser';
 import { DocumentViewerModal } from './DocumentViewerModal';
+import { Camera } from 'lucide-react';
 
 interface DocumentUploaderProps {
   onAnalyze: (input: AnalysisInput) => void;
   onLoadPresetResult?: (presetId?: string) => void;
   isAnalyzing: boolean;
+  onOpenScanModal?: () => void;
 }
 
 export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ 
   onAnalyze, 
   onLoadPresetResult, 
-  isAnalyzing 
+  isAnalyzing,
+  onOpenScanModal,
 }) => {
   const [procedureType, setProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
   const [parsedFiles, setParsedFiles] = useState<ParsedDocument[]>([]);
@@ -335,16 +338,30 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               </p>
             </div>
 
-            {hasContent && (
-              <button
-                type="button"
-                onClick={handleClearAll}
-                className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-bold flex items-center gap-1 transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Очистить всё
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {onOpenScanModal && (
+                <button
+                  type="button"
+                  onClick={onOpenScanModal}
+                  className="text-xs text-indigo-700 dark:text-indigo-300 hover:text-indigo-800 font-bold flex items-center gap-1.5 transition-colors bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                  title="Распознать скан или фото документа (Gemini Vision)"
+                >
+                  <Camera className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Скан / Фото (OCR)</span>
+                </button>
+              )}
+
+              {hasContent && (
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-bold flex items-center gap-1 transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Очистить всё
+                </button>
+              )}
+            </div>
           </div>
 
           {/* DRAG AND DROP ZONE */}
