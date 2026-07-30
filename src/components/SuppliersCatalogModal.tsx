@@ -24,39 +24,15 @@ import {
   Globe,
   Check,
   AlertCircle,
-  Cpu
+  Cpu,
+  Info,
+  Copy,
+  FileText
 } from 'lucide-react';
 import { VERIFIED_SUPPLIERS } from '../data/verifiedSuppliers';
 import { ProductItem } from '../types';
-
-interface NeonCatalogItem {
-  id: number;
-  category: string;
-  modelName: string;
-  manufacturer: string;
-  country: string;
-  dimensions: string;
-  estimatedPrice: number;
-  priceFormatted: string;
-  description: string;
-  gispRegistryStatus: string;
-  productUrl: string;
-  imageUrl: string;
-  productFeatures: string[];
-  supplierName: string;
-  supplierContacts?: string;
-  supplierWebsite?: string;
-  inGispRegistry?: boolean;
-}
-
-interface NeonStatus {
-  status: string;
-  database: string;
-  host: string;
-  suppliersCount: number;
-  itemsCount: number;
-  currentTime?: string;
-}
+import { NeonService, NeonCatalogItem, NeonStatus } from '../lib/neonService';
+import { NeonSchemaModal } from './NeonSchemaModal';
 
 interface SuppliersCatalogModalProps {
   isOpen: boolean;
@@ -75,6 +51,15 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [onlyDomestic, setOnlyDomestic] = useState(false);
   const [activeTab, setActiveTab] = useState<'neon' | 'catalog' | 'matching'>('neon');
+
+  // Price Range Filters
+  const [minPrice, setMinPrice] = useState<string>('');
+  const [maxPrice, setMaxPrice] = useState<string>('');
+
+  // Selected item for Tech Specs Modal Inspector
+  const [inspectedItem, setInspectedItem] = useState<NeonCatalogItem | null>(null);
+  const [copiedNotification, setCopiedNotification] = useState(false);
+  const [showSchemaModal, setShowSchemaModal] = useState(false);
 
   // Neon DB state
   const [neonStatus, setNeonStatus] = useState<NeonStatus | null>(null);
@@ -102,11 +87,8 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
 
   const fetchNeonStatus = async () => {
     try {
-      const res = await fetch('/api/neon/status');
-      if (res.ok) {
-        const data = await res.json();
-        setNeonStatus(data);
-      }
+      const data = await NeonService.getStatus();
+      setNeonStatus(data);
     } catch (e) {
       console.warn('Neon status check error:', e);
     }
@@ -116,15 +98,18 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
     setNeonLoading(true);
     try {
       const q = query !== undefined ? query : searchTerm;
-      const url = new URL('/api/neon/catalog', window.location.origin);
-      if (q) url.searchParams.set('search', q);
-      if (selectedCategory !== 'ALL') url.searchParams.set('category', selectedCategory);
+      const parsedMin = minPrice ? parseFloat(minPrice) : undefined;
+      const parsedMax = maxPrice ? parseFloat(maxPrice) : undefined;
 
-      const res = await fetch(url.toString());
-      if (res.ok) {
-        const data = await res.json();
-        setNeonCatalog(data);
-      }
+      const items = await NeonService.getCatalog({
+        search: q,
+        category: selectedCategory,
+        minPrice: parsedMin,
+        maxPrice: parsedMax,
+        inGispOnly: onlyDomestic,
+      });
+
+      setNeonCatalog(items);
     } catch (e) {
       console.warn('Neon catalog fetch error:', e);
     } finally {
@@ -145,28 +130,23 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
 
     setFormSaving(true);
     try {
-      const res = await fetch('/api/neon/catalog', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          companyName: newCompany,
-          category: newCategory,
-          modelName: newModel,
-          dimensions: newDimensions,
-          estimatedPrice: parseFloat(newPrice) || 15000,
-          priceFormatted: `${(parseFloat(newPrice) || 15000).toLocaleString('ru-RU')} ₽ / шт.`,
-          description: newDescription || `Модель "${newModel}", размеры: ${newDimensions}. Изготовлено по ГОСТ Р.`,
-          gispRegistryStatus: newGispStatus,
-          productFeatures: ['ГОСТ Р', 'Минпромторг РФ', 'Сделано в РФ']
-        }),
+      const p = parseFloat(newPrice) || 15000;
+      await NeonService.addCatalogItem({
+        companyName: newCompany,
+        category: newCategory,
+        modelName: newModel,
+        dimensions: newDimensions,
+        estimatedPrice: p,
+        priceFormatted: `${p.toLocaleString('ru-RU')} ₽ / шт.`,
+        description: newDescription || `Модель "${newModel}", габариты: ${newDimensions}. Изготовлено по ГОСТ Р.`,
+        gispRegistryStatus: newGispStatus,
+        productFeatures: ['ГОСТ Р', 'Минпромторг РФ', 'Сделано в РФ']
       });
 
-      if (res.ok) {
-        setNewModel('');
-        setShowAddForm(false);
-        fetchNeonCatalog();
-        fetchNeonStatus();
-      }
+      setNewModel('');
+      setShowAddForm(false);
+      fetchNeonCatalog();
+      fetchNeonStatus();
     } catch (err) {
       console.error('Failed to add item to Neon DB:', err);
     } finally {
@@ -177,14 +157,43 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
   const handleDeleteItem = async (id: number) => {
     if (!confirm('Удалить эту модель из Neon PostgreSQL БД?')) return;
     try {
-      const res = await fetch(`/api/neon/catalog/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        fetchNeonCatalog();
-        fetchNeonStatus();
-      }
+      await NeonService.deleteCatalogItem(id);
+      fetchNeonCatalog();
+      fetchNeonStatus();
     } catch (err) {
       console.error('Failed to delete item from Neon DB:', err);
     }
+  };
+
+  const exportNeonCatalogCsv = () => {
+    const headers = 'ID,Категория,Поставщик,Наименование Модели,Габариты (Размеры),Ориентировочный прайс (₽),Описание ТХ,Реестр ГИСП / Минпромторг,Контакты Поставщика\n';
+    const rows = neonCatalog.map(item =>
+      `"${item.id}","${item.category}","${item.supplierName || item.manufacturer}","${item.modelName}","${item.dimensions}","${item.estimatedPrice}","${item.description.replace(/"/g, '""')}","${item.gispRegistryStatus}","${item.supplierContacts || ''}"`
+    ).join('\n');
+
+    const blob = new Blob(['\uFEFF' + headers + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'Neon_PostgreSQL_Catalog_Pricelists.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const copyTechSpecsToClipboard = (item: NeonCatalogItem) => {
+    const text = `ТЕХНИЧЕСКИЕ ХАРАКТЕРИСТИКИ И ПРАЙС (Neon PostgreSQL ID #${item.id}):\n` +
+      `• Наименование: ${item.modelName}\n` +
+      `• Производитель: ${item.supplierName || item.manufacturer}\n` +
+      `• Габариты / Размеры: ${item.dimensions}\n` +
+      `• Цена / Прайс: ${item.priceFormatted || item.estimatedPrice + ' ₽'}\n` +
+      `• Описание: ${item.description}\n` +
+      `• Статус ГИСП: ${item.gispRegistryStatus}\n` +
+      `• Контакты: ${item.supplierContacts || 'Не указаны'}`;
+
+    navigator.clipboard.writeText(text);
+    setCopiedNotification(true);
+    setTimeout(() => setCopiedNotification(false), 2500);
   };
 
   if (!isOpen) return null;
@@ -321,7 +330,7 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
         </div>
 
         {/* Filter Bar & Action buttons */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-3">
+        <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-3">
           <form onSubmit={handleSearchSubmit} className="relative flex-1 flex gap-2">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
@@ -339,7 +348,30 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
           </form>
 
           {activeTab === 'neon' && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Price Filters */}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-xl text-xs">
+                <DollarSign className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="text-[10px] text-slate-400 font-bold">Прайс (₽):</span>
+                <input
+                  type="number"
+                  placeholder="от"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  onBlur={() => fetchNeonCatalog()}
+                  className="w-14 bg-transparent text-slate-800 dark:text-slate-100 focus:outline-none text-xs"
+                />
+                <span className="text-slate-400">—</span>
+                <input
+                  type="number"
+                  placeholder="до"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  onBlur={() => fetchNeonCatalog()}
+                  className="w-16 bg-transparent text-slate-800 dark:text-slate-100 focus:outline-none text-xs"
+                />
+              </div>
+
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
@@ -355,11 +387,29 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
               </select>
 
               <button
+                onClick={() => setShowSchemaModal(true)}
+                className="px-3 py-2 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 rounded-xl text-xs font-bold border border-cyan-800 transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Инспектор структуры данных таблиц Neon PostgreSQL"
+              >
+                <Database className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Структура БД</span>
+              </button>
+
+              <button
+                onClick={exportNeonCatalogCsv}
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
+                title="Экспорт выгрузки Neon DB в CSV/Excel"
+              >
+                <Download className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Прайс CSV</span>
+              </button>
+
+              <button
                 onClick={() => setShowAddForm(!showAddForm)}
                 className="px-3.5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                <span>Добавить товар в Neon БД</span>
+                <span>+ Добавить позицию</span>
               </button>
             </div>
           )}
@@ -578,6 +628,25 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                           <span className="truncate">Реестр: {item.gispRegistryStatus}</span>
                           <span className="font-bold text-cyan-500 shrink-0">Neon DB ID #{item.id}</span>
                         </div>
+
+                        {/* Action buttons for tech specs and copying */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={() => setInspectedItem(item)}
+                            className="flex-1 px-3 py-1.5 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <Info className="w-3.5 h-3.5" />
+                            <span>Детальные ТХ и Прайс</span>
+                          </button>
+
+                          <button
+                            onClick={() => copyTechSpecsToClipboard(item)}
+                            className="p-1.5 bg-slate-100 dark:bg-slate-900 text-slate-400 hover:text-cyan-400 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+                            title="Скопировать технические характеристики в буфер"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {item.supplierContacts && (
@@ -769,6 +838,109 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Toast notification for copied text */}
+      {copiedNotification && (
+        <div className="fixed bottom-6 right-6 bg-cyan-600 text-white px-4 py-2 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 z-50 animate-bounce">
+          <Check className="w-4 h-4" />
+          <span>Технические характеристики скопированы в буфер!</span>
+        </div>
+      )}
+
+      {/* Tech Specs Inspector Overlay Modal */}
+      {inspectedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-slate-900 border border-cyan-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden p-6 space-y-5 text-white">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-cyan-500/20 rounded-2xl text-cyan-400 border border-cyan-500/30">
+                  <Cpu className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold text-cyan-400 uppercase tracking-widest block">
+                    Neon PostgreSQL • Запись #{inspectedItem.id}
+                  </span>
+                  <h3 className="text-lg font-extrabold text-white">
+                    {inspectedItem.modelName}
+                  </h3>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setInspectedItem(null)}
+                className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Spec details grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                <span className="text-slate-400 font-bold block text-[10px] uppercase">Изготовитель / Бренд</span>
+                <span className="font-extrabold text-cyan-300">{inspectedItem.supplierName || inspectedItem.manufacturer}</span>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                <span className="text-slate-400 font-bold block text-[10px] uppercase">Страна производства</span>
+                <span className="font-extrabold text-emerald-400">{inspectedItem.country}</span>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
+                <span className="text-slate-400 font-bold block text-[10px] uppercase">Габариты / Размеры</span>
+                <span className="font-mono font-extrabold text-white">{inspectedItem.dimensions || 'По ТЗ'}</span>
+              </div>
+
+              <div className="bg-emerald-950/40 p-3 rounded-2xl border border-emerald-800/60 space-y-1">
+                <span className="text-emerald-400 font-bold block text-[10px] uppercase">Прайс / Ориентировочная стоимость</span>
+                <span className="font-mono font-extrabold text-emerald-300 text-sm">
+                  {inspectedItem.priceFormatted || `${inspectedItem.estimatedPrice?.toLocaleString('ru-RU')} ₽`}
+                </span>
+              </div>
+            </div>
+
+            {/* Full description */}
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1.5">
+              <span className="text-slate-400 font-bold block text-[10px] uppercase">Полное описание ТХ и соответствие ГОСТ</span>
+              <p className="text-xs text-slate-200 leading-relaxed font-sans">
+                {inspectedItem.description}
+              </p>
+            </div>
+
+            {/* GISP Registry Status */}
+            <div className="bg-cyan-950/40 p-3 rounded-2xl border border-cyan-800/60 flex items-center justify-between text-xs">
+              <span className="text-slate-300 font-bold">Статус реестра Минпромторга РФ:</span>
+              <span className="font-extrabold text-cyan-300 bg-cyan-900/60 px-3 py-1 rounded-xl border border-cyan-700">
+                {inspectedItem.gispRegistryStatus}
+              </span>
+            </div>
+
+            {/* Modal actions */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => copyTechSpecsToClipboard(inspectedItem)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Copy className="w-4 h-4 text-cyan-400" />
+                <span>Скопировать ТХ</span>
+              </button>
+
+              <button
+                onClick={() => setInspectedItem(null)}
+                className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Database Schema Inspector Modal */}
+      <NeonSchemaModal
+        isOpen={showSchemaModal}
+        onClose={() => setShowSchemaModal(false)}
+      />
     </div>
   );
 };

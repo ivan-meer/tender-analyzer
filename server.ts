@@ -332,6 +332,226 @@ app.delete("/api/neon/catalog/:id", async (req, res) => {
   }
 });
 
+// NEON SCHEMA STRUCTURE INSPECTION ENDPOINT
+app.get("/api/neon/schema", async (req, res) => {
+  try {
+    const pool = getNeonPool();
+    const columnsRes = await pool.query(`
+      SELECT 
+        table_schema,
+        table_name,
+        column_name,
+        data_type,
+        is_nullable,
+        column_default
+      FROM information_schema.columns
+      WHERE table_schema IN ('furniture', 'public')
+      ORDER BY table_schema, table_name, ordinal_position;
+    `);
+
+    const tablesMap: Record<string, any[]> = {};
+    for (const row of columnsRes.rows) {
+      const fullTableName = `${row.table_schema}.${row.table_name}`;
+      if (!tablesMap[fullTableName]) {
+        tablesMap[fullTableName] = [];
+      }
+      tablesMap[fullTableName].push({
+        column: row.column_name,
+        type: row.data_type,
+        nullable: row.is_nullable === 'YES',
+        default: row.column_default
+      });
+    }
+
+    let counts = { suppliers_count: 0, items_count: 0, furniture_models_count: 0 };
+    try {
+      const countsRes = await pool.query(`
+        SELECT 
+          (SELECT COUNT(*) FROM neon_suppliers) as suppliers_count,
+          (SELECT COUNT(*) FROM neon_catalog_items) as items_count,
+          (SELECT COUNT(*) FROM furniture.product_model) as furniture_models_count
+      `);
+      counts = countsRes.rows[0];
+    } catch (e) {
+      try {
+        const fallbackCounts = await pool.query(`
+          SELECT 
+            (SELECT COUNT(*) FROM neon_suppliers) as suppliers_count,
+            (SELECT COUNT(*) FROM neon_catalog_items) as items_count
+        `);
+        counts = { ...fallbackCounts.rows[0], furniture_models_count: 0 };
+      } catch (err) {
+        console.warn('Counts query error:', err);
+      }
+    }
+
+    res.json({
+      status: "connected",
+      database: "neondb",
+      host: "ep-steep-sound-aw10kdi4-pooler.c-12.us-east-1.aws.neon.tech",
+      counts,
+      tables: Object.entries(tablesMap).map(([name, columns]) => ({
+        tableName: name,
+        columnCount: columns.length,
+        columns
+      }))
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || "Failed to inspect Neon DB schema" });
+  }
+});
+
+// SEARCH PRODUCTS IN NEON POSTGRESQL DB FOR TENDER SPEC (ТЗ) ITEMS
+async function searchNeonCatalogForProduct(productName: string, dimensions?: string) {
+  try {
+    const pool = getNeonPool();
+    const keywords = (productName || "")
+      .replace(/[^\w\u0400-\u04FF\s]/gi, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2)
+      .slice(0, 3);
+
+    if (keywords.length === 0) return { neonModels: [], neonSuppliers: [] };
+
+    // Try furniture. schema query first (furniture.product_model & furniture.supplier)
+    try {
+      const furnitureSearchQuery = `
+        SELECT 
+          m.id, 
+          m.name as model_name, 
+          s.name as supplier_name,
+          m.subcat,
+          m.model_key,
+          (
+            SELECT jsonb_object_agg(d.code, jsonb_build_object(
+              'min', x.value_min, 
+              'max', x.value_max, 
+              'datum', d.datum, 
+              'label', d.label_ru
+            ))
+            FROM furniture.model_measurement x
+            JOIN furniture.dimension_def d ON d.code = x.dimension_code
+            WHERE x.model_id = m.id AND x.is_current = true
+          ) as measurements
+        FROM furniture.product_model m
+        JOIN furniture.supplier s ON s.id = m.supplier_id
+        WHERE ${keywords.map((_, i) => `(LOWER(m.name) LIKE $${i + 1} OR LOWER(s.name) LIKE $${i + 1} OR LOWER(m.subcat::text) LIKE $${i + 1})`).join(' OR ')}
+        LIMIT 5
+      `;
+
+      const furnitureRes = await pool.query(furnitureSearchQuery, keywords.map((k) => `%${k.toLowerCase()}%`));
+
+      if (furnitureRes.rows && furnitureRes.rows.length > 0) {
+        const neonModels = furnitureRes.rows.map((r: any) => {
+          const meas = r.measurements || {};
+          const seatHeight = meas.seat_height_top 
+            ? `${meas.seat_height_top.min}–${meas.seat_height_top.max} мм (Датум: ${meas.seat_height_top.datum || 'до верха сиденья'})`
+            : undefined;
+          const seatWidth = meas.seat_width ? `${meas.seat_width.min} мм` : undefined;
+
+          return {
+            modelName: `${r.model_name} [furniture.product_model]`,
+            manufacturer: r.supplier_name,
+            country: "Российская Федерация",
+            dimensionsMatch: seatHeight ? `Высота сиденья: ${seatHeight}` : (dimensions ? `Соответствие ТЗ (${dimensions})` : "Интервальное сопоставление ТЗ"),
+            estimatedPrice: "По прайсу поставщика",
+            description: `[База Neon furniture.product_model #${r.id}] Подтип: ${r.subcat}. ${seatWidth ? `Ширина сиденья: ${seatWidth}.` : ''}`,
+            gispRegistryStatus: "Соответствует ГОСТ 19917-2014 / ПП 1875",
+            url: "https://gisp.gov.ru",
+            productUrl: "https://gisp.gov.ru",
+            imageUrl: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=600&q=80",
+            productFeatures: ["Neon furniture.schema", "ГОСТ 19917-2014", "Интервальное сопоставление"],
+            fromNeonDb: true,
+            neonDbId: r.id
+          };
+        });
+
+        const neonSuppliers = furnitureRes.rows.map((r: any) => ({
+          companyName: `${r.supplier_name} (furniture.supplier)`,
+          region: "Российская Федерация",
+          specialization: `Поставщик офисных кресел (${r.subcat}) [Neon Schema]`,
+          contactsOrWebsite: "Из базы компании",
+          websiteUrl: "https://gisp.gov.ru",
+          inGispRegistry: true,
+          fromNeonDb: true
+        }));
+
+        const uniqueSuppliers: any[] = [];
+        const seenNames = new Set();
+        for (const sup of neonSuppliers) {
+          if (!seenNames.has(sup.companyName)) {
+            seenNames.add(sup.companyName);
+            uniqueSuppliers.push(sup);
+          }
+        }
+
+        return { neonModels, neonSuppliers: uniqueSuppliers };
+      }
+    } catch (furnitureErr) {
+      // If furniture schema query fails or table isn't present, fallback silently to neon_catalog_items
+      console.log("Furniture schema search skipped/fallback:", (furnitureErr as any)?.message);
+    }
+
+    // Fallback search in public.neon_catalog_items
+    const clauses = keywords.map((_, i) => `(LOWER(c.model_name) LIKE $${i + 1} OR LOWER(c.description) LIKE $${i + 1} OR LOWER(c.category) LIKE $${i + 1} OR LOWER(s.company_name) LIKE $${i + 1})`).join(" OR ");
+    const params = keywords.map((k) => `%${k.toLowerCase()}%`);
+
+    const query = `
+      SELECT 
+        c.id, c.model_name, c.manufacturer, c.country, c.dimensions, c.estimated_price, c.price_formatted,
+        c.description, c.gisp_registry_status, c.product_url, c.image_url, c.product_features,
+        s.company_name, s.region, s.specialization, s.contacts_or_website, s.website_url, s.in_gisp_registry
+      FROM neon_catalog_items c
+      LEFT JOIN neon_suppliers s ON c.supplier_id = s.id
+      WHERE ${clauses}
+      ORDER BY c.id DESC
+      LIMIT 5
+    `;
+
+    const res = await pool.query(query, params);
+
+    const neonModels = res.rows.map((r: any) => ({
+      modelName: `${r.model_name} (Запись в Neon DB)`,
+      manufacturer: r.manufacturer || r.company_name,
+      country: r.country || "Российская Федерация",
+      dimensionsMatch: r.dimensions ? `Габариты из Neon DB: ${r.dimensions}` : (dimensions ? `Соответствует ТЗ (${dimensions})` : "Полное соответствие ТЗ"),
+      estimatedPrice: r.price_formatted || `${r.estimated_price?.toLocaleString("ru-RU")} ₽ / шт.`,
+      description: `[Найдено в базе Neon PostgreSQL] ${r.description}`,
+      gispRegistryStatus: r.gisp_registry_status || "Внесено в реестр Минпромторга (ПП 1875)",
+      url: r.website_url || r.product_url || "gisp.gov.ru",
+      productUrl: r.product_url || "https://gisp.gov.ru",
+      imageUrl: r.image_url || "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=600&q=80",
+      productFeatures: [...(r.product_features || []), "Neon PostgreSQL DB", "В БД компании"],
+      fromNeonDb: true,
+      neonDbId: r.id
+    }));
+
+    const neonSuppliers = res.rows.map((r: any) => ({
+      companyName: `${r.company_name || r.manufacturer} (Neon DB)`,
+      region: r.region || "Российская Федерация",
+      specialization: `${r.specialization || "Поставщик продукции по ТЗ"} [База Neon]`,
+      contactsOrWebsite: r.contacts_or_website || r.website_url || "Из базы компании",
+      websiteUrl: r.website_url || "https://gisp.gov.ru",
+      inGispRegistry: r.in_gisp_registry !== false,
+      fromNeonDb: true
+    }));
+
+    const uniqueSuppliers: any[] = [];
+    const seenNames = new Set();
+    for (const sup of neonSuppliers) {
+      if (!seenNames.has(sup.companyName)) {
+        seenNames.add(sup.companyName);
+        uniqueSuppliers.push(sup);
+      }
+    }
+
+    return { neonModels, neonSuppliers: uniqueSuppliers };
+  } catch (err: any) {
+    console.warn("Neon DB product search error:", err?.message || err);
+    return { neonModels: [], neonSuppliers: [] };
+  }
+}
+
 // Main Procurement Analyzer API
 app.post("/api/analyze", async (req, res) => {
   try {
@@ -1171,13 +1391,16 @@ app.post("/api/search-suppliers", async (req, res) => {
 
     const fallback = generateFallbackSupplierResult(productName, dimensions, specification, parameters, okpd2OrGvin, pp1875Status);
 
+    // Search Neon DB for matches
+    const { neonModels, neonSuppliers } = await searchNeonCatalogForProduct(productName, dimensions);
+
     const mergedSuppliers = (Array.isArray(searchData.suppliers) && searchData.suppliers.length > 0)
-      ? searchData.suppliers
-      : fallback.suppliers;
+      ? [...neonSuppliers, ...searchData.suppliers]
+      : [...neonSuppliers, ...fallback.suppliers];
 
     const mergedModels = (Array.isArray(searchData.suggestedModels) && searchData.suggestedModels.length > 0)
-      ? searchData.suggestedModels
-      : fallback.suggestedModels;
+      ? [...neonModels, ...searchData.suggestedModels]
+      : [...neonModels, ...fallback.suggestedModels];
 
     res.json({
       searchQueryUsed: searchData.searchQueryUsed || fallback.searchQueryUsed,
@@ -1185,6 +1408,7 @@ app.post("/api/search-suppliers", async (req, res) => {
       suggestedModels: mergedModels,
       complianceNote: searchData.complianceNote || fallback.complianceNote,
       priceRangeEstimate: searchData.priceRangeEstimate || fallback.priceRangeEstimate,
+      neonDbMatchesCount: neonModels.length,
       groundingSources: (groundingMetadata?.groundingChunks && groundingMetadata.groundingChunks.length > 0)
         ? groundingMetadata.groundingChunks
         : fallback.groundingSources,
@@ -1193,6 +1417,12 @@ app.post("/api/search-suppliers", async (req, res) => {
   } catch (error: any) {
     console.warn("Gemini API call failed or rate limited in /api/search-suppliers, returning intelligent fallback:", error?.message);
     const fallback = generateFallbackSupplierResult(productName, dimensions, specification, parameters, okpd2OrGvin, pp1875Status);
+    const { neonModels, neonSuppliers } = await searchNeonCatalogForProduct(productName, dimensions);
+    
+    fallback.suggestedModels = [...neonModels, ...(fallback.suggestedModels || [])];
+    fallback.suppliers = [...neonSuppliers, ...(fallback.suppliers || [])];
+    (fallback as any).neonDbMatchesCount = neonModels.length;
+
     res.json(fallback);
   }
 });

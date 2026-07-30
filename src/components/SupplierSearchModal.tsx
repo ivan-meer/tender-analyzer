@@ -18,7 +18,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Image as ImageIcon,
-  Sparkles
+  Sparkles,
+  Database,
+  Cpu
 } from 'lucide-react';
 
 interface SupplierSearchModalProps {
@@ -192,9 +194,18 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
               {/* Top Banner: Price Range & Query */}
               <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl p-5 text-white flex flex-col md:flex-row md:items-center justify-between gap-4 border border-indigo-800/50">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-indigo-300 font-bold uppercase tracking-wider">
-                    <Tag className="w-3.5 h-3.5" />
-                    Ориентировочная вилка цен по РФ
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-indigo-300 font-bold uppercase tracking-wider">
+                      <Tag className="w-3.5 h-3.5" />
+                      Ориентировочная вилка цен по РФ
+                    </div>
+
+                    {(result as any).neonDbMatchesCount > 0 && (
+                      <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 rounded-lg text-[10px] font-extrabold flex items-center gap-1">
+                        <Database className="w-3 h-3 text-cyan-400" />
+                        {(result as any).neonDbMatchesCount} поз. из базы Neon DB
+                      </span>
+                    )}
                   </div>
                   <p className="text-2xl font-extrabold text-amber-300">
                     {result.priceRangeEstimate || 'По запросу'}
