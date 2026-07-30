@@ -25,10 +25,15 @@ import { DocumentViewerModal } from './DocumentViewerModal';
 
 interface DocumentUploaderProps {
   onAnalyze: (input: AnalysisInput) => void;
+  onLoadPresetResult?: (presetId?: string) => void;
   isAnalyzing: boolean;
 }
 
-export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ onAnalyze, isAnalyzing }) => {
+export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ 
+  onAnalyze, 
+  onLoadPresetResult, 
+  isAnalyzing 
+}) => {
   const [procedureType, setProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
   const [parsedFiles, setParsedFiles] = useState<ParsedDocument[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -238,7 +243,18 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ onAnalyze, i
             Быстрый запуск с готовыми примерами закупок:
           </span>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {onLoadPresetResult && (
+            <button
+              type="button"
+              onClick={() => onLoadPresetResult('sample-furniture-223fz')}
+              className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-1.5 rounded-xl transition-all shadow-sm hover:shadow-md cursor-pointer flex items-center gap-1.5"
+              title="Открыть готовый эталонный результат со всеми картами рисков и функциями"
+            >
+              <span>⚡ Флагманский демо-отчет (0 токенов)</span>
+            </button>
+          )}
+
           {SAMPLE_PROCUREMENTS.map(preset => (
             <button
               key={preset.id}
@@ -525,28 +541,41 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ onAnalyze, i
             )}
           </div>
 
-          <button
-            id="start-analysis-btn"
-            type="submit"
-            disabled={!hasContent || isAnalyzing || isProcessing}
-            className={`px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
-              hasContent && !isAnalyzing && !isProcessing
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 active:scale-95'
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            }`}
-          >
-            {isAnalyzing ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Выполняется юридический анализ 223-ФЗ...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-white" />
-                <span>Проанализировать и Сформировать Отчет</span>
-              </>
+          <div className="flex flex-wrap items-center gap-2">
+            {onLoadPresetResult && (
+              <button
+                type="button"
+                onClick={() => onLoadPresetResult('sample-furniture-223fz')}
+                className="px-4 py-3.5 rounded-2xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                title="Показать эталонный отчёт без обращения к API ИИ"
+              >
+                <span>⚡ Быстрый отчет по шаблону</span>
+              </button>
             )}
-          </button>
+
+            <button
+              id="start-analysis-btn"
+              type="submit"
+              disabled={!hasContent || isAnalyzing || isProcessing}
+              className={`px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
+                hasContent && !isAnalyzing && !isProcessing
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 active:scale-95'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              {isAnalyzing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Выполняется юридический анализ 223-ФЗ...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 text-white" />
+                  <span>Проанализировать и Сформировать Отчет</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </form>
 

@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { GuideModal } from './components/GuideModal';
 import { DocumentUploader } from './components/DocumentUploader';
 import { RiskSummaryCard } from './components/RiskSummaryCard';
+import { RiskMapCard } from './components/RiskMapCard';
 import { DeliveryLogisticsCard } from './components/DeliveryLogisticsCard';
 import { ContractRisksTable } from './components/ContractRisksTable';
 import { ProductListTable } from './components/ProductListTable';
@@ -11,7 +12,8 @@ import { PostAwardWorkflow } from './components/PostAwardWorkflow';
 import { TemplatesSection } from './components/TemplatesSection';
 import { AnalysisInput, AnalysisResult } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
-import { Download, AlertCircle, FileText, CheckCircle2, RefreshCw, ShieldCheck, FileSpreadsheet } from 'lucide-react';
+import { getPresetAnalysisResult } from './data/presetResults';
+import { Download, AlertCircle, FileText, CheckCircle2, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -52,6 +54,20 @@ export default function App() {
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const handleLoadPresetResult = (presetId?: string) => {
+    setIsAnalyzing(true);
+    setError(null);
+    setTimeout(() => {
+      const data = getPresetAnalysisResult(presetId || 'sample-furniture-223fz');
+      setAnalysisResult(data);
+      setIsAnalyzing(false);
+      setTimeout(() => {
+        const el = document.getElementById('analysis-results-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }, 300);
   };
 
   const handleExportPdf = async () => {
@@ -141,6 +157,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         {/* Document Uploader Form */}
         <DocumentUploader
           onAnalyze={handleAnalyze}
+          onLoadPresetResult={handleLoadPresetResult}
           isAnalyzing={isAnalyzing}
         />
 
@@ -209,6 +226,12 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
             {/* Risk Summary Card */}
             <RiskSummaryCard summary={analysisResult.summary} />
+
+            {/* Interactive Recharts Risk Map Card (Red/Yellow/Green categories & severity) */}
+            <RiskMapCard 
+              summary={analysisResult.summary} 
+              contractRisks={analysisResult.contractRisks} 
+            />
 
             {/* Delivery Terms & Addresses Card (High Accent) */}
             <DeliveryLogisticsCard deliveryInfo={analysisResult.deliveryInfo} />
