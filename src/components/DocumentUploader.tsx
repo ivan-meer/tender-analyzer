@@ -202,29 +202,29 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     switch (type) {
       case 'excel':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md">
-            <Table className="w-3 h-3 text-emerald-600" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-md">
+            <Table className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
             Excel / Таблица
           </span>
         );
       case 'word':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-md">
-            <FileText className="w-3 h-3 text-blue-600" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded-md">
+            <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" />
             Word Doc
           </span>
         );
       case 'pdf':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-md">
-            <FileCode className="w-3 h-3 text-rose-600" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded-md">
+            <FileCode className="w-3 h-3 text-rose-600 dark:text-rose-400" />
             PDF Doc
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md">
-            <File className="w-3 h-3 text-slate-500" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md">
+            <File className="w-3 h-3 text-slate-500 dark:text-slate-400" />
             Текст
           </span>
         );
@@ -303,7 +303,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               className={`px-3 py-2.5 rounded-2xl text-xs font-bold border text-center transition-all cursor-pointer ${
                 procedureType === 'COMMERCIAL'
                   ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
               }`}
             >
               Коммерческая закупка
@@ -314,7 +314,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               className={`px-3 py-2.5 rounded-2xl text-xs font-bold border text-center transition-all cursor-pointer ${
                 procedureType === 'OTHER'
                   ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
               }`}
             >
               Иная процедура
@@ -324,13 +324,13 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
         {/* STANDARDIZED UNIFIED DOCUMENT WINDOW */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <FolderUp className="w-4 h-4 text-indigo-600" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <FolderUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <span>Единое окно загрузки документации закупки</span>
               </h3>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
                 Загрузите любые файлы: Таблицы Excel (.xlsx/.csv), PDF (.pdf), Документы Word (.docx/.doc) или Текстовые файлы
               </p>
             </div>
@@ -339,7 +339,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               <button
                 type="button"
                 onClick={handleClearAll}
-                className="text-xs text-slate-500 hover:text-red-600 font-bold flex items-center gap-1 transition-colors bg-slate-100 hover:bg-red-50 px-3 py-1.5 rounded-xl border border-slate-200 cursor-pointer"
+                className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-bold flex items-center gap-1 transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/50 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Очистить всё
@@ -356,7 +356,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             className={`border-2 border-dashed rounded-3xl p-6 sm:p-8 text-center transition-all cursor-pointer ${
               isDragging
                 ? 'border-indigo-500 bg-indigo-50/80 scale-[1.01]'
-                : 'border-slate-300 hover:border-indigo-400 bg-slate-50/60 hover:bg-indigo-50/30'
+                : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/40'
             }`}
           >
             <input
@@ -369,31 +369,31 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             />
 
             <div className="max-w-md mx-auto space-y-3 pointer-events-none">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto shadow-2xs">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-2xs">
                 <Upload className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-sm font-bold text-slate-900 block">
+                <span className="text-sm font-bold text-slate-900 dark:text-white block">
                   Перетащите сюда файлы документации или кликните для выбора
                 </span>
-                <span className="text-xs text-slate-500 font-medium block mt-1">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block mt-1">
                   Поддерживаются: <strong>PDF</strong>, <strong>Word (.docx)</strong>, <strong>Excel (.xlsx/csv)</strong>, <strong>TXT</strong>
                 </span>
               </div>
 
               {/* Supported Format Icons */}
               <div className="flex items-center justify-center gap-2 pt-1">
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 text-rose-800 px-2 py-1 rounded-lg border border-rose-200">
-                  <FileCode className="w-3 h-3 text-rose-600" /> PDF
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 px-2 py-1 rounded-lg border border-rose-200 dark:border-rose-800">
+                  <FileCode className="w-3 h-3 text-rose-600 dark:text-rose-400" /> PDF
                 </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded-lg border border-blue-200">
-                  <FileText className="w-3 h-3 text-blue-600" /> Word
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Word
                 </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-lg border border-emerald-200">
-                  <Table className="w-3 h-3 text-emerald-600" /> Excel / Таблицы
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                  <Table className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Excel / Таблицы
                 </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded-lg border border-slate-200">
-                  <File className="w-3 h-3 text-slate-500" /> TXT
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <File className="w-3 h-3 text-slate-500 dark:text-slate-400" /> TXT
                 </span>
               </div>
             </div>
@@ -401,8 +401,8 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
           {/* Processing Spinner */}
           {isProcessing && (
-            <div className="flex items-center justify-center gap-2 p-4 bg-indigo-50 border border-indigo-200 rounded-2xl text-xs font-bold text-indigo-700 animate-pulse">
-              <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+            <div className="flex items-center justify-center gap-2 p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-2xl text-xs font-bold text-indigo-700 dark:text-indigo-300 animate-pulse">
+              <RefreshCw className="w-4 h-4 animate-spin text-indigo-600 dark:text-indigo-400" />
               <span>Извлекаем и индексируем содержимое документов...</span>
             </div>
           )}
@@ -421,16 +421,16 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                 {parsedFiles.map((file) => (
                   <div
                     key={file.id}
-                    className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5 transition-all shadow-2xs hover:border-slate-300"
+                    className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 space-y-2.5 transition-all shadow-2xs hover:border-slate-300 dark:hover:border-slate-600"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         {getFileBadge(file.fileType)}
                         <div className="min-w-0">
-                          <span className="text-xs font-bold text-slate-900 truncate block">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
                             {file.fileName}
                           </span>
-                          <span className="text-[11px] text-slate-500 font-medium">
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                             {formatFileSize(file.fileSize)} • {file.charCount} симв.
                           </span>
                         </div>
@@ -441,7 +441,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                         <select
                           value={file.category}
                           onChange={(e) => handleCategoryChange(file.id, e.target.value as ParsedDocument['category'])}
-                          className="text-xs font-bold bg-white border border-slate-200 text-slate-700 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 shadow-2xs"
+                          className="text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 shadow-2xs"
                         >
                           <option value="contract">📄 Проект договора</option>
                           <option value="docs">📋 Извещение / Правила</option>
@@ -453,7 +453,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                         <button
                           type="button"
                           onClick={() => setModalDocument(file)}
-                          className="px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 shadow-2xs"
+                          className="px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 flex items-center gap-1.5 shadow-2xs"
                           title="Открыть полноэкранный ридер с поиском и таблицами"
                         >
                           <Eye className="w-3.5 h-3.5 text-indigo-600" />
@@ -463,7 +463,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRemoveFile(file.id)}
-                          className="p-2 text-slate-400 hover:text-red-600 bg-white hover:bg-red-50 border border-slate-200 rounded-xl transition-colors cursor-pointer"
+                          className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-900 hover:bg-red-50 dark:hover:bg-red-950/50 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
                           title="Удалить файл"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -473,21 +473,21 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
                     {/* Quick Extracted Text Preview Drawer */}
                     {previewingFileId === file.id && (
-                      <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs space-y-2 shadow-inner">
+                      <div className="bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs space-y-2 shadow-inner">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-700 block text-[11px] uppercase tracking-wider">
+                          <span className="font-bold text-slate-700 dark:text-slate-200 block text-[11px] uppercase tracking-wider">
                             Предпросмотр извлеченного текста ({file.fileName}):
                           </span>
                           <button
                             type="button"
                             onClick={() => setModalDocument(file)}
-                            className="text-[11px] font-bold text-indigo-600 hover:underline flex items-center gap-1"
+                            className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                           >
                             <span>Открыть в полноэкранном ридере</span>
                             <Eye className="w-3 h-3" />
                           </button>
                         </div>
-                        <pre className="font-mono text-slate-800 text-[11px] whitespace-pre-wrap max-h-48 overflow-y-auto p-2 bg-slate-50 rounded-lg border border-slate-200">
+                        <pre className="font-mono text-slate-800 dark:text-slate-200 text-[11px] whitespace-pre-wrap max-h-48 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-700">
                           {file.content || '[Пустой или распознанный формат]'}
                         </pre>
                       </div>
@@ -501,7 +501,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           {/* UNIFIED MANUAL TEXT INPUT / NOTES */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 block">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
                 Или вставьте дополнительные фрагменты / текст вручную:
               </label>
               <textarea
@@ -509,12 +509,12 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
                 placeholder="Вставьте пункт о штрафах, выдержку из извещения или текст договора..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white font-mono leading-relaxed transition-all shadow-inner"
+                className="w-full bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:bg-white dark:focus:bg-slate-900 font-mono leading-relaxed transition-all shadow-inner"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 block">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
                 Примечания и особые указания тендерному эксперту:
               </label>
               <textarea
@@ -522,18 +522,18 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                 value={additionalNotes}
                 onChange={(e) => setAdditionalNotes(e.target.value)}
                 placeholder="Укажите особые условия: например, проверить наличие авансирования, специфику поставщика или правила ПП РФ 1875..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white leading-relaxed transition-all shadow-inner"
+                className="w-full bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:bg-white dark:focus:bg-slate-900 leading-relaxed transition-all shadow-inner"
               />
             </div>
           </div>
         </div>
 
         {/* Action Button */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3 border-t border-slate-200">
-          <div className="text-xs font-medium text-slate-500">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+          <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
             {hasContent ? (
-              <span className="text-emerald-700 font-bold flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-emerald-600" />
+              <span className="text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1.5">
+                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 Готово к ИИ-экспертизе ({parsedFiles.length} файл(ов), ~{totalChars} симв.)
               </span>
             ) : (
@@ -559,8 +559,8 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               disabled={!hasContent || isAnalyzing || isProcessing}
               className={`px-6 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
                 hasContent && !isAnalyzing && !isProcessing
-                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 active:scale-95'
-                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 dark:shadow-indigo-900/50 active:scale-95'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
               }`}
             >
               {isAnalyzing ? (
