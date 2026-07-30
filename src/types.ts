@@ -107,6 +107,10 @@ export interface ProductItem {
 export interface AnalysisResult {
   summary: {
     procurementTitle: string;
+    projectName?: string; // Понятное название проекта (напр. "Проект №223-894: Поставка офисной мебели")
+    customerName?: string; // Заказчик (напр. "ГУП Мосгортранс", "ПАО Газпром")
+    procurementSum?: string; // НМЦК / Сумма закупки (напр. "12 450 000 ₽")
+    auctionDate?: string; // Дата аукциона / окончания подачи (напр. "15.08.2026")
     overallRiskScore: number; // 0 to 100
     riskLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
     keyTakeaway: string;
@@ -126,5 +130,25 @@ export interface AnalysisInput {
   documentationText: string;
   tzText: string;
   additionalNotes?: string;
+}
+
+export interface VerifiedSupplierProduct {
+  name: string;
+  dimensions?: string;
+  priceRange?: string;
+  okpd2?: string;
+}
+
+export interface VerifiedSupplier {
+  id: string;
+  brandName: string;
+  website: string;
+  description: string;
+  contacts: string;
+  category: string;
+  isDomesticProducer: boolean;
+  region: string;
+  note?: string;
+  sampleProducts?: VerifiedSupplierProduct[];
 }
 

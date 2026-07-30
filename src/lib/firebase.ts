@@ -17,6 +17,10 @@ export interface SavedAnalysis {
   userId: string;
   userEmail?: string;
   title: string;
+  projectName?: string;
+  customerName?: string;
+  procurementSum?: string;
+  auctionDate?: string;
   procurementNumber?: string;
   riskScore: number;
   riskLevel: string;
@@ -31,12 +35,16 @@ export interface SavedAnalysis {
 // Helper functions for analysis database operations
 export async function saveAnalysisToDb(userId: string, userEmail: string, result: any, title?: string): Promise<string> {
   const collectionRef = collection(db, 'analyses');
-  const docTitle = title || result.summary?.procurementTitle || 'Анализ закупки 223-ФЗ';
+  const docTitle = title || result.summary?.projectName || result.summary?.procurementTitle || 'Анализ закупки 223-ФЗ';
   
   const docRef = await addDoc(collectionRef, {
     userId,
     userEmail: userEmail || 'анонимный',
     title: docTitle,
+    projectName: result.summary?.projectName || docTitle,
+    customerName: result.summary?.customerName || 'Заказчик по 223-ФЗ',
+    procurementSum: result.summary?.procurementSum || 'Сумма определяется заявкой',
+    auctionDate: result.summary?.auctionDate || 'Срок подачи уточняется',
     procurementNumber: result.submissionRulesCheck?.procedureType || '223-ФЗ',
     riskScore: result.summary?.overallRiskScore ?? 50,
     riskLevel: result.summary?.riskLevel || 'MEDIUM',

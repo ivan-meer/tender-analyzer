@@ -16,12 +16,15 @@ import {
   File,
   Table,
   FileCheck2,
-  Plus
+  Plus,
+  MessageSquare,
+  X
 } from 'lucide-react';
 import { AnalysisInput, ProcedureType } from '../types';
 import { SAMPLE_PROCUREMENTS } from '../data/sampleProcurements';
 import { parseDocumentFile, ParsedDocument, formatFileSize } from '../utils/documentParser';
 import { DocumentViewerModal } from './DocumentViewerModal';
+import { TokenPriceEstimator } from './TokenPriceEstimator';
 import { Camera } from 'lucide-react';
 
 interface DocumentUploaderProps {
@@ -29,6 +32,7 @@ interface DocumentUploaderProps {
   onLoadPresetResult?: (presetId?: string) => void;
   isAnalyzing: boolean;
   onOpenScanModal?: () => void;
+  onOpenHistory?: () => void;
 }
 
 export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ 
@@ -36,17 +40,19 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   onLoadPresetResult, 
   isAnalyzing,
   onOpenScanModal,
+  onOpenHistory,
 }) => {
   const [procedureType, setProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
   const [parsedFiles, setParsedFiles] = useState<ParsedDocument[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   
-  // Single-window workspace text inputs
+  // Single-window workspace text inputs & modals
   const [pastedText, setPastedText] = useState('');
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [previewingFileId, setPreviewingFileId] = useState<string | null>(null);
   const [modalDocument, setModalDocument] = useState<ParsedDocument | null>(null);
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -236,17 +242,29 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xs overflow-hidden space-y-0 transition-colors duration-200">
-      {/* Top Banner: Presets */}
-      <div className="bg-indigo-50/50 dark:bg-indigo-950/40 p-3.5 sm:p-4 border-b border-indigo-100/80 dark:border-indigo-900/60 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      {/* Top Banner: Quick Shortcuts */}
+      <div className="bg-indigo-50/50 dark:bg-indigo-950/40 p-3 sm:p-4 border-b border-indigo-100/80 dark:border-indigo-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/80 rounded-xl text-indigo-700 dark:text-indigo-300">
             <Sparkles className="w-4 h-4 shrink-0" />
           </div>
           <span className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
-            Быстрый запуск с готовыми примерами закупок:
+            Загрузка документации 223-ФЗ
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onOpenHistory && (
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+              title="Открыть историю сохраненных проверок"
+            >
+              <FolderUp className="w-3.5 h-3.5 text-indigo-500" />
+              <span>📜 История запросов</span>
+            </button>
+          )}
+
           {onLoadPresetResult && (
             <button
               type="button"
@@ -254,91 +272,43 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               className="text-xs bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-extrabold px-3 py-1.5 rounded-xl transition-all shadow-sm hover:shadow-md cursor-pointer flex items-center gap-1.5"
               title="Открыть готовый эталонный результат со всеми картами рисков и функциями"
             >
-              <span>⚡ Флагманский демо-отчет (0 токенов)</span>
+              <span>⚡ Флагманский демо-отчет</span>
             </button>
           )}
-
-          {SAMPLE_PROCUREMENTS.map(preset => (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => handleLoadPreset(preset.id)}
-              className="text-xs bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-slate-700 dark:text-slate-200 font-bold border border-indigo-200/80 dark:border-indigo-800 px-3 py-1.5 rounded-xl transition-all shadow-2xs hover:border-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer"
-            >
-              {preset.title}
-            </button>
-          ))}
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
-        {/* Procedure Selector */}
-        <div>
-          <label className="block text-[11px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-            Тип закупки / Процедуры:
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button
-              type="button"
-              onClick={() => setProcedureType('223_FZ_QUOTATION')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border text-center transition-all cursor-pointer ${
-                procedureType === '223_FZ_QUOTATION'
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
-              }`}
-            >
-              223-ФЗ Запрос котировок
-            </button>
-            <button
-              type="button"
-              onClick={() => setProcedureType('223_FZ_AUCTION')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border text-center transition-all cursor-pointer ${
-                procedureType === '223_FZ_AUCTION'
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
-              }`}
-            >
-              223-ФЗ Аукцион
-            </button>
-            <button
-              type="button"
-              onClick={() => setProcedureType('COMMERCIAL')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border text-center transition-all cursor-pointer ${
-                procedureType === 'COMMERCIAL'
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
-              }`}
-            >
-              Коммерческая закупка
-            </button>
-            <button
-              type="button"
-              onClick={() => setProcedureType('OTHER')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border text-center transition-all cursor-pointer ${
-                procedureType === 'OTHER'
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
-              }`}
-            >
-              Иная процедура
-            </button>
-          </div>
-        </div>
-
         {/* STANDARDIZED UNIFIED DOCUMENT WINDOW */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 gap-2">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <FolderUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <span>Единое окно загрузки документации закупки</span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                Загрузите любые файлы: Таблицы Excel (.xlsx/.csv), PDF (.pdf), Документы Word (.docx/.doc) или Текстовые файлы
+                Загрузите файлы: Таблицы Excel (.xlsx/.csv), PDF (.pdf), Word (.docx) или Текст
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsNotesModalOpen(true)}
+                className={`text-xs font-bold flex items-center gap-1.5 transition-all px-3 py-1.5 rounded-xl border cursor-pointer ${
+                  pastedText.trim() || additionalNotes.trim()
+                    ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+                title="Добавить особые указания или вставить текст вручную"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>
+                  {pastedText.trim() || additionalNotes.trim() ? '💬 Инструкция (Добавлена)' : '💬 Инструкция / Текст'}
+                </span>
+              </button>
+
               {onOpenScanModal && (
                 <button
                   type="button"
@@ -347,7 +317,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                   title="Распознать скан или фото документа (Gemini Vision)"
                 >
                   <Camera className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                  <span>Скан / Фото (OCR)</span>
+                  <span>Скан (OCR)</span>
                 </button>
               )}
 
@@ -358,7 +328,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                   className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-bold flex items-center gap-1 transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  Очистить всё
+                  Очистить
                 </button>
               )}
             </div>
@@ -515,35 +485,10 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             </div>
           )}
 
-          {/* UNIFIED MANUAL TEXT INPUT / NOTES */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                Или вставьте дополнительные фрагменты / текст вручную:
-              </label>
-              <textarea
-                rows={3}
-                value={pastedText}
-                onChange={(e) => setPastedText(e.target.value)}
-                placeholder="Вставьте пункт о штрафах, выдержку из извещения или текст договора..."
-                className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 font-mono leading-relaxed transition-all shadow-inner"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                Примечания и особые указания тендерному эксперту:
-              </label>
-              <textarea
-                rows={3}
-                value={additionalNotes}
-                onChange={(e) => setAdditionalNotes(e.target.value)}
-                placeholder="Укажите особые условия: например, проверить наличие авансирования, специфику поставщика или правила ПП РФ 1875..."
-                className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 leading-relaxed transition-all shadow-inner"
-              />
-            </div>
-          </div>
         </div>
+
+        {/* Live Token & Price Estimator Calculator */}
+        <TokenPriceEstimator totalChars={totalChars} />
 
         {/* Action Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
@@ -554,7 +499,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                 Готово к ИИ-экспертизе ({parsedFiles.length} файл(ов), ~{totalChars} симв.)
               </span>
             ) : (
-              'Загрузите файлы в окно или выберите готовый пример выше'
+              'Загрузите файлы документации в окно выше'
             )}
           </div>
 
@@ -595,6 +540,74 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           </div>
         </div>
       </form>
+
+      {/* Modal for Custom Instructions & Pasted Text */}
+      {isNotesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-xl">
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Инструкция и дополнительный текст
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Укажите комментарий эксперту ИИ или вставьте фрагмент вручную
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNotesModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300 block">
+                  Примечания и особые указания тендерному эксперту:
+                </label>
+                <textarea
+                  rows={3}
+                  value={additionalNotes}
+                  onChange={(e) => setAdditionalNotes(e.target.value)}
+                  placeholder="Укажите особые условия: например, проверить аванс, штрафы ПП 1875 или спецификацию..."
+                  className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300 block">
+                  Вставьте фрагменты текста вручную (если нет файла):
+                </label>
+                <textarea
+                  rows={4}
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  placeholder="Вставьте пункт о штрафах, ТЗ или извещение..."
+                  className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-slate-800 dark:text-slate-100 placeholder-slate-400 font-mono text-[11px] focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsNotesModalOpen(false)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer"
+              >
+                Сохранить и закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Interactive Document Viewer Modal */}
       <DocumentViewerModal
