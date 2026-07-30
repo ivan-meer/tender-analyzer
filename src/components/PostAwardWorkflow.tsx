@@ -23,23 +23,23 @@ export const PostAwardWorkflow: React.FC<PostAwardWorkflowProps> = ({ workflow }
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
         {/* Step A: Pre-delivery & Primary Docs */}
-        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-5 space-y-3.5 shadow-2xs">
+        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-2xs">
           <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200 border-b border-slate-200/80 dark:border-slate-700/60 pb-2.5">
             <Mail className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>До поставки & Сопровождение</span>
           </div>
 
-          <div className="space-y-2.5 text-slate-700">
-            <p className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs font-medium">
-              <strong className="text-slate-900 font-bold block mb-0.5">Уточнение формата первички:</strong>
+          <div className="space-y-2.5 text-slate-700 dark:text-slate-300">
+            <p className="bg-white dark:bg-slate-900/90 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs font-medium">
+              <strong className="text-slate-900 dark:text-white font-bold block mb-0.5">Уточнение формата первички:</strong>
               {workflow.primaryDocFormatConfirmation || 'Уточнить до поставки у Заказчика (УПД, ТОРГ-12, счета) и отписаться в Юджайл!'}
             </p>
 
-            <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-              <strong className="text-slate-900 font-bold block mb-1">Передать ВМЕСТЕ с товаром:</strong>
-              <ul className="list-disc pl-4 space-y-1 text-slate-600 font-medium">
+            <div className="space-y-1 bg-white dark:bg-slate-900/90 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+              <strong className="text-slate-900 dark:text-white font-bold block mb-1">Передать ВМЕСТЕ с товаром:</strong>
+              <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400 font-medium">
                 {workflow.accompanyingDocs && workflow.accompanyingDocs.length > 0 ? (
-                  workflow.accompanyingDocs.map((doc, idx) => <li key={idx} className="text-slate-800 font-bold">{doc}</li>)
+                  workflow.accompanyingDocs.map((doc, idx) => <li key={idx} className="text-slate-800 dark:text-slate-200 font-bold">{doc}</li>)
                 ) : (
                   <>
                     <li>Сертификаты и декларации соответствия</li>
@@ -53,43 +53,43 @@ export const PostAwardWorkflow: React.FC<PostAwardWorkflowProps> = ({ workflow }
         </div>
 
         {/* Step B: Strict Acceptance Documents Rule */}
-        <div className="bg-emerald-50/50 border border-emerald-200 rounded-2xl p-5 space-y-3.5 shadow-2xs">
-          <div className="flex items-center gap-2 font-bold text-emerald-800 border-b border-emerald-200/80 pb-2.5">
-            <FileCheck className="w-4 h-4 text-emerald-600" />
+        <div className="bg-emerald-50/50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-2xs">
+          <div className="flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-300 border-b border-emerald-200/80 dark:border-emerald-800/60 pb-2.5">
+            <FileCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>Закрывающие документы с печатями</span>
           </div>
 
-          <div className="space-y-2.5 text-slate-700 leading-relaxed font-medium">
-            <p className="text-slate-900 font-bold">
+          <div className="space-y-2.5 text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+            <p className="text-slate-900 dark:text-white font-bold">
               Максимальная работа с документами:
             </p>
-            <p className="text-xs text-slate-700 bg-white p-3 rounded-xl border border-emerald-200 shadow-2xs font-medium">
+            <p className="text-xs text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900/90 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/80 shadow-2xs font-medium">
               {workflow.acceptanceDocsStrategy || 'Требуем от Заказчика документы о приемке с подписями, печатями и ДАТАМИ приемки. Грузим сканы в Юджайл. Запрашиваем подтверждающие сканы на почту, а при молчании — требование оригиналов почтой!'}
             </p>
-            <div className="text-[11px] text-emerald-800 font-extrabold bg-emerald-100/80 p-2 rounded-lg border border-emerald-200">
+            <div className="text-[11px] text-emerald-800 dark:text-emerald-300 font-extrabold bg-emerald-100/80 dark:bg-emerald-900/60 p-2 rounded-lg border border-emerald-200 dark:border-emerald-800">
               ✓ Факт приемки подтверждается ТОЛЬКО наличием подписей и печатей с обеих сторон.
             </div>
           </div>
         </div>
 
         {/* Step C: Refusals & Claim Correspondence */}
-        <div className="bg-red-50/50 border border-red-200 rounded-2xl p-5 space-y-3.5 shadow-2xs">
-          <div className="flex items-center gap-2 font-bold text-red-800 border-b border-red-200/80 pb-2.5">
-            <AlertOctagon className="w-4 h-4 text-red-600" />
+        <div className="bg-red-50/50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/80 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-2xs">
+          <div className="flex items-center gap-2 font-bold text-red-800 dark:text-red-300 border-b border-red-200/80 dark:border-red-800/60 pb-2.5">
+            <AlertOctagon className="w-4 h-4 text-red-600 dark:text-red-400" />
             <span>Отказы Заказчика & Претензии</span>
           </div>
 
-          <div className="space-y-2.5 text-slate-700">
-            <div className="bg-white p-3 rounded-xl border border-red-200 shadow-2xs">
-              <strong className="text-red-700 font-bold block mb-1">При отказе от приемки:</strong>
-              <span className="text-xs text-slate-700 font-medium">
+          <div className="space-y-2.5 text-slate-700 dark:text-slate-300">
+            <div className="bg-white dark:bg-slate-900/90 p-3 rounded-xl border border-red-200 dark:border-red-800/80 shadow-2xs">
+              <strong className="text-red-700 dark:text-red-400 font-bold block mb-1">При отказе от приемки:</strong>
+              <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">
                 {workflow.motivatedRefusalGuide || 'Если доставлен качественный товар по ТЗ, а заказчик отказывается принимать — ТРЕБУЕМ письменный мотивированный отказ. Отказы на словах НЕ ПРИНИМАЕМ!'}
               </span>
             </div>
 
-            <div className="text-xs text-slate-700 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs space-y-1 font-medium">
-              <strong className="text-amber-800 font-bold block">Официальная переписка:</strong>
-              <p className="text-slate-600">
+            <div className="text-xs text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900/90 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs space-y-1 font-medium">
+              <strong className="text-amber-800 dark:text-amber-400 font-bold block">Официальная переписка:</strong>
+              <p className="text-slate-600 dark:text-slate-400">
                 Вся претензионная переписка строго с официальной почты, логируется в Юджайл. При получении претензии ответ готовится без задержек!
               </p>
             </div>

@@ -84,29 +84,29 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
     switch (status) {
       case 'RUSSIAN_REQUIRED':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-lg">
-            <ShieldAlert className="w-3 h-3 text-amber-600" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 px-2.5 py-1 rounded-lg">
+            <ShieldAlert className="w-3 h-3 text-amber-600 dark:text-amber-400" />
             ПП РФ 1875: Требуется РФ
           </span>
         );
       case 'RESTRICTED':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-purple-100 text-purple-900 border border-purple-300 px-2.5 py-1 rounded-lg">
-            <Layers className="w-3 h-3 text-purple-600" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-purple-100 dark:bg-purple-950/80 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-800 px-2.5 py-1 rounded-lg">
+            <Layers className="w-3 h-3 text-purple-600 dark:text-purple-400" />
             ПП РФ 1875: Ограничение
           </span>
         );
       case 'NOT_APPLICABLE':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-1 rounded-lg">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 px-2.5 py-1 rounded-lg">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
             Без ограничений
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg">
-            <HelpCircle className="w-3 h-3 text-slate-500" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 px-2.5 py-1 rounded-lg">
+            <HelpCircle className="w-3 h-3 text-slate-500 dark:text-slate-400" />
             Не определено
           </span>
         );
@@ -174,21 +174,21 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
             {filteredProducts.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">
+                <td colSpan={7} className="py-8 text-center text-slate-500 dark:text-slate-400 font-medium">
                   По заданным фильтрам позиции не найдены.
                 </td>
               </tr>
             ) : (
               filteredProducts.map((item, idx) => (
-                <tr key={item.id || idx} className="hover:bg-indigo-50/30 transition-colors align-top">
-                  <td className="py-3.5 px-4 font-mono font-bold text-slate-500 text-center">
+                <tr key={item.id || idx} className="hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30 transition-colors align-top">
+                  <td className="py-3.5 px-4 font-mono font-bold text-slate-500 dark:text-slate-400 text-center">
                     {idx + 1}
                   </td>
-                  <td className="py-3.5 px-4 font-bold text-slate-900 leading-snug">
+                  <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white leading-snug">
                     {item.name}
                   </td>
                   <td className="py-3.5 px-4">
-                    <span className="inline-block px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 font-extrabold rounded-lg">
+                    <span className="inline-block px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-extrabold rounded-lg">
                       {item.quantity}
                     </span>
                   </td>
@@ -197,14 +197,14 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
                     {(item.deliveryAddress || item.deliveryDeadline) && (
                       <div className="flex flex-wrap gap-1.5 pb-1">
                         {item.deliveryAddress && (
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-900 rounded-lg text-[11px] font-bold">
-                            <MapPin className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200 rounded-lg text-[11px] font-bold">
+                            <MapPin className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
                             <span>Адрес поставки: {item.deliveryAddress}</span>
                           </div>
                         )}
                         {item.deliveryDeadline && (
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-lg text-[11px] font-bold">
-                            <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 rounded-lg text-[11px] font-bold">
+                            <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
                             <span>Срок поставки: {item.deliveryDeadline}</span>
                           </div>
                         )}
@@ -213,21 +213,21 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
 
                     {/* Highlighted Dimensions / Габариты Badge */}
                     {item.dimensions && (
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg text-[11px] font-extrabold">
-                        <Ruler className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 rounded-lg text-[11px] font-extrabold">
+                        <Ruler className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                         <span>Размеры/Габариты: {item.dimensions}</span>
                       </div>
                     )}
 
                     {/* Main specification text */}
-                    <p className="text-slate-600 leading-relaxed font-medium">
+                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
                       {item.specification}
                     </p>
 
                     {/* Extracted Structured Parameters Grid with Visual Icon System */}
                     {item.parameters && item.parameters.length > 0 && (
                       <div className="pt-1.5">
-                        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">
                           <Sliders className="w-3 h-3 text-indigo-500" />
                           <span>Параметры и требования ТЗ (система иконок):</span>
                         </div>
@@ -249,13 +249,13 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
                       </div>
                     )}
                   </td>
-                  <td className="py-3.5 px-4 font-mono text-[11px] font-bold text-slate-700">
+                  <td className="py-3.5 px-4 font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">
                     {item.okpd2OrGvin || '—'}
                   </td>
                   <td className="py-3.5 px-4 space-y-1">
                     <div>{getStatusBadge(item.pp1875Status)}</div>
                     {item.registryNumberNote && (
-                      <p className="text-[11px] text-slate-500 font-medium leading-tight">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight">
                         {item.registryNumberNote}
                       </p>
                     )}
@@ -265,7 +265,7 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
                       <button
                         type="button"
                         onClick={() => handleOpenSearch(item)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-2xs"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white border border-indigo-200 dark:border-indigo-800 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-2xs"
                         title="Найти заводские аналоги и поставщиков в РФ по параметрам ТЗ"
                       >
                         <Globe className="w-3.5 h-3.5" />
@@ -275,10 +275,10 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
                       <button
                         type="button"
                         onClick={() => handleCopyProduct(item)}
-                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all cursor-pointer"
+                        className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 rounded-xl transition-all cursor-pointer"
                         title="Скопировать позицию со всеми параметрами"
                       >
-                        {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                        {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-4 h-4" />}
                       </button>
                     </div>
                   </td>
