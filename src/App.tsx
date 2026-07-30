@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { GuideModal } from './components/GuideModal';
+import { UserFlowSteps } from './components/UserFlowSteps';
 import { DocumentUploader } from './components/DocumentUploader';
 import { RiskSummaryCard } from './components/RiskSummaryCard';
 import { RiskMapCard } from './components/RiskMapCard';
@@ -21,6 +22,24 @@ export default function App() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem('theme') === 'dark' || 
+      (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(prev => !prev);
+  };
 
   const handleAnalyze = async (input: AnalysisInput) => {
     setIsAnalyzing(true);
@@ -133,26 +152,31 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans selection:bg-indigo-600 selection:text-white">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white transition-colors duration-200">
       <Header
         onOpenGuide={() => setIsGuideOpen(true)}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={toggleDarkMode}
         isAnalyzing={isAnalyzing}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Intro Section */}
         <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold">
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             Интеллектуальная система юридического и операционного аудита
           </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             Единое окно загрузки и анализа документации
           </h2>
-          <p className="text-slate-600 text-sm max-w-3xl font-medium">
+          <p className="text-slate-600 dark:text-slate-300 text-sm max-w-3xl font-medium">
             Загрузите файлы в единое окно (Excel-сметы, PDF, Word, тексты). ИИ-ассистент извлечет спецификацию продукции, проверит кабальные штрафы по 223-ФЗ, правила подачи файлов и сгенерирует отчет в PDF.
           </p>
         </div>
+
+        {/* User Flow Steps Map */}
+        <UserFlowSteps />
 
         {/* Document Uploader Form */}
         <DocumentUploader
@@ -163,8 +187,8 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
         {/* Error Alert */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-3xl p-5 flex items-start gap-3 text-red-800 text-sm animate-shake shadow-xs">
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-3xl p-5 flex items-start gap-3 text-red-800 dark:text-red-200 text-sm animate-shake shadow-xs">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
             <div className="flex-1">
               <strong className="font-bold block mb-0.5">Ошибка анализа:</strong>
               <span className="font-medium">{error}</span>
@@ -174,13 +198,13 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
         {/* Analysis Loading Indicator */}
         {isAnalyzing && (
-          <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-4 shadow-xs">
-            <div className="w-12 h-12 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin mx-auto"></div>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center space-y-4 shadow-xs">
+            <div className="w-12 h-12 rounded-full border-4 border-indigo-100 dark:border-indigo-950 border-t-indigo-600 dark:border-t-indigo-400 animate-spin mx-auto"></div>
             <div className="space-y-1">
-              <h3 className="text-lg font-bold text-slate-900">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                 Анализируем документацию и спецификацию по 223-ФЗ...
               </h3>
-              <p className="text-xs text-slate-500 font-medium max-w-md mx-auto">
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-md mx-auto">
                 Извлекаем номенклатуру продукции, проверяем штрафы 3%, условия поставки по заявке Заказчика, закупку у 3-х лиц и ограничение по ПП РФ № 1875.
               </p>
             </div>
@@ -191,9 +215,9 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         {analysisResult && !isAnalyzing && (
           <div id="analysis-results-section" className="space-y-8 animate-fade-in pt-2">
             {/* Top Toolbar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 p-4 rounded-2xl shadow-xs">
-              <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Анализ успешно завершен! Сформирован комплексный отчет.</span>
               </div>
 
@@ -215,10 +239,10 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
                 <button
                   id="export-txt-report-btn"
                   onClick={handleExportTxt}
-                  className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
                   title="Скачать исходный текстовый формат"
                 >
-                  <FileText className="w-4 h-4 text-slate-500" />
+                  <FileText className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                   <span>.TXT</span>
                 </button>
               </div>
@@ -261,10 +285,10 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
       />
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 space-y-1 font-medium">
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6 mt-12">
+        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 dark:text-slate-400 space-y-1 font-medium">
           <p>Интерфейс анализатора заявки по регламенту 223-ФЗ | ИИ-ассистент тендерного отдела</p>
-          <p className="text-[11px] text-slate-400">Все расчёты и выводы формируются с учётом неисполняемого списания штрафов по 223-ФЗ</p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">Все расчёты и выводы формируются с учётом неисполняемого списания штрафов по 223-ФЗ</p>
         </div>
       </footer>
     </div>

@@ -107,11 +107,11 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto animate-fade-in">
-      <div className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 overflow-y-auto animate-fade-in">
+      <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-8">
         
         {/* Header */}
-        <div className="p-6 bg-slate-900 text-white flex items-start justify-between gap-4">
+        <div className="p-6 bg-slate-900 dark:bg-slate-950 text-white flex items-start justify-between gap-4">
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-500/20 border border-indigo-400/30 text-indigo-200 rounded-lg text-xs font-bold">
               <Globe className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />

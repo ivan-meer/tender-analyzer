@@ -38,12 +38,12 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
 
   if (!products || products.length === 0) {
     return (
-      <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-3">
-        <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center space-y-3">
+        <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center mx-auto">
           <Package className="w-6 h-6" />
         </div>
-        <p className="text-sm font-bold text-slate-700">Спецификация и список продукции не обнаружены</p>
-        <p className="text-xs text-slate-500 font-medium max-w-md mx-auto">
+        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Спецификация и список продукции не обнаружены</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-md mx-auto">
           В загруженных файлах не найден явный перечень номенклатурных позиций. Загрузите файлы ТЗ или сметы в формате Excel (.xlsx) или таблицы Word.
         </p>
       </div>
@@ -114,18 +114,18 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden space-y-0">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xs overflow-hidden space-y-0 transition-colors duration-200">
       {/* Header Bar */}
-      <div className="p-5 border-b border-slate-200 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl">
+          <div className="p-2.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-2xl">
             <FileSpreadsheet className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
               Спецификация и Параметры Продукции ({products.length} позиций)
             </h3>
-            <p className="text-xs text-slate-500 font-medium">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
               Автоматическое извлечение наименований, габаритов, размеров и физико-технических параметров из ТЗ
             </p>
           </div>
@@ -134,20 +134,20 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
         {/* Filter & Search controls */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[220px]">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Поиск по наименованию, габаритам, ТЗ..."
-              className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-medium"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-medium"
             />
           </div>
 
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs font-bold bg-white border border-slate-200 text-slate-700 rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-500 shadow-2xs"
+            className="text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-500 shadow-2xs"
           >
             <option value="ALL">Все статусы ПП 1875</option>
             <option value="RUSSIAN_REQUIRED">Требуется РФ</option>
@@ -159,9 +159,9 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
 
       {/* Products Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs text-slate-700 border-collapse">
+        <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300 border-collapse">
           <thead>
-            <tr className="bg-slate-100/70 text-slate-900 font-bold border-b border-slate-200">
+            <tr className="bg-slate-100/70 dark:bg-slate-800/90 text-slate-900 dark:text-slate-100 font-bold border-b border-slate-200 dark:border-slate-800">
               <th className="py-3 px-4 w-12 text-center">№</th>
               <th className="py-3 px-4 min-w-[200px]">Наименование продукции</th>
               <th className="py-3 px-4 w-28">Количество</th>
@@ -171,7 +171,7 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
               <th className="py-3 px-4 w-14 text-center">Действие</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
             {filteredProducts.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-slate-500 font-medium">

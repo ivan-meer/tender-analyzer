@@ -8,24 +8,24 @@ interface PostAwardWorkflowProps {
 
 export const PostAwardWorkflow: React.FC<PostAwardWorkflowProps> = ({ workflow }) => {
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6">
-      <div className="border-b border-slate-200 pb-4">
-        <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-xl">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-6 transition-colors duration-200">
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
             <Truck className="w-5 h-5" />
           </div>
           <span>Порядок исполнения договора и работу с закрывашками (223-ФЗ)</span>
         </h3>
-        <p className="text-xs text-slate-500 font-medium mt-0.5">
+        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
           Операционные правила поставки, приемки документов, YouGile и защиты при отказах
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
         {/* Step A: Pre-delivery & Primary Docs */}
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3.5 shadow-2xs">
-          <div className="flex items-center gap-2 font-bold text-slate-800 border-b border-slate-200/80 pb-2.5">
-            <Mail className="w-4 h-4 text-indigo-600" />
+        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-5 space-y-3.5 shadow-2xs">
+          <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200 border-b border-slate-200/80 dark:border-slate-700/60 pb-2.5">
+            <Mail className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>До поставки & Сопровождение</span>
           </div>
 

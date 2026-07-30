@@ -58,15 +58,15 @@ export const TemplatesSection: React.FC<TemplatesSectionProps> = ({ templates })
   const currentTemplate = templates[activeTab] || '';
 
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-5">
-      <div className="border-b border-slate-200 pb-4">
-        <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-xl">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-5 transition-colors duration-200">
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
             <Sparkles className="w-5 h-5" />
           </div>
           <span>Автоматически сгенерированные шаблоны писем и документов</span>
         </h3>
-        <p className="text-xs text-slate-500 font-medium mt-0.5">
+        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
           Готовые юридически подкованные тексты для моментального копирования и отправки
         </p>
       </div>
@@ -83,10 +83,10 @@ export const TemplatesSection: React.FC<TemplatesSectionProps> = ({ templates })
               className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                 isActive
                   ? 'bg-indigo-600 border-indigo-600 text-white font-bold shadow-sm'
-                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-medium'
+                  : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white font-medium'
               }`}
             >
-              <Icon className={`w-4 h-4 mb-2.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+              <Icon className={`w-4 h-4 mb-2.5 ${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500'}`} />
               <span className="text-[11px] leading-snug line-clamp-2">{item.title}</span>
             </button>
           );
@@ -94,13 +94,13 @@ export const TemplatesSection: React.FC<TemplatesSectionProps> = ({ templates })
       </div>
 
       {/* Active Template Output */}
-      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3.5 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200/80 pb-3 gap-3">
+      <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-5 space-y-3.5 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200/80 dark:border-slate-700/60 pb-3 gap-3">
           <div>
-            <h4 className="text-xs font-bold text-slate-900">
+            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
               {templateConfig.find(t => t.key === activeTab)?.title}
             </h4>
-            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
               {templateConfig.find(t => t.key === activeTab)?.description}
             </p>
           </div>
@@ -123,7 +123,7 @@ export const TemplatesSection: React.FC<TemplatesSectionProps> = ({ templates })
           </button>
         </div>
 
-        <pre className="text-xs text-slate-800 font-mono whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto p-4 bg-white rounded-xl border border-slate-200 shadow-2xs font-medium">
+        <pre className="text-xs text-slate-800 dark:text-slate-200 font-mono whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto p-4 bg-white dark:bg-slate-900/90 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs font-medium">
           {currentTemplate || 'Текст шаблона формируется...'}
         </pre>
       </div>

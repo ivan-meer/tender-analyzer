@@ -8,20 +8,20 @@ interface SubmissionChecklistProps {
 
 export const SubmissionChecklist: React.FC<SubmissionChecklistProps> = ({ check }) => {
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6">
-      <div className="border-b border-slate-200 pb-4 flex items-center justify-between">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-6 transition-colors duration-200">
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-xl">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-xl">
               <CheckSquare className="w-5 h-5" />
             </div>
             <span>Правила подготовки и подачи заявки</span>
           </h3>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
             Контрольный чек-лист подготовки документов менеджеру и тендерному специалисту
           </p>
         </div>
-        <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-indigo-700">
+        <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-300">
           {check.procedureType === '223_FZ_AUCTION'
             ? 'Электронный Аукцион'
             : check.procedureType === '223_FZ_QUOTATION'

@@ -163,10 +163,10 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden space-y-0 animate-fade-in">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden space-y-0 transition-colors duration-200 animate-fade-in">
       
       {/* Card Header */}
-      <div className="bg-slate-900 text-white p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800">
+      <div className="bg-slate-900 dark:bg-slate-950 text-white p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800">
         <div className="flex items-center gap-3.5">
           <div className="p-3 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl text-white shadow-md">
             <Activity className="w-6 h-6" />
@@ -234,9 +234,9 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
           
           {/* Risk Score Gauge Display */}
-          <div className="md:col-span-5 bg-slate-50 border border-slate-200 rounded-3xl p-5 flex flex-col justify-between space-y-4">
+          <div className="md:col-span-5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-3xl p-5 flex flex-col justify-between space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Индекс риска договора
               </span>
               <span className={`text-xs font-black px-3 py-1 rounded-full ${riskZone.badgeBg}`}>
@@ -247,10 +247,10 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
             {/* Score Number + Color Bar Progress */}
             <div className="space-y-3">
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight">
+                <span className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
                   {riskScore}
                 </span>
-                <span className="text-base font-bold text-slate-400">/ 100</span>
+                <span className="text-base font-bold text-slate-400 dark:text-slate-500">/ 100</span>
               </div>
 
               {/* Tricolor Scale Meter */}
@@ -293,11 +293,11 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
           </div>
 
           {/* Recharts Chart Canvas Container */}
-          <div className="md:col-span-7 bg-slate-50 border border-slate-200 rounded-3xl p-5 flex flex-col justify-between min-h-[280px]">
+          <div className="md:col-span-7 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-3xl p-5 flex flex-col justify-between min-h-[280px]">
             
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <h3 className="text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 {activeChartTab === 'categories' && 'Распределение факторов риска по категориям'}
                 {activeChartTab === 'severity' && 'Соотношение уровней критичности'}
                 {activeChartTab === 'matrix' && 'Профиль концентрации рисков'}
@@ -306,7 +306,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCategoryClick(selectedCategory)}
-                  className="text-[11px] font-bold text-indigo-600 hover:underline flex items-center gap-1"
+                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                 >
                   <span>Сбросить фильтр</span>
                 </button>
@@ -320,12 +320,12 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
                   <BarChart data={categoryChartData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
                     <XAxis 
                       dataKey="name" 
-                      tick={{ fontSize: 11, fontWeight: 700, fill: '#475569' }} 
+                      tick={{ fontSize: 11, fontWeight: 700, fill: '#94a3b8' }} 
                       interval={0}
                       angle={-15}
                       textAnchor="end"
                     />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} />
                     <Tooltip 
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
@@ -407,7 +407,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
                     />
                     <Legend 
                       wrapperStyle={{ fontSize: '11px', fontWeight: 700 }}
-                      formatter={(value) => <span className="text-slate-700 font-bold">{value}</span>}
+                      formatter={(value) => <span className="text-slate-700 dark:text-slate-300 font-bold">{value}</span>}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -419,8 +419,8 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
               <div className="w-full h-60">
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart cx="50%" cy="50%" outerRadius="70%" data={categoryChartData}>
-                    <PolarGrid stroke="#cbd5e1" />
-                    <PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 700, fill: '#334155' }} />
+                    <PolarGrid stroke="#475569" />
+                    <PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
                     <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={{ fontSize: 9 }} />
                     <Radar name="Индекс риска" dataKey="weight" stroke="#6366f1" fill="#818cf8" fillOpacity={0.5} />
                     <Tooltip />
@@ -429,7 +429,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
               </div>
             )}
 
-            <p className="text-[11px] text-slate-400 font-medium text-center mt-2">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium text-center mt-2">
               💡 Нажмите на любой столбец диаграммы для быстрой фильтрации кабальных условий в реестре ниже.
             </p>
 
@@ -438,8 +438,8 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
         </div>
 
         {/* Category Quick Badges Filter Bar */}
-        <div className="pt-2 border-t border-slate-100 space-y-2">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+          <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
             Быстрая выборка факторов риска по разделам договора:
           </span>
 
@@ -449,8 +449,8 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
               onClick={() => handleCategoryClick('')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                 !selectedCategory
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 border-slate-900 dark:border-white shadow-xs'
+                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
               }`}
             >
               Все риски ({contractRisks.length})
@@ -468,13 +468,13 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
                     isSel
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50'
+                      : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30'
                   }`}
                 >
                   <span>{catInfo?.icon || '📌'}</span>
                   <span>{cat.name}</span>
                   <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
-                    isSel ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-800'
+                    isSel ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200'
                   }`}>
                     {cat.count}
                   </span>
