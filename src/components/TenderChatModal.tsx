@@ -5,7 +5,8 @@ import {
   ChevronUp, Info, Building2, Ruler, ShieldAlert, LayoutGrid, Maximize2, 
   ExternalLink, Tag, Activity, CheckCircle2, Clock, Layers, Cpu, Play,
   Trash2, Image as ImageIcon, RotateCcw, Paperclip, Mic, MicOff, Volume2, VolumeX,
-  Calculator, FileText, Upload, Plus, FileJson, DownloadCloud, Wrench, FileUp
+  Calculator, FileText, Upload, Plus, FileJson, DownloadCloud, Wrench, FileUp,
+  Pencil, Camera, Save, Link, Eye
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -22,6 +23,27 @@ export interface AttachedFile {
   content?: string;
   previewUrl?: string;
 }
+
+export interface DetailedProduct {
+  msgId: string;
+  originalIndex: number;
+  modelName: string;
+  supplierName: string;
+  matchStatus: string;
+  priceText: string;
+  imageUrl: string;
+  specs: { label: string; value: string }[];
+  rawRow: Record<string, any>;
+}
+
+export const MOCK_CHAIR_IMAGES = [
+  { title: 'Эргономичное сетчатое кресло', url: '/src/assets/images/office_chair_ergonomic_1785511520849.jpg' },
+  { title: 'Премиум кожаное кресло руководителя', url: '/src/assets/images/executive_leather_chair_1785511530335.jpg' },
+  { title: 'Стильное операторское синее кресло', url: '/src/assets/images/task_chair_blue_1785511542046.jpg' },
+  { title: 'Классическое тканевое офисное кресло', url: 'https://images.unsplash.com/photo-1580481072645-022f9a6d8310?auto=format&fit=crop&w=800&q=80' },
+  { title: 'Современное компьютерное кресло', url: 'https://images.unsplash.com/photo-1505797149-43b0069ec26b?auto=format&fit=crop&w=800&q=80' },
+  { title: 'Черное анатомическое кресло', url: 'https://images.unsplash.com/photo-1688578735427-91038bc320f7?auto=format&fit=crop&w=800&q=80' },
+];
 
 interface Message {
   id: string;
@@ -144,6 +166,148 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
   const [penaltyContractAmount, setPenaltyContractAmount] = useState('1000000');
   const [penaltyDays, setPenaltyDays] = useState('10');
   const [penaltyKeyRate, setPenaltyKeyRate] = useState('16');
+
+  // Product Detail Modal State
+  const [selectedProduct, setSelectedProduct] = useState<DetailedProduct | null>(null);
+  const [isEditingProduct, setIsEditingProduct] = useState(false);
+  const [showMockGallery, setShowMockGallery] = useState(false);
+  const productImageFileInputRef = useRef<HTMLInputElement>(null);
+
+  const [productEditForm, setProductEditForm] = useState({
+    modelName: '',
+    supplierName: '',
+    matchStatus: '',
+    priceText: '',
+    imageUrl: '',
+    seatHeightTop: '',
+    seatWidth: '',
+    seatDepth: '',
+    overallHeight: '',
+    loadMax: ''
+  });
+
+  const openProductDetail = (prod: DetailedProduct) => {
+    setSelectedProduct(prod);
+    setIsEditingProduct(false);
+    setShowMockGallery(false);
+    setProductEditForm({
+      modelName: prod.modelName,
+      supplierName: prod.supplierName,
+      matchStatus: prod.matchStatus,
+      priceText: prod.priceText,
+      imageUrl: prod.imageUrl,
+      seatHeightTop: String(prod.rawRow.seat_height_top ?? ''),
+      seatWidth: String(prod.rawRow.seat_width ?? ''),
+      seatDepth: String(prod.rawRow.seat_depth ?? ''),
+      overallHeight: String(prod.rawRow.overall_height ?? ''),
+      loadMax: String(prod.rawRow.load_max ?? '')
+    });
+  };
+
+  const handleSaveProductEdits = () => {
+    if (!selectedProduct) return;
+
+    const { msgId, originalIndex } = selectedProduct;
+
+    setMessages(prev => prev.map(m => {
+      if (m.id === msgId && m.sqlTable) {
+        const updatedRows = [...m.sqlTable.rows];
+        const targetRow = { ...updatedRows[originalIndex] };
+
+        targetRow.model_name = productEditForm.modelName;
+        targetRow.supplier = productEditForm.supplierName;
+        targetRow.match_status = productEditForm.matchStatus;
+        targetRow.price_min = productEditForm.priceText;
+        targetRow.image_url = productEditForm.imageUrl;
+        if (productEditForm.seatHeightTop) targetRow.seat_height_top = productEditForm.seatHeightTop;
+        if (productEditForm.seatWidth) targetRow.seat_width = productEditForm.seatWidth;
+        if (productEditForm.seatDepth) targetRow.seat_depth = productEditForm.seatDepth;
+        if (productEditForm.overallHeight) targetRow.overall_height = productEditForm.overallHeight;
+        if (productEditForm.loadMax) targetRow.load_max = productEditForm.loadMax;
+
+        updatedRows[originalIndex] = targetRow;
+
+        return {
+          ...m,
+          sqlTable: {
+            ...m.sqlTable,
+            rows: updatedRows
+          }
+        };
+      }
+      return m;
+    }));
+
+    setSelectedProduct(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        modelName: productEditForm.modelName,
+        supplierName: productEditForm.supplierName,
+        matchStatus: productEditForm.matchStatus,
+        priceText: productEditForm.priceText,
+        imageUrl: productEditForm.imageUrl,
+        rawRow: {
+          ...prev.rawRow,
+          model_name: productEditForm.modelName,
+          supplier: productEditForm.supplierName,
+          match_status: productEditForm.matchStatus,
+          price_min: productEditForm.priceText,
+          image_url: productEditForm.imageUrl,
+          seat_height_top: productEditForm.seatHeightTop,
+          seat_width: productEditForm.seatWidth,
+          seat_depth: productEditForm.seatDepth,
+          overall_height: productEditForm.overallHeight,
+          load_max: productEditForm.loadMax
+        }
+      };
+    });
+
+    setIsEditingProduct(false);
+  };
+
+  const handleProductPhotoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    updateProductPhoto(previewUrl);
+  };
+
+  const updateProductPhoto = (newUrl: string) => {
+    setProductEditForm(prev => ({ ...prev, imageUrl: newUrl }));
+    if (selectedProduct) {
+      setSelectedProduct(prev => prev ? ({ ...prev, imageUrl: newUrl }) : null);
+      setMessages(prevMsgs => prevMsgs.map(m => {
+        if (m.id === selectedProduct.msgId && m.sqlTable) {
+          const updatedRows = [...m.sqlTable.rows];
+          updatedRows[selectedProduct.originalIndex] = {
+            ...updatedRows[selectedProduct.originalIndex],
+            image_url: newUrl
+          };
+          return { ...m, sqlTable: { ...m.sqlTable, rows: updatedRows } };
+        }
+        return m;
+      }));
+    }
+  };
+
+  const handleDeleteProductPhoto = () => {
+    const fallbackUrl = 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=400&q=80';
+    updateProductPhoto(fallbackUrl);
+  };
+
+  const handleReplacePhotoUrl = () => {
+    const url = prompt('Введите URL нового изображения товара:', productEditForm.imageUrl || selectedProduct?.imageUrl || '');
+    if (url && url.trim()) {
+      updateProductPhoto(url.trim());
+    }
+  };
+
+  const handleSelectMockImage = (url: string) => {
+    updateProductPhoto(url);
+    setShowMockGallery(false);
+  };
 
   // Hook for executing SQL queries via dbService.ts
   const { executeSql, isExecuting: isExecutingHookSql, resetSqlState } = useSqlExecutor();
@@ -1006,7 +1170,12 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
 
           {messages.map(msg => {
             const hasSql = Boolean(msg.sqlQuery || msg.sqlTable);
-            const currentTab = activeTab[msg.id] || (msg.sqlTable ? 'cards' : 'text');
+            const isProductTable = Boolean(
+              msg.sqlTable?.columns.some(col => 
+                ['model_name', 'supplier', 'product_name', 'furniture_id', 'model_key', 'subcat', 'manufacturer', 'supplier_name'].includes(col)
+              )
+            );
+            const currentTab = activeTab[msg.id] || (msg.sqlTable ? (isProductTable ? 'cards' : 'table') : 'text');
             const isCodeVisible = Boolean(showSqlCode[msg.id]);
             const isAgentLogsVisible = Boolean(showAgentLogs[msg.id]);
             const filterQuery = (tableSearchTerm[msg.id] || '').toLowerCase();

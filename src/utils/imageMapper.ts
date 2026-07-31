@@ -6,6 +6,9 @@
 const CATEGORY_IMAGE_BANKS: Record<string, string[]> = {
   // Office Chairs & Ergonomic Seating
   chair: [
+    '/src/assets/images/office_chair_ergonomic_1785511520849.jpg',
+    '/src/assets/images/executive_leather_chair_1785511530335.jpg',
+    '/src/assets/images/task_chair_blue_1785511542046.jpg',
     'https://images.unsplash.com/photo-1580481072645-022f9a6d8310?auto=format&fit=crop&w=800&q=80',
     'https://images.unsplash.com/photo-1505797149-43b0069ec26b?auto=format&fit=crop&w=800&q=80',
     'https://images.unsplash.com/photo-1688578735427-91038bc320f7?auto=format&fit=crop&w=800&q=80',
