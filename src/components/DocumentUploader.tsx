@@ -18,11 +18,14 @@ import {
   FileCheck2,
   Plus,
   MessageSquare,
-  X
+  X,
+  Archive,
+  FileArchive,
+  Zap
 } from 'lucide-react';
 import { AnalysisInput, ProcedureType } from '../types';
 import { SAMPLE_PROCUREMENTS } from '../data/sampleProcurements';
-import { parseDocumentFile, ParsedDocument, formatFileSize } from '../utils/documentParser';
+import { parseDocumentFile, parseFileOrArchive, ParsedDocument, formatFileSize } from '../utils/documentParser';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { TokenPriceEstimator } from './TokenPriceEstimator';
 import { Camera } from 'lucide-react';
@@ -102,15 +105,15 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     setPastedText('');
   };
 
-  // Process selected or dropped files
+  // Process selected or dropped files (supports PDF, DOCX, XLSX, and ZIP/RAR/7Z Archives)
   const handleFilesAdded = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
     setIsProcessing(true);
 
     const newParsedList: ParsedDocument[] = [];
     for (let i = 0; i < files.length; i++) {
-      const parsed = await parseDocumentFile(files[i]);
-      newParsedList.push(parsed);
+      const parsedResults = await parseFileOrArchive(files[i]);
+      newParsedList.push(...parsedResults);
     }
 
     setParsedFiles(prev => [...prev, ...newParsedList]);
@@ -350,7 +353,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.rtf,.json,.md"
+              accept=".zip,.rar,.7z,.tar,.gz,.tgz,.pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.rtf,.json,.md"
               className="hidden"
               onChange={(e) => e.target.files && handleFilesAdded(e.target.files)}
             />
@@ -361,10 +364,10 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               </div>
               <div>
                 <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 block">
-                  Перетащите сюда файлы документации или кликните для выбора
+                  Перетащите сюда файлы закупочной документации или архивы (.zip)
                 </span>
                 <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium block mt-1">
-                  Поддерживаются: <strong>PDF</strong>, <strong>Word (.docx)</strong>, <strong>Excel (.xlsx/csv)</strong>, <strong>TXT</strong>
+                  Поддерживаются: <strong className="text-indigo-600 dark:text-indigo-400">Архивы ZIP/RAR/7Z</strong> (авто-разархивация), <strong>PDF</strong>, <strong>Word</strong>, <strong>Excel</strong>, <strong>TXT</strong>
                 </span>
               </div>
 
@@ -414,9 +417,17 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                       <div className="flex items-center gap-2.5 min-w-0">
                         {getFileBadge(file.fileType)}
                         <div className="min-w-0">
-                          <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
-                            {file.fileName}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
+                              {file.fileName}
+                            </span>
+                            {file.isFromArchive && (
+                              <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-md text-[10px] font-extrabold inline-flex items-center gap-1 shrink-0">
+                                <FileArchive className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                                Разархивирован ({file.archiveFileName})
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                             {formatFileSize(file.fileSize)} • {file.charCount} симв.
                           </span>

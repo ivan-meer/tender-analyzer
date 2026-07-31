@@ -79,6 +79,9 @@ export interface SupplierSearchResult {
   priceRangeEstimate: string;
   groundingSources?: Array<{ web?: { uri?: string; title?: string } }>;
   webSearchQueries?: string[];
+  fromCache?: boolean;
+  cachedAt?: string;
+  cacheHits?: number;
 }
 
 export interface DeliveryInfo {

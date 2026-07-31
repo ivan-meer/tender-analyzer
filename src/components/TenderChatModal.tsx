@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Send, User, X, Sparkles, Copy, Check, RefreshCw, Database, Terminal, Table as TableIcon, Download, AlertTriangle, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Bot, Send, User, X, Sparkles, Copy, Check, RefreshCw, Database, Terminal, Table as TableIcon, Download, AlertTriangle, ShieldCheck, Search, ChevronDown, ChevronUp, Info, Building2, Ruler, ShieldAlert } from 'lucide-react';
 
 interface SqlResultTable {
   sqlExecuted: string;
@@ -27,13 +27,38 @@ interface TenderChatModalProps {
   activeAnalysisContext?: string;
 }
 
+// User-friendly prompt chips
 const QUICK_PROMPTS = [
-  '🔍 Подбери кресла с сиденьем 450-550 мм',
-  '📊 Показать v_requirement_coverage',
-  '⚠️ Проверить v_data_issues',
-  'SELECT * FROM furniture.product_model LIMIT 10',
-  'Протокол разногласий к штрафу 3%',
+  { label: '🔍 Подобрать кресла (сиденье 450–550 мм)', query: 'Подбери кресла с высотой сиденья 450-550 мм и шириной от 500 мм' },
+  { label: '📊 Заполненность характеристик в базе', query: 'Показать статистику заполненности характеристик v_requirement_coverage' },
+  { label: '⚠️ Найти ошибки и аномалии в размерах', query: 'Проверить ошибки и аномалии данных v_data_issues' },
+  { label: '🏢 Топ-10 кресел всех фабрик', query: 'Показать каталог моделей офисных кресел поставщиков' },
+  { label: '⚖️ Оспорить штраф 3% по 223-ФЗ', query: 'Как правильно составить протокол разногласий к штрафу 3% за просрочку?' },
 ];
+
+// Human-readable labels for database columns
+const COLUMN_HUMAN_NAMES: Record<string, string> = {
+  label_ru: 'Характеристика',
+  pct_models: '% моделей с данными',
+  suppliers_with_value: 'Фабрик с данными',
+  tender_advice_ru: 'Совет для ТЗ',
+  model_name: 'Модель кресла',
+  supplier: 'Поставщик (Фабрика)',
+  supplier_name: 'Поставщик (Фабрика)',
+  seat_height_top: 'Высота сиденья',
+  seat_width: 'Ширина сиденья',
+  seat_depth: 'Глубина сиденья',
+  overall_height: 'Габаритная высота',
+  match_status: 'Статус соответствия',
+  score: 'Точность',
+  reqs_covered: 'Покрыто ТЗ',
+  price_min: 'Ориент. цена',
+  issue_ru: 'Суть проблемы',
+  severity: 'Критичность',
+  model_key: 'Артикул модели',
+  subcat: 'Категория',
+  detail: 'Детали сопоставления'
+};
 
 export const TenderChatModal: React.FC<TenderChatModalProps> = ({
   isOpen,
@@ -44,7 +69,7 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Здравствуйте! Я ваш ИИ-ассистент по тендерному каталогу мебели и закупкам 223-ФЗ. Я умею искать подходящие товары по базе PostgreSQL (схема furniture), вычислять интервалы габаритов (ПОКРЫВАЕТ, ПЕРЕСЕКАЕТ, В ДОПУСКЕ, НЕТ ДАННЫХ) и выполнять безопасные SQL-запросы.',
+      content: 'Здравствуйте! Я ваш умный ассистент по каталогу мебели и нормам 223-ФЗ/44-ФЗ. Я умею искать продукцию по базе PostgreSQL (схема furniture), сопоставлять интервальные габариты кресел и готовить документы.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       sqlQuery: `SELECT label_ru, pct_models, suppliers_with_value, tender_advice_ru FROM furniture.v_requirement_coverage ORDER BY pct_models DESC LIMIT 5;`,
       sqlTable: {
@@ -60,7 +85,7 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
         rowCount: 5,
         executionTimeMs: 8,
         fromLiveDb: true,
-        note: "Каталог Neon DB (furniture.v_requirement_coverage)"
+        note: "Сводка полноты каталога Neon DB (furniture.v_requirement_coverage)"
       }
     },
   ]);
@@ -68,6 +93,8 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Record<string, 'text' | 'table'>>({});
+  const [showSqlCode, setShowSqlCode] = useState<Record<string, boolean>>({});
+  const [tableSearchTerm, setTableSearchTerm] = useState<Record<string, string>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -100,7 +127,6 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
     setIsLoading(true);
 
     try {
-      // Format history for backend
       const formattedHistory = newMessages.map(m => ({
         role: m.role,
         content: m.content,
@@ -153,7 +179,7 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
 
   const exportTableCsv = (table: SqlResultTable) => {
     if (!table.columns || !table.rows) return;
-    const header = table.columns.join(',');
+    const header = table.columns.map(c => COLUMN_HUMAN_NAMES[c] || c).join(',');
     const csvRows = table.rows.map(row => 
       table.columns.map(col => {
         let val = row[col];
@@ -166,7 +192,7 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `furniture_sql_export_${Date.now()}.csv`);
+    link.setAttribute('download', `furniture_catalog_export_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -190,8 +216,8 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
     // Format interval match statuses
     if (str.toUpperCase().includes('ПОКРЫВАЕТ')) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-          <ShieldCheck className="w-3 h-3 text-emerald-500" />
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
           {str}
         </span>
       );
@@ -199,8 +225,8 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
 
     if (str.toUpperCase().includes('В ДОПУСКЕ')) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
-          <Check className="w-3 h-3 text-cyan-500" />
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
+          <Check className="w-3.5 h-3.5 text-cyan-500" />
           {str}
         </span>
       );
@@ -208,8 +234,8 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
 
     if (str.toUpperCase().includes('ПЕРЕСЕКАЕТ')) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-          <AlertTriangle className="w-3 h-3 text-amber-500" />
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
           {str}
         </span>
       );
@@ -217,7 +243,7 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
 
     if (str.toUpperCase().includes('НЕТ ДАННЫХ')) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30">
           {str}
         </span>
       );
@@ -225,7 +251,7 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
 
     if (str === 'критично') {
       return (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+        <span className="px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
           ⚠️ Критично
         </span>
       );
@@ -233,7 +259,7 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
 
     if (str === 'важно') {
       return (
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
           Важно
         </span>
       );
@@ -254,13 +280,13 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-base text-white">ИИ-Консультант & SQL Neon DB</h3>
-                <span className="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-extrabold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
-                  <Database className="w-2.5 h-2.5 text-cyan-400" />
-                  furniture.schema
+                <h3 className="font-bold text-base text-white">Умный Помощник по Мебели & 223-ФЗ</h3>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold px-2 py-0.5 rounded-full uppercase flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                  База Поставщиков Neon
                 </span>
               </div>
-              <p className="text-xs text-indigo-200/80">Автоматический подбор товаров по базе PostgreSQL и 223-ФЗ</p>
+              <p className="text-xs text-indigo-200/80">Автоматический подбор кресел под ТЗ, сравнение фабрик и юридический анализ</p>
             </div>
           </div>
 
@@ -274,24 +300,63 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
 
         {/* Quick prompt suggestions */}
         <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 overflow-x-auto scrollbar-none text-xs">
-          <span className="text-[11px] text-slate-400 font-bold uppercase shrink-0 pl-2">Запросы к каталогу:</span>
+          <span className="text-[11px] text-slate-400 font-bold uppercase shrink-0 pl-2">Популярные запросы:</span>
           {QUICK_PROMPTS.map((prompt, idx) => (
             <button
               key={idx}
-              onClick={() => handleSend(prompt)}
+              onClick={() => handleSend(prompt.query)}
               disabled={isLoading}
-              className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 text-slate-700 dark:text-slate-200 rounded-full shrink-0 text-xs font-medium transition-all cursor-pointer hover:shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1"
+              className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 text-slate-700 dark:text-slate-200 rounded-full shrink-0 text-xs font-medium transition-all cursor-pointer hover:shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
             >
-              {prompt}
+              {prompt.label}
             </button>
           ))}
         </div>
 
         {/* Messages List */}
         <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-50/50 dark:bg-slate-950/40">
+          
+          {/* Visual Legend Card at the top */}
+          <div className="bg-gradient-to-r from-indigo-50/80 via-white to-cyan-50/80 dark:from-slate-800/80 dark:via-slate-900 dark:to-slate-800/80 border border-indigo-100 dark:border-slate-800 rounded-2xl p-3 text-xs shadow-2xs">
+            <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+              <Info className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>Обозначение статусов сопоставления с ТЗ (по ГОСТ 19917-2014):</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
+              <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                <span><strong>ПОКРЫВАЕТ:</strong> 100% подходит</span>
+              </div>
+              <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shrink-0"></span>
+                <span><strong>В ДОПУСКЕ:</strong> В пределах ±20 мм</span>
+              </div>
+              <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"></span>
+                <span><strong>ПЕРЕСЕКАЕТ:</strong> Частичный допуск</span>
+              </div>
+              <div className="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0"></span>
+                <span><strong>НЕТ ДАННЫХ:</strong> Уточнить у фабрики</span>
+              </div>
+            </div>
+          </div>
+
           {messages.map(msg => {
             const hasSql = Boolean(msg.sqlQuery || msg.sqlTable);
             const currentTab = activeTab[msg.id] || (msg.sqlTable ? 'table' : 'text');
+            const isCodeVisible = Boolean(showSqlCode[msg.id]);
+            const filterQuery = (tableSearchTerm[msg.id] || '').toLowerCase();
+
+            // Filter table rows if search term entered
+            let filteredRows = msg.sqlTable?.rows || [];
+            if (filterQuery && msg.sqlTable?.columns) {
+              filteredRows = filteredRows.filter(row => 
+                msg.sqlTable!.columns.some(col => 
+                  String(row[col] ?? '').toLowerCase().includes(filterQuery)
+                )
+              );
+            }
 
             return (
               <div
@@ -305,7 +370,7 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
                 )}
 
                 <div
-                  className={`max-w-[92%] rounded-2xl p-4 shadow-2xs space-y-3 relative group ${
+                  className={`max-w-[94%] rounded-2xl p-4 shadow-2xs space-y-3 relative group ${
                     msg.role === 'user'
                       ? 'bg-indigo-600 text-white rounded-br-xs'
                       : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-xs'
@@ -313,39 +378,47 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
                 >
                   {/* Mode switcher tabs if SQL table exists */}
                   {hasSql && msg.role === 'assistant' && (
-                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setActiveTab(prev => ({ ...prev, [msg.id]: 'text' }))}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            currentTab === 'text'
-                              ? 'bg-indigo-600 text-white shadow-2xs'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                          }`}
-                        >
-                          Пояснения ИИ
-                        </button>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => setActiveTab(prev => ({ ...prev, [msg.id]: 'table' }))}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                             currentTab === 'table'
-                              ? 'bg-cyan-600 text-white shadow-2xs'
+                              ? 'bg-cyan-600 text-white shadow-2xs ring-2 ring-cyan-500/30'
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                           }`}
                         >
-                          <TableIcon className="w-3.5 h-3.5" />
-                          Таблица результатов SQL
+                          <TableIcon className="w-4 h-4" />
+                          📊 Наглядная таблица результатов
                           {msg.sqlTable?.rowCount !== undefined && (
-                            <span className="ml-1 bg-white/20 text-white px-1.5 py-0.2 rounded-full text-[10px]">
-                              {msg.sqlTable.rowCount}
+                            <span className="ml-1 bg-white/20 text-white px-1.5 py-0.2 rounded-full text-[10px] font-mono">
+                              {msg.sqlTable.rowCount} моделей
                             </span>
                           )}
                         </button>
+
+                        <button
+                          onClick={() => setActiveTab(prev => ({ ...prev, [msg.id]: 'text' }))}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            currentTab === 'text'
+                              ? 'bg-indigo-600 text-white shadow-2xs ring-2 ring-indigo-500/30'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          💬 Текстовое пояснение ИИ
+                        </button>
                       </div>
 
-                      <span className="text-[10px] text-slate-400 font-mono hidden sm:inline-block">
-                        PostgreSQL 17 Neon DB
-                      </span>
+                      {msg.sqlQuery && (
+                        <button
+                          onClick={() => setShowSqlCode(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
+                          className="text-[11px] font-medium text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1 cursor-pointer bg-slate-50 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700"
+                        >
+                          <Terminal className="w-3.5 h-3.5 text-cyan-500" />
+                          <span>{isCodeVisible ? 'Скрыть SQL-код' : 'Показать SQL-код'}</span>
+                          {isCodeVisible ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -359,13 +432,13 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
                   {/* SQL Execution Block & Interactive Table */}
                   {hasSql && msg.role === 'assistant' && (
                     <div className="space-y-3 pt-1">
-                      {/* Executed SQL Code Panel */}
-                      {msg.sqlQuery && (
-                        <div className="bg-slate-950 text-indigo-200 rounded-xl p-3 text-xs font-mono border border-slate-800 overflow-x-auto relative">
+                      {/* Collapsible Technical SQL Code */}
+                      {msg.sqlQuery && isCodeVisible && (
+                        <div className="bg-slate-950 text-indigo-200 rounded-xl p-3 text-xs font-mono border border-slate-800 overflow-x-auto relative animate-fade-in">
                           <div className="flex items-center justify-between text-[10px] text-slate-400 border-b border-slate-800 pb-1.5 mb-2">
                             <span className="flex items-center gap-1 text-cyan-400 font-bold">
                               <Terminal className="w-3.5 h-3.5" />
-                              SQL-Запрос к базе Neon (furniture)
+                              Технический запрос к PostgreSQL (furniture)
                             </span>
                             <button
                               onClick={() => handleCopy(msg.id + '_sql', msg.sqlQuery!)}
@@ -379,30 +452,44 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
                         </div>
                       )}
 
-                      {/* Interactive Data Table */}
-                      {msg.sqlTable && (
-                        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
-                          {/* Table Meta Bar */}
-                          <div className="bg-slate-100 dark:bg-slate-800/80 px-3.5 py-2 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      {/* Interactive Data Table View */}
+                      {msg.sqlTable && (currentTab === 'table' || !msg.content) && (
+                        <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-xs">
+                          {/* Table Controls & Search Header */}
+                          <div className="bg-slate-100/90 dark:bg-slate-800/90 px-3.5 py-2.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                                 <TableIcon className="w-4 h-4 text-cyan-500" />
-                                Выборка из базы ({msg.sqlTable.rowCount} строк)
+                                Найдено моделей: <span className="text-cyan-600 dark:text-cyan-400 font-extrabold">{filteredRows.length}</span> из {msg.sqlTable.rowCount}
                               </span>
-                              {msg.sqlTable.executionTimeMs !== undefined && (
-                                <span className="text-[10px] text-slate-400 font-mono">
-                                  • {msg.sqlTable.executionTimeMs} мс
+                              {msg.sqlTable.note && (
+                                <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md border border-indigo-200/50 dark:border-indigo-800/50 hidden sm:inline-block">
+                                  {msg.sqlTable.note}
                                 </span>
                               )}
                             </div>
 
-                            <button
-                              onClick={() => exportTableCsv(msg.sqlTable!)}
-                              className="px-2.5 py-1 bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-slate-600 transition-colors cursor-pointer flex items-center gap-1"
-                            >
-                              <Download className="w-3 h-3 text-indigo-500" />
-                              Экспорт CSV
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {/* Quick Search in Table */}
+                              <div className="relative">
+                                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                                <input
+                                  type="text"
+                                  placeholder="Быстрый фильтр..."
+                                  value={tableSearchTerm[msg.id] || ''}
+                                  onChange={(e) => setTableSearchTerm(prev => ({ ...prev, [msg.id]: e.target.value }))}
+                                  className="pl-8 pr-3 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500 w-36 sm:w-48"
+                                />
+                              </div>
+
+                              <button
+                                onClick={() => exportTableCsv(msg.sqlTable!)}
+                                className="px-3 py-1 bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-600 transition-colors cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs"
+                              >
+                                <Download className="w-3.5 h-3.5 text-indigo-500" />
+                                Экспорт CSV
+                              </button>
+                            </div>
                           </div>
 
                           {/* Error Banner if any */}
@@ -413,27 +500,32 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
                           )}
 
                           {/* Render Scrollable Table */}
-                          {msg.sqlTable.columns && msg.sqlTable.columns.length > 0 && msg.sqlTable.rows ? (
+                          {msg.sqlTable.columns && msg.sqlTable.columns.length > 0 && filteredRows.length > 0 ? (
                             <div className="overflow-x-auto max-h-80 scrollbar-thin">
                               <table className="w-full text-left text-xs border-collapse">
-                                <thead className="bg-slate-50 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 font-bold sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700">
+                                <thead className="bg-slate-100/80 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700 shadow-2xs">
                                   <tr>
-                                    <th className="px-3 py-2 border-r border-slate-200 dark:border-slate-800 w-10 text-center text-slate-400">#</th>
+                                    <th className="px-3 py-2.5 border-r border-slate-200 dark:border-slate-800 w-10 text-center text-slate-400">№</th>
                                     {msg.sqlTable.columns.map((col, cIdx) => (
-                                      <th key={cIdx} className="px-3 py-2 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">
-                                        {col}
+                                      <th key={cIdx} className="px-3 py-2.5 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">
+                                        <div className="flex flex-col">
+                                          <span>{COLUMN_HUMAN_NAMES[col] || col}</span>
+                                          {COLUMN_HUMAN_NAMES[col] && (
+                                            <span className="text-[9px] font-mono font-normal text-slate-400 dark:text-slate-500">{col}</span>
+                                          )}
+                                        </div>
                                       </th>
                                     ))}
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-sans">
-                                  {msg.sqlTable.rows.map((row, rIdx) => (
-                                    <tr key={rIdx} className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 transition-colors">
-                                      <td className="px-3 py-2 text-center text-slate-400 border-r border-slate-200 dark:border-slate-800 font-mono text-[10px]">
+                                  {filteredRows.map((row, rIdx) => (
+                                    <tr key={rIdx} className="hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 transition-colors">
+                                      <td className="px-3 py-2.5 text-center text-slate-400 border-r border-slate-200 dark:border-slate-800 font-mono text-[10px]">
                                         {rIdx + 1}
                                       </td>
                                       {msg.sqlTable!.columns.map((col, cIdx) => (
-                                        <td key={cIdx} className="px-3 py-2 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap text-slate-700 dark:text-slate-200">
+                                        <td key={cIdx} className="px-3 py-2.5 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap text-slate-700 dark:text-slate-200">
                                           {renderTableCell(row[col])}
                                         </td>
                                       ))}
@@ -443,8 +535,8 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
                               </table>
                             </div>
                           ) : (
-                            <div className="p-4 text-center text-slate-400 text-xs">
-                              Запрос выполнен, результатов нет (0 строк).
+                            <div className="p-6 text-center text-slate-400 text-xs">
+                              {filterQuery ? 'Ничего не найдено по введенному фильтру.' : 'Запрос выполнен, результатов нет (0 строк).'}
                             </div>
                           )}
                         </div>
@@ -487,7 +579,7 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-2xl rounded-bl-xs shadow-2xs flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-spin" />
-                <span className="text-xs text-slate-500 font-medium">ИИ выполнят сопоставление интервалов и SQL-запрос к базе Neon DB...</span>
+                <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Выполняется сопоставление габаритов и обращение к базе данных Neon...</span>
               </div>
             </div>
           )}
@@ -501,13 +593,13 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
             e.preventDefault();
             handleSend();
           }}
-          className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2"
+          className="p-3.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2"
         >
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Задайте вопрос по мебели или введите SQL-запрос (SELECT * FROM furniture...)..."
+            placeholder="Напишите вопрос по подбору кресел (например: 'Найди офисные кресла с высотой 450-550 мм')..."
             disabled={isLoading}
             className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white px-4 py-3 rounded-2xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-400 font-sans"
           />
@@ -523,3 +615,4 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
     </div>
   );
 };
+

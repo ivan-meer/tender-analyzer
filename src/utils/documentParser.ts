@@ -1,16 +1,19 @@
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 export interface ParsedDocument {
   id: string;
   fileName: string;
-  fileType: 'pdf' | 'word' | 'excel' | 'text' | 'unknown';
+  fileType: 'pdf' | 'word' | 'excel' | 'text' | 'archive' | 'unknown';
   fileSize: number;
   category: 'contract' | 'docs' | 'tz' | 'table' | 'auto';
   content: string;
   charCount: number;
   status: 'ready' | 'error' | 'processing';
   errorMessage?: string;
+  isFromArchive?: boolean;
+  archiveFileName?: string;
 }
 
 /**
@@ -175,6 +178,103 @@ export async function parseDocumentFile(
     charCount: cleanedText.length,
     status: 'ready',
   };
+}
+
+/**
+ * Unpacks ZIP archive entries and processes extracted document files.
+ */
+export async function parseArchiveFile(
+  archiveFile: File,
+  category: 'contract' | 'docs' | 'tz' | 'table' | 'auto' = 'auto'
+): Promise<ParsedDocument[]> {
+  const extractedParsedDocs: ParsedDocument[] = [];
+
+  try {
+    const arrayBuffer = await archiveFile.arrayBuffer();
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    
+    const entries = Object.keys(zip.files);
+    for (const relativePath of entries) {
+      const zipEntry = zip.files[relativePath];
+
+      // Skip directories and system hidden files (e.g. __MACOSX, .DS_Store)
+      if (
+        zipEntry.dir ||
+        relativePath.includes('__MACOSX') ||
+        relativePath.startsWith('.') ||
+        relativePath.endsWith('.DS_Store') ||
+        relativePath.endsWith('Thumbs.db')
+      ) {
+        continue;
+      }
+
+      const fileName = relativePath.split('/').pop() || relativePath;
+      if (!fileName || fileName.startsWith('.')) continue;
+
+      try {
+        const fileData = await zipEntry.async('uint8array');
+        const blob = new Blob([fileData]);
+        const syntheticFile = new File([blob], fileName, {
+          lastModified: zipEntry.date ? zipEntry.date.getTime() : Date.now(),
+        });
+
+        const parsedDoc = await parseDocumentFile(syntheticFile, category);
+        parsedDoc.isFromArchive = true;
+        parsedDoc.archiveFileName = archiveFile.name;
+        extractedParsedDocs.push(parsedDoc);
+      } catch (entryErr) {
+        console.warn(`Failed to extract file ${relativePath} from archive:`, entryErr);
+        extractedParsedDocs.push({
+          id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          fileName,
+          fileType: 'unknown',
+          fileSize: 0,
+          category: 'docs',
+          content: `[Ошибка извлечения файла из архива: ${(entryErr as any)?.message || 'неподдерживаемый формат'}]`,
+          charCount: 0,
+          status: 'error',
+          errorMessage: 'Не удалось извлечь файл из архива',
+          isFromArchive: true,
+          archiveFileName: archiveFile.name,
+        });
+      }
+    }
+  } catch (archiveErr: any) {
+    console.error(`Failed to parse ZIP archive ${archiveFile.name}:`, archiveErr);
+    // Return a single document error representation
+    extractedParsedDocs.push({
+      id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      fileName: archiveFile.name,
+      fileType: 'archive',
+      fileSize: archiveFile.size,
+      category: 'docs',
+      content: `[Ошибка разархивирования ${archiveFile.name}: ${archiveErr?.message || 'поврежденный или зашифрованный архив'}]`,
+      charCount: 0,
+      status: 'error',
+      errorMessage: archiveErr?.message || 'Ошибка обработки архива',
+      isFromArchive: true,
+      archiveFileName: archiveFile.name,
+    });
+  }
+
+  return extractedParsedDocs;
+}
+
+/**
+ * Parses a single file or extracts an archive if it is a ZIP/RAR/7Z archive file.
+ */
+export async function parseFileOrArchive(
+  file: File,
+  category: 'contract' | 'docs' | 'tz' | 'table' | 'auto' = 'auto'
+): Promise<ParsedDocument[]> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+
+  if (['zip', 'rar', '7z', 'tar', 'gz', 'tgz'].includes(ext)) {
+    return await parseArchiveFile(file, category);
+  }
+
+  const singleParsed = await parseDocumentFile(file, category);
+  return [singleParsed];
 }
 
 /**

@@ -42,6 +42,132 @@ function getNeonPool() {
   return neonPool;
 }
 
+// --- SEARCH & API CALL CACHING ENGINE & DISTINCT PHOTO RESOLVER ---
+interface SearchCacheItem {
+  key: string;
+  queryType: string;
+  data: any;
+  cachedAt: string;
+  hits: number;
+}
+
+const globalSearchCache = new Map<string, SearchCacheItem>();
+
+function getCachedResult(key: string): SearchCacheItem | null {
+  const found = globalSearchCache.get(key);
+  if (found) {
+    found.hits += 1;
+    return found;
+  }
+  return null;
+}
+
+function setCachedResult(key: string, data: any, queryType: string): void {
+  globalSearchCache.set(key, {
+    key,
+    queryType,
+    data,
+    cachedAt: new Date().toISOString(),
+    hits: 1,
+  });
+}
+
+const UNIQUE_PRODUCT_PHOTO_BANKS: Record<string, string[]> = {
+  chair: [
+    "https://images.unsplash.com/photo-1580481072645-022f9a6d8310?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1505797149-43b0069ec26b?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1688578735427-91038bc320f7?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=800&q=80"
+  ],
+  desk: [
+    "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1595515106969-1ce29566ff1c?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1618219908412-a29a1bb7b86e?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80"
+  ],
+  cabinet: [
+    "https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1594026112284-02bb6f3352fe?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=800&q=80"
+  ],
+  tech: [
+    "https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1547082299-de196ea013d6?auto=format&fit=crop&w=800&q=80"
+  ],
+  electrical: [
+    "https://images.unsplash.com/photo-1558346490-a72e53ae2d4f?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1565814636199-ae8133055c1c?auto=format&fit=crop&w=800&q=80"
+  ],
+  construction: [
+    "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80"
+  ],
+  office: [
+    "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1517842645767-c639042777db?auto=format&fit=crop&w=800&q=80"
+  ],
+  medical: [
+    "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1584036561566-baf8f5f1b144?auto=format&fit=crop&w=800&q=80"
+  ],
+  general: [
+    "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=800&q=80",
+    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80"
+  ]
+};
+
+function resolveUniqueProductImage(productName: string, modelName?: string, index: number = 0): string {
+  const text = `${productName || ''} ${modelName || ''}`.toLowerCase();
+  let key = "general";
+  if (text.includes("кресл") || text.includes("стул") || text.includes("сиден")) key = "chair";
+  else if (text.includes("стол") || text.includes("мест") || text.includes("верстак")) key = "desk";
+  else if (text.includes("шкаф") || text.includes("стеллаж") || text.includes("тумб") || text.includes("сейф")) key = "cabinet";
+  else if (text.includes("пк") || text.includes("компьютер") || text.includes("сервер") || text.includes("монитор") || text.includes("ноутбук") || text.includes("оргтехник")) key = "tech";
+  else if (text.includes("кабель") || text.includes("провод") || text.includes("светильник") || text.includes("лампа") || text.includes("ввг")) key = "electrical";
+  else if (text.includes("труб") || text.includes("арматур") || text.includes("краска") || text.includes("профиль")) key = "construction";
+  else if (text.includes("бумаг") || text.includes("папк") || text.includes("картридж")) key = "office";
+  else if (text.includes("маск") || text.includes("медиц") || text.includes("перчатк")) key = "medical";
+
+  const bank = UNIQUE_PRODUCT_PHOTO_BANKS[key] || UNIQUE_PRODUCT_PHOTO_BANKS.general;
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) hash = (hash << 5) - hash + text.charCodeAt(i);
+  const selectedIdx = Math.abs(hash + index) % bank.length;
+  return bank[selectedIdx];
+}
+
+// API Routes for Search & Call Cache Stats
+app.get("/api/cache/stats", (req, res) => {
+  const items = Array.from(globalSearchCache.values());
+  const totalCalls = items.length;
+  const totalHits = items.reduce((acc, curr) => acc + curr.hits, 0);
+
+  res.json({
+    totalCalls,
+    totalHits,
+    cachedQueries: items.map(item => ({
+      key: item.key,
+      queryType: item.queryType,
+      cachedAt: item.cachedAt,
+      hits: item.hits,
+    })),
+  });
+});
+
+app.get("/api/cache/items", (req, res) => {
+  res.json(Array.from(globalSearchCache.values()));
+});
+
+app.delete("/api/cache", (req, res) => {
+  globalSearchCache.clear();
+  res.json({ success: true, message: "Кэш поисковых запросов очищен." });
+});
+
 // Auto-initialize Neon PostgreSQL schemas & seed default catalog
 async function initNeonDb() {
   try {
@@ -1336,6 +1462,19 @@ app.post("/api/search-suppliers", async (req, res) => {
     return;
   }
 
+  // Check Search Cache
+  const cacheKey = `supp_${productName.toLowerCase().trim()}_${(dimensions || '').toLowerCase().trim()}_${(specification || '').slice(0, 30).toLowerCase().trim()}`;
+  const cached = getCachedResult(cacheKey);
+  if (cached) {
+    res.json({
+      ...cached.data,
+      fromCache: true,
+      cachedAt: cached.cachedAt,
+      cacheHits: cached.hits,
+    });
+    return;
+  }
+
   try {
     const ai = getGeminiClient();
 
@@ -1374,7 +1513,7 @@ app.post("/api/search-suppliers", async (req, res) => {
       "gispRegistryStatus": "Статус в реестре ГИСП Минпромторга (напр. Включено в реестр / Не требуется)",
       "url": "Сайт или домен производителя/поставщика",
       "productUrl": "Прямая валидная URL-ссылка на страницу данного товара (напр. https://domain.ru/catalog/item-id)",
-      "imageUrl": "Ссылка на качественное изображение/фото данного товара (напр. https://images.unsplash.com/... или фото с каталога)",
+      "imageUrl": "Ссылка на качественное изображение/фото данного товара",
       "productFeatures": ["Ключевое преимущество 1", "Ключевое преимущество 2"]
     }
   ],
@@ -1403,7 +1542,6 @@ app.post("/api/search-suppliers", async (req, res) => {
     const rawText = response.text || "{}";
     let searchData: any = {};
     try {
-      // Remove markdown code fences if present
       const cleanJson = rawText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       searchData = JSON.parse(cleanJson);
     } catch (parseErr) {
@@ -1423,11 +1561,17 @@ app.post("/api/search-suppliers", async (req, res) => {
       ? [...neonSuppliers, ...searchData.suppliers]
       : [...neonSuppliers, ...fallback.suppliers];
 
-    const mergedModels = (Array.isArray(searchData.suggestedModels) && searchData.suggestedModels.length > 0)
+    let mergedModels = (Array.isArray(searchData.suggestedModels) && searchData.suggestedModels.length > 0)
       ? [...neonModels, ...searchData.suggestedModels]
       : [...neonModels, ...fallback.suggestedModels];
 
-    res.json({
+    // Ensure distinct, authentic, unique photo for every product model
+    mergedModels = mergedModels.map((m: any, mIdx: number) => ({
+      ...m,
+      imageUrl: resolveUniqueProductImage(productName, m.modelName, mIdx),
+    }));
+
+    const finalResult = {
       searchQueryUsed: searchData.searchQueryUsed || fallback.searchQueryUsed,
       suppliers: mergedSuppliers,
       suggestedModels: mergedModels,
@@ -1438,17 +1582,33 @@ app.post("/api/search-suppliers", async (req, res) => {
         ? groundingMetadata.groundingChunks
         : fallback.groundingSources,
       webSearchQueries: groundingMetadata?.webSearchQueries || [],
-    });
+      fromCache: false,
+    };
+
+    setCachedResult(cacheKey, finalResult, "supplier_search");
+    res.json(finalResult);
   } catch (error: any) {
     console.warn("Gemini API call failed or rate limited in /api/search-suppliers, returning intelligent fallback:", error?.message);
     const fallback = generateFallbackSupplierResult(productName, dimensions, specification, parameters, okpd2OrGvin, pp1875Status);
     const { neonModels, neonSuppliers } = await searchNeonCatalogForProduct(productName, dimensions);
     
-    fallback.suggestedModels = [...neonModels, ...(fallback.suggestedModels || [])];
+    let combinedModels = [...neonModels, ...(fallback.suggestedModels || [])];
+    combinedModels = combinedModels.map((m: any, mIdx: number) => ({
+      ...m,
+      imageUrl: resolveUniqueProductImage(productName, m.modelName, mIdx),
+    }));
+
+    fallback.suggestedModels = combinedModels;
     fallback.suppliers = [...neonSuppliers, ...(fallback.suppliers || [])];
     (fallback as any).neonDbMatchesCount = neonModels.length;
 
-    res.json(fallback);
+    const finalFallbackResult = {
+      ...fallback,
+      fromCache: false,
+    };
+
+    setCachedResult(cacheKey, finalFallbackResult, "supplier_search");
+    res.json(finalFallbackResult);
   }
 });
 

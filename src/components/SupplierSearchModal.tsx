@@ -20,7 +20,9 @@ import {
   Image as ImageIcon,
   Sparkles,
   Database,
-  Cpu
+  Cpu,
+  Zap,
+  Maximize2
 } from 'lucide-react';
 
 interface SupplierSearchModalProps {
@@ -38,6 +40,7 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SupplierSearchResult | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
+  const [activeZoomImage, setActiveZoomImage] = useState<{ url: string; title: string } | null>(null);
 
   useEffect(() => {
     if (isOpen && product) {
@@ -200,6 +203,13 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
                       Ориентировочная вилка цен по РФ
                     </div>
 
+                    {result.fromCache && (
+                      <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 rounded-lg text-[10px] font-extrabold flex items-center gap-1 animate-pulse">
+                        <Zap className="w-3 h-3 text-emerald-400" />
+                        ⚡ Из кэша ({result.cacheHits && result.cacheHits > 1 ? `обращений: ${result.cacheHits}` : 'сохранено'})
+                      </span>
+                    )}
+
                     {(result as any).neonDbMatchesCount > 0 && (
                       <span className="px-2.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 rounded-lg text-[10px] font-extrabold flex items-center gap-1">
                         <Database className="w-3 h-3 text-cyan-400" />
@@ -321,17 +331,26 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
                         className="p-4 sm:p-5 bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-3xl space-y-3 shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-500 transition-all flex flex-col md:flex-row gap-4 items-start"
                       >
                         {/* Product Image Thumbnail */}
-                        <div className="w-full md:w-44 h-36 bg-slate-100 dark:bg-slate-900 rounded-2xl overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 relative group">
+                        <div 
+                          onClick={() => model.imageUrl && setActiveZoomImage({ url: model.imageUrl, title: `${model.modelName} — ${model.manufacturer}` })}
+                          className="w-full md:w-44 h-36 bg-slate-100 dark:bg-slate-900 rounded-2xl overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700 relative group cursor-pointer"
+                        >
                           {model.imageUrl ? (
-                            <img 
-                              src={model.imageUrl} 
-                              alt={model.modelName}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=400&q=80';
-                              }}
-                            />
+                            <>
+                              <img 
+                                src={model.imageUrl} 
+                                alt={model.modelName}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=400&q=80';
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1.5 font-bold text-xs backdrop-blur-xs">
+                                <Maximize2 className="w-4 h-4" />
+                                <span>Увеличить</span>
+                              </div>
+                            </>
                           ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 space-y-1">
                               <ImageIcon className="w-8 h-8 opacity-60" />
@@ -479,6 +498,36 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
         </div>
 
       </div>
+
+      {/* Lightbox Zoom Image Modal */}
+      {activeZoomImage && (
+        <div 
+          onClick={() => setActiveZoomImage(null)}
+          className="fixed inset-0 z-60 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-4 cursor-zoom-out animate-fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="relative max-w-4xl max-h-[85vh] bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl space-y-3 p-3 flex flex-col items-center"
+          >
+            <div className="w-full flex items-center justify-between px-2 pt-1 text-white text-xs font-bold">
+              <span className="truncate pr-4">{activeZoomImage.title}</span>
+              <button 
+                type="button"
+                onClick={() => setActiveZoomImage(null)}
+                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img 
+              src={activeZoomImage.url} 
+              alt={activeZoomImage.title}
+              referrerPolicy="no-referrer"
+              className="max-w-full max-h-[75vh] object-contain rounded-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
