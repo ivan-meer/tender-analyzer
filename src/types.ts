@@ -99,8 +99,10 @@ export interface ProductItem {
   quantity: string; // Количество с единицами измерения
   dimensions?: string; // Размеры / Габариты из ТЗ (если есть)
   specification: string; // Основное описание / технические требования из ТЗ
+  rawRequirementText?: string;
   parameters?: ProductParameter[]; // Список ключевых физико-технических параметров
   okpd2OrGvin?: string; // Код ОКПД2 / КТРУ
+  okpd2?: string;
   pp1875Status: 'RUSSIAN_REQUIRED' | 'RESTRICTED' | 'NOT_APPLICABLE' | 'UNKNOWN';
   registryNumberNote?: string; // Описание реестровых номеров / баллов по ПП 1875
   deliveryAddress?: string; // Конкретный адрес поставки для данной позиции (если отличается)

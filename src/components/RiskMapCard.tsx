@@ -348,7 +348,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
                     <Bar 
                       dataKey="count" 
                       radius={[8, 8, 0, 0]}
-                      onClick={(barData) => handleCategoryClick(barData.categoryKey)}
+                      onClick={(barData: any) => handleCategoryClick(barData?.categoryKey || barData?.payload?.categoryKey)}
                       className="cursor-pointer"
                     >
                       {categoryChartData.map((entry, index) => {

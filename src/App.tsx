@@ -206,7 +206,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
   const productsCount = analysisResult?.productList?.length || 0;
   const risksCount = analysisResult?.contractRisks?.length || 0;
   const criticalRisksCount = analysisResult?.contractRisks?.filter(r => r.severity === 'CRITICAL' || r.severity === 'HIGH').length || 0;
-  const templatesCount = analysisResult?.generatedTemplates?.length || 0;
+  const templatesCount = analysisResult?.generatedTemplates ? Object.keys(analysisResult.generatedTemplates).length : 0;
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white transition-colors duration-200">
