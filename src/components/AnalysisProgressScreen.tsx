@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, FileSearch, Sparkles, CheckCircle2, Cpu, Building2, Zap, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, FileSearch, Sparkles, CheckCircle2, Cpu, Building2, Zap, AlertTriangle, Archive, FileArchive } from 'lucide-react';
 
 interface AnalysisProgressScreenProps {
   onCancel?: () => void;
@@ -10,6 +10,12 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = () 
   const [progress, setProgress] = useState(12);
 
   const steps = [
+    {
+      id: 'unarchive',
+      title: 'Разархивирование и распаковка ZIP/RAR закупочных файлов',
+      subtitle: 'Извлечение проектов контрактов, спец-ТЗ, смет и чертежей',
+      icon: Archive,
+    },
     {
       id: 'ocr',
       title: 'Парсинг структуры и извлечение юридических формулировок 223-ФЗ',

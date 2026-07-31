@@ -180,6 +180,37 @@ export class NeonService {
   }
 
   /**
+   * Update existing catalog item in Neon DB
+   */
+  static async updateCatalogItem(id: number, payload: Partial<{
+    companyName: string;
+    supplierName: string;
+    category: string;
+    modelName: string;
+    dimensions: string;
+    estimatedPrice: number;
+    priceFormatted: string;
+    description: string;
+    gispRegistryStatus: string;
+    productUrl: string;
+    imageUrl: string;
+    productFeatures: string[];
+  }>): Promise<NeonCatalogItem> {
+    const res = await fetch(`/api/neon/catalog/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to update item in Neon DB');
+    }
+
+    return res.json();
+  }
+
+  /**
    * Add a supplier company to Neon DB
    */
   static async addSupplier(supplier: {
@@ -201,5 +232,44 @@ export class NeonService {
     }
 
     return res.json();
+  }
+
+  /**
+   * Update existing supplier in Neon DB
+   */
+  static async updateSupplier(id: number, supplier: Partial<{
+    companyName: string;
+    region: string;
+    specialization: string;
+    contactsOrWebsite: string;
+    websiteUrl: string;
+    inGispRegistry: boolean;
+  }>): Promise<NeonSupplier> {
+    const res = await fetch(`/api/neon/suppliers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(supplier),
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to update supplier in Neon DB');
+    }
+
+    return res.json();
+  }
+
+  /**
+   * Delete supplier from Neon DB
+   */
+  static async deleteSupplier(id: number): Promise<boolean> {
+    const res = await fetch(`/api/neon/suppliers/${id}`, {
+      method: 'DELETE',
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to delete supplier from Neon DB');
+    }
+
+    return true;
   }
 }

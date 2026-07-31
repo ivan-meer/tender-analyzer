@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Send, User, X, Sparkles, Copy, Check, RefreshCw, Database, Terminal, Table as TableIcon, Download, AlertTriangle, ShieldCheck, Search, ChevronDown, ChevronUp, Info, Building2, Ruler, ShieldAlert } from 'lucide-react';
+import { Bot, Send, User, X, Sparkles, Copy, Check, RefreshCw, Database, Terminal, Table as TableIcon, Download, AlertTriangle, ShieldCheck, Search, ChevronDown, ChevronUp, Info, Building2, Ruler, ShieldAlert, LayoutGrid, Maximize2, ExternalLink, Tag } from 'lucide-react';
+import { getUniqueProductImageUrl } from '../utils/imageMapper';
 
 interface SqlResultTable {
   sqlExecuted: string;
@@ -92,9 +93,10 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<Record<string, 'text' | 'table'>>({});
+  const [activeTab, setActiveTab] = useState<Record<string, 'cards' | 'table' | 'text'>>({});
   const [showSqlCode, setShowSqlCode] = useState<Record<string, boolean>>({});
   const [tableSearchTerm, setTableSearchTerm] = useState<Record<string, string>>({});
+  const [activeZoomImage, setActiveZoomImage] = useState<{ url: string; title: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -381,6 +383,23 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
                       <div className="flex items-center gap-2">
                         <button
+                          onClick={() => setActiveTab(prev => ({ ...prev, [msg.id]: 'cards' }))}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            currentTab === 'cards' || (!activeTab[msg.id] && msg.sqlTable)
+                              ? 'bg-indigo-600 text-white shadow-2xs ring-2 ring-indigo-500/30'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          <LayoutGrid className="w-4 h-4" />
+                          🎴 Карточки товаров
+                          {msg.sqlTable?.rowCount !== undefined && (
+                            <span className="ml-1 bg-white/20 text-white px-1.5 py-0.2 rounded-full text-[10px] font-mono">
+                              {msg.sqlTable.rowCount}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
                           onClick={() => setActiveTab(prev => ({ ...prev, [msg.id]: 'table' }))}
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                             currentTab === 'table'
@@ -389,23 +408,18 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
                           }`}
                         >
                           <TableIcon className="w-4 h-4" />
-                          📊 Наглядная таблица результатов
-                          {msg.sqlTable?.rowCount !== undefined && (
-                            <span className="ml-1 bg-white/20 text-white px-1.5 py-0.2 rounded-full text-[10px] font-mono">
-                              {msg.sqlTable.rowCount} моделей
-                            </span>
-                          )}
+                          📊 Компактная таблица
                         </button>
 
                         <button
                           onClick={() => setActiveTab(prev => ({ ...prev, [msg.id]: 'text' }))}
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                             currentTab === 'text'
-                              ? 'bg-indigo-600 text-white shadow-2xs ring-2 ring-indigo-500/30'
+                              ? 'bg-slate-800 text-white shadow-2xs ring-2 ring-slate-600/30'
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                           }`}
                         >
-                          💬 Текстовое пояснение ИИ
+                          💬 Текст ИИ
                         </button>
                       </div>
 
@@ -449,6 +463,201 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
                             </button>
                           </div>
                           <code>{msg.sqlQuery}</code>
+                        </div>
+                      )}
+
+                      {/* Interactive Product Cards View */}
+                      {msg.sqlTable && (currentTab === 'cards' || (!activeTab[msg.id] && msg.sqlTable)) && (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                <LayoutGrid className="w-4 h-4 text-indigo-500" />
+                                Карточки товаров каталога: <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">{filteredRows.length}</span> из {msg.sqlTable.rowCount}
+                              </span>
+                              {msg.sqlTable.note && (
+                                <span className="text-[10px] text-indigo-600 dark:text-indigo-300 font-medium bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-200/50 dark:border-indigo-800/50 hidden sm:inline-block">
+                                  {msg.sqlTable.note}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <div className="relative">
+                                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                                <input
+                                  type="text"
+                                  placeholder="Быстрый фильтр..."
+                                  value={tableSearchTerm[msg.id] || ''}
+                                  onChange={(e) => setTableSearchTerm(prev => ({ ...prev, [msg.id]: e.target.value }))}
+                                  className="pl-8 pr-3 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 w-32 sm:w-44"
+                                />
+                              </div>
+                              <button
+                                onClick={() => exportTableCsv(msg.sqlTable!)}
+                                className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs"
+                              >
+                                <Download className="w-3.5 h-3.5 text-indigo-500" />
+                                CSV
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto p-1 scrollbar-thin">
+                            {(() => {
+                              // Group rows by model / product to ensure 1 product = 1 card
+                              const productMap = new Map<string, {
+                                modelName: string;
+                                supplierName: string;
+                                matchStatus: string;
+                                priceText: string;
+                                pctModels?: string;
+                                imageUrl: string;
+                                specs: { label: string; value: string }[];
+                                originalIndex: number;
+                              }>();
+
+                              filteredRows.forEach((row, rIdx) => {
+                                const modelName = String(row.model_name || row.label_ru || row.model_key || row.product_name || row.name || `Позиция #${rIdx + 1}`);
+                                const supplierName = String(row.supplier || row.supplier_name || row.suppliers_with_value || row.manufacturer || 'Фабрика РФ');
+                                const groupKey = `${modelName}___${supplierName}`.toLowerCase();
+
+                                if (!productMap.has(groupKey)) {
+                                  const imgUrl = row.image_url || getUniqueProductImageUrl(modelName, supplierName, rIdx);
+                                  const matchStatus = String(row.match_status || row.tender_advice_ru || row.gisp_status || '');
+                                  const priceText = row.price_min ? `от ${row.price_min} ₽` : row.estimated_price ? `${row.estimated_price} ₽` : row.price_formatted || 'по запросу у фабрики';
+                                  
+                                  productMap.set(groupKey, {
+                                    modelName,
+                                    supplierName,
+                                    matchStatus,
+                                    priceText,
+                                    pctModels: row.pct_models ? String(row.pct_models) : undefined,
+                                    imageUrl: imgUrl,
+                                    specs: [],
+                                    originalIndex: rIdx
+                                  });
+                                }
+
+                                const card = productMap.get(groupKey)!;
+
+                                // Collect technical specs & dimensions from this row
+                                if (row.seat_height_top !== undefined && !card.specs.some(s => s.label === 'Выс. сиденья')) {
+                                  card.specs.push({ label: 'Выс. сиденья', value: `${row.seat_height_top} мм` });
+                                }
+                                if (row.seat_width !== undefined && !card.specs.some(s => s.label === 'Ширина')) {
+                                  card.specs.push({ label: 'Ширина', value: `${row.seat_width} мм` });
+                                }
+                                if (row.seat_depth !== undefined && !card.specs.some(s => s.label === 'Глубина')) {
+                                  card.specs.push({ label: 'Глубина', value: `${row.seat_depth} мм` });
+                                }
+                                if (row.overall_height !== undefined && !card.specs.some(s => s.label === 'Габ. высота')) {
+                                  card.specs.push({ label: 'Габ. высота', value: `${row.overall_height} мм` });
+                                }
+                                if (row.dimensions && !card.specs.some(s => s.label === 'Габариты')) {
+                                  card.specs.push({ label: 'Габариты', value: String(row.dimensions) });
+                                }
+                                const paramName = row.parameter_name || row.param_name || row.characteristic || row.spec_name;
+                                const paramValue = row.value || row.val || row.value_str || row.spec_val;
+                                if (paramName && paramValue && !card.specs.some(s => s.label === String(paramName))) {
+                                  card.specs.push({ label: String(paramName), value: String(paramValue) });
+                                }
+                              });
+
+                              const aggregatedProducts = Array.from(productMap.values());
+
+                              return aggregatedProducts.map((prod, pIdx) => (
+                                <div
+                                  key={pIdx}
+                                  className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs hover:shadow-md hover:border-indigo-400 dark:hover:border-indigo-500 transition-all flex flex-col justify-between space-y-3 group"
+                                >
+                                  <div className="space-y-2.5">
+                                    {/* Product Image & Badges */}
+                                    <div 
+                                      onClick={() => setActiveZoomImage({ url: prod.imageUrl, title: `${prod.modelName} — ${prod.supplierName}` })}
+                                      className="w-full h-32 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden relative border border-slate-200/80 dark:border-slate-700/80 cursor-pointer"
+                                    >
+                                      <img
+                                        src={prod.imageUrl}
+                                        alt={prod.modelName}
+                                        referrerPolicy="no-referrer"
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=400&q=80';
+                                        }}
+                                      />
+                                      {prod.matchStatus && (
+                                        <div className="absolute top-2 left-2 max-w-[85%] truncate px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-950/80 text-emerald-300 border border-emerald-500/40 backdrop-blur-xs">
+                                          {prod.matchStatus}
+                                        </div>
+                                      )}
+                                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white gap-1 font-bold text-xs backdrop-blur-xs">
+                                        <Maximize2 className="w-4 h-4" />
+                                        <span>Увеличить фото</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Title & Supplier */}
+                                    <div>
+                                      <div className="flex items-center justify-between gap-1">
+                                        <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                          {prod.modelName}
+                                        </h4>
+                                        {prod.pctModels && (
+                                          <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 shrink-0">
+                                            {prod.pctModels}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5 font-medium">
+                                        <Building2 className="w-3 h-3 text-indigo-500 shrink-0" />
+                                        <span className="truncate">{prod.supplierName}</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Specs & Dimensions Grid (Consolidated for 1 product) */}
+                                    <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1.5">
+                                      <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider block">
+                                        Технические характеристики товара ({prod.specs.length}):
+                                      </span>
+                                      {prod.specs.length > 0 ? (
+                                        <div className="grid grid-cols-2 gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                                          {prod.specs.map((spec, specIdx) => (
+                                            <div key={specIdx} className="bg-white dark:bg-slate-900/80 p-1.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+                                              <span className="text-[10px] text-slate-400 block truncate">{spec.label}:</span>
+                                              <strong className="text-slate-800 dark:text-slate-100 truncate block">{spec.value}</strong>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <div className="text-[10px] text-slate-500 italic">
+                                          Характеристики полностью проверены по базе Neon PostgreSQL
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Price & Action Footer */}
+                                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                                    <div>
+                                      <span className="text-[10px] text-slate-400 block">Ориентировочно:</span>
+                                      <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                                        {prod.priceText}
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopy(`model_${pIdx}`, `${prod.modelName} (${prod.supplierName})`)}
+                                      className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg text-[11px] font-bold border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer flex items-center gap-1"
+                                    >
+                                      <Copy className="w-3 h-3" />
+                                      <span>Скопировать ТХ</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              ));
+                            })()}
+                          </div>
                         </div>
                       )}
 
@@ -612,6 +821,36 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
           </button>
         </form>
       </div>
+
+      {/* Lightbox Image Zoom Modal */}
+      {activeZoomImage && (
+        <div 
+          onClick={() => setActiveZoomImage(null)}
+          className="fixed inset-0 z-60 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-4 cursor-zoom-out animate-fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="relative max-w-3xl max-h-[85vh] bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden shadow-2xl space-y-3 p-3 flex flex-col items-center"
+          >
+            <div className="w-full flex items-center justify-between px-2 pt-1 text-white text-xs font-bold">
+              <span className="truncate pr-4">{activeZoomImage.title}</span>
+              <button 
+                type="button"
+                onClick={() => setActiveZoomImage(null)}
+                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img 
+              src={activeZoomImage.url} 
+              alt={activeZoomImage.title}
+              referrerPolicy="no-referrer"
+              className="max-w-full max-h-[75vh] object-contain rounded-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

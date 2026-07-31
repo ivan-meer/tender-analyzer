@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ProductItem } from '../types';
 import { SupplierSearchModal } from './SupplierSearchModal';
+import { ProductSearchAgentModal } from './ProductSearchAgentModal';
 import { getParameterIconConfig } from '../utils/paramIconSystem';
 import { 
   Package, 
@@ -16,7 +17,9 @@ import {
   Sliders,
   Globe,
   MapPin,
-  Calendar
+  Calendar,
+  Bot,
+  Sparkles
 } from 'lucide-react';
 
 interface ProductListTableProps {
@@ -31,9 +34,18 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
   const [selectedProductForSearch, setSelectedProductForSearch] = useState<ProductItem | null>(null);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
 
+  // AI Agent Search Modal state
+  const [isAgentModalOpen, setIsAgentModalOpen] = useState<boolean>(false);
+  const [selectedProductForAgent, setSelectedProductForAgent] = useState<ProductItem | null>(null);
+
   const handleOpenSearch = (product: ProductItem) => {
     setSelectedProductForSearch(product);
     setIsSearchModalOpen(true);
+  };
+
+  const handleOpenAgentSearch = (product?: ProductItem) => {
+    setSelectedProductForAgent(product || null);
+    setIsAgentModalOpen(true);
   };
 
   if (!products || products.length === 0) {
@@ -133,6 +145,16 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
 
         {/* Filter & Search controls */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleOpenAgentSearch()}
+            className="flex items-center gap-1.5 text-xs font-extrabold bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-sm shadow-cyan-950/20"
+            title="Запустить ИИ-Агент для генерации промптов и поиска в сети по всей продукции"
+          >
+            <Bot className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+            <span>🤖 ИИ-Агент Поиска & Промпты</span>
+          </button>
+
           <div className="relative min-w-[220px]">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
@@ -264,6 +286,16 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
                     <div className="flex items-center justify-center gap-1">
                       <button
                         type="button"
+                        onClick={() => handleOpenAgentSearch(item)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white rounded-xl font-bold text-xs transition-all cursor-pointer shadow-xs"
+                        title="Сгенерировать точечные ИИ-промпты и запустить Агент Поиска"
+                      >
+                        <Bot className="w-3.5 h-3.5 text-amber-300" />
+                        <span className="hidden sm:inline">ИИ-Агент</span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => handleOpenSearch(item)}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white border border-indigo-200 dark:border-indigo-800 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-2xs"
                         title="Найти заводские аналоги и поставщиков в РФ по параметрам ТЗ"
@@ -294,6 +326,14 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
         product={selectedProductForSearch}
         isOpen={isSearchModalOpen}
         onClose={() => setIsSearchModalOpen(false)}
+      />
+
+      {/* AI Product Search Agent Modal */}
+      <ProductSearchAgentModal
+        isOpen={isAgentModalOpen}
+        onClose={() => setIsAgentModalOpen(false)}
+        procurementProducts={products}
+        initialSelectedProduct={selectedProductForAgent}
       />
     </div>
   );

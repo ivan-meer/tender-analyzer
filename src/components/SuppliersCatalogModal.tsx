@@ -27,12 +27,19 @@ import {
   Cpu,
   Info,
   Copy,
-  FileText
+  FileText,
+  Pencil,
+  Camera,
+  Image as ImageIcon,
+  Save,
+  Upload
 } from 'lucide-react';
 import { VERIFIED_SUPPLIERS } from '../data/verifiedSuppliers';
 import { ProductItem } from '../types';
-import { NeonService, NeonCatalogItem, NeonStatus } from '../lib/neonService';
+import { NeonService, NeonCatalogItem, NeonStatus, NeonSupplier } from '../lib/neonService';
 import { NeonSchemaModal } from './NeonSchemaModal';
+import { ProductSearchAgentModal } from './ProductSearchAgentModal';
+import { Bot } from 'lucide-react';
 
 interface SuppliersCatalogModalProps {
   isOpen: boolean;
@@ -50,7 +57,7 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [onlyDomestic, setOnlyDomestic] = useState(false);
-  const [activeTab, setActiveTab] = useState<'neon' | 'catalog' | 'matching'>('neon');
+  const [activeTab, setActiveTab] = useState<'neon' | 'suppliers' | 'catalog' | 'matching'>('neon');
 
   // Price Range Filters
   const [minPrice, setMinPrice] = useState<string>('');
@@ -60,12 +67,22 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
   const [inspectedItem, setInspectedItem] = useState<NeonCatalogItem | null>(null);
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [showSchemaModal, setShowSchemaModal] = useState(false);
+  const [showSearchAgentModal, setShowSearchAgentModal] = useState(false);
+  const [selectedAgentProduct, setSelectedAgentProduct] = useState<ProductItem | null>(null);
 
   // Neon DB state
   const [neonStatus, setNeonStatus] = useState<NeonStatus | null>(null);
   const [neonCatalog, setNeonCatalog] = useState<NeonCatalogItem[]>([]);
+  const [neonSuppliers, setNeonSuppliers] = useState<NeonSupplier[]>([]);
   const [neonLoading, setNeonLoading] = useState(false);
+
+  // Forms Visibility
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddSupplierForm, setShowAddSupplierForm] = useState(false);
+
+  // Editing States
+  const [editingItem, setEditingItem] = useState<NeonCatalogItem | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<NeonSupplier | null>(null);
 
   // New item form state
   const [newCompany, setNewCompany] = useState('ООО "Фабрика Офис-Мебель РФ"');
@@ -75,13 +92,23 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
   const [newPrice, setNewPrice] = useState('18500');
   const [newDescription, setNewDescription] = useState('');
   const [newGispStatus, setNewGispStatus] = useState('Внесено в реестр Минпромторга (ПП 1875)');
+  const [newImageUrl, setNewImageUrl] = useState('');
   const [formSaving, setFormSaving] = useState(false);
 
-  // Fetch Neon DB status & catalog on open
+  // New Supplier Form State
+  const [supCompany, setSupCompany] = useState('');
+  const [supRegion, setSupRegion] = useState('Москва / Московская обл.');
+  const [supSpec, setSupSpec] = useState('Офисная и школьная мебель');
+  const [supContacts, setSupContacts] = useState('+7 (495) 800-22-11 / info@factory.ru');
+  const [supWebsite, setSupWebsite] = useState('https://factory-rf.ru');
+  const [supGisp, setSupGisp] = useState(true);
+
+  // Fetch Neon DB status, catalog & suppliers on open
   useEffect(() => {
     if (isOpen) {
       fetchNeonStatus();
       fetchNeonCatalog();
+      fetchNeonSuppliers();
     }
   }, [isOpen, selectedCategory]);
 
@@ -117,11 +144,40 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
     }
   };
 
+  const fetchNeonSuppliers = async () => {
+    try {
+      const list = await NeonService.getSuppliers();
+      setNeonSuppliers(list);
+    } catch (e) {
+      console.warn('Neon suppliers fetch error:', e);
+    }
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (activeTab === 'neon') {
       fetchNeonCatalog(searchTerm);
     }
+  };
+
+  // Helper for uploading photos from device (converts to Data URL)
+  const handlePhotoFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setImageCallback: (dataUrl: string) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert('Файл слишком большой. Выберите изображение до 8 МБ.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setImageCallback(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleAddNewItem = async (e: React.FormEvent) => {
@@ -140,15 +196,46 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
         priceFormatted: `${p.toLocaleString('ru-RU')} ₽ / шт.`,
         description: newDescription || `Модель "${newModel}", габариты: ${newDimensions}. Изготовлено по ГОСТ Р.`,
         gispRegistryStatus: newGispStatus,
-        productFeatures: ['ГОСТ Р', 'Минпромторг РФ', 'Сделано в РФ']
+        productFeatures: ['ГОСТ Р', 'Минпромторг РФ', 'Сделано в РФ'],
+        imageUrl: newImageUrl || 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=600&q=80'
       });
 
       setNewModel('');
+      setNewImageUrl('');
       setShowAddForm(false);
       fetchNeonCatalog();
       fetchNeonStatus();
     } catch (err) {
       console.error('Failed to add item to Neon DB:', err);
+    } finally {
+      setFormSaving(false);
+    }
+  };
+
+  const handleUpdateItemSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+
+    setFormSaving(true);
+    try {
+      await NeonService.updateCatalogItem(editingItem.id, {
+        modelName: editingItem.modelName,
+        supplierName: editingItem.supplierName,
+        category: editingItem.category,
+        dimensions: editingItem.dimensions,
+        estimatedPrice: editingItem.estimatedPrice,
+        priceFormatted: editingItem.priceFormatted || `${editingItem.estimatedPrice?.toLocaleString('ru-RU')} ₽`,
+        description: editingItem.description,
+        gispRegistryStatus: editingItem.gispRegistryStatus,
+        productUrl: editingItem.productUrl,
+        imageUrl: editingItem.imageUrl
+      });
+
+      setEditingItem(null);
+      fetchNeonCatalog();
+    } catch (err) {
+      console.error('Error updating item:', err);
+      alert('Не удалось сохранить изменения в Neon DB');
     } finally {
       setFormSaving(false);
     }
@@ -162,6 +249,69 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
       fetchNeonStatus();
     } catch (err) {
       console.error('Failed to delete item from Neon DB:', err);
+    }
+  };
+
+  // Supplier CRUD
+  const handleAddNewSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supCompany.trim()) return;
+
+    setFormSaving(true);
+    try {
+      await NeonService.addSupplier({
+        companyName: supCompany,
+        region: supRegion,
+        specialization: supSpec,
+        contactsOrWebsite: supContacts,
+        websiteUrl: supWebsite,
+        inGispRegistry: supGisp
+      });
+
+      setSupCompany('');
+      setShowAddSupplierForm(false);
+      fetchNeonSuppliers();
+    } catch (err) {
+      console.error('Error adding supplier:', err);
+      alert('Ошибка при сохранении фабрики');
+    } finally {
+      setFormSaving(false);
+    }
+  };
+
+  const handleUpdateSupplierSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSupplier) return;
+
+    setFormSaving(true);
+    try {
+      await NeonService.updateSupplier(editingSupplier.id, {
+        companyName: editingSupplier.companyName,
+        region: editingSupplier.region,
+        specialization: editingSupplier.specialization,
+        contactsOrWebsite: editingSupplier.contactsOrWebsite,
+        websiteUrl: editingSupplier.websiteUrl,
+        inGispRegistry: editingSupplier.inGispRegistry
+      });
+
+      setEditingSupplier(null);
+      fetchNeonSuppliers();
+    } catch (err) {
+      console.error('Error updating supplier:', err);
+      alert('Не удалось обновить данные поставщика');
+    } finally {
+      setFormSaving(false);
+    }
+  };
+
+  const handleDeleteSupplier = async (id: number) => {
+    if (!confirm('Удалить поставщика из базы Neon DB?')) return;
+    try {
+      await NeonService.deleteSupplier(id);
+      fetchNeonSuppliers();
+    } catch (err) {
+      console.error('Error deleting supplier:', err);
+      alert('Ошибка при удалении');
     }
   };
 
@@ -300,6 +450,26 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
             >
               <Building2 className="w-3.5 h-3.5" />
               <span>Реестр фабрик РФ ({VERIFIED_SUPPLIERS.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('suppliers')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'suppliers'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 text-emerald-300" />
+              <span>База Поставщиков Neon ({neonSuppliers.length})</span>
+            </button>
+
+            <button
+              onClick={() => setShowSearchAgentModal(true)}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-md hover:from-cyan-500 hover:to-teal-500"
+            >
+              <Bot className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+              <span>🤖 ИИ-Агент поиска & Промпты</span>
             </button>
 
             {procurementProducts.length > 0 && (
@@ -507,6 +677,38 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                   className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
                 />
               </div>
+
+              <div className="col-span-1 sm:col-span-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 space-y-2">
+                <label className="text-[10px] font-bold text-cyan-400 block flex items-center gap-1">
+                  <Camera className="w-3 h-3" />
+                  Фотография / Изображение товара (Ссылка или Загрузка файла):
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newImageUrl}
+                    onChange={(e) => setNewImageUrl(e.target.value)}
+                    placeholder="https://... или загрузите файл с компьютера"
+                    className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                  />
+                  <label className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Загрузить фото</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handlePhotoFileUpload(e, (url) => setNewImageUrl(url))}
+                    />
+                  </label>
+                </div>
+                {newImageUrl && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <img src={newImageUrl} alt="Превью" className="w-12 h-12 object-cover rounded-lg border border-slate-700" />
+                    <span className="text-[10px] text-emerald-400 font-bold">✓ Изображение готово к сохранению</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-1">
@@ -588,6 +790,13 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                               ПП 1875
                             </span>
                             <button
+                              onClick={() => setEditingItem(item)}
+                              className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-cyan-950/40 rounded-lg transition-colors cursor-pointer"
+                              title="Редактировать товар и фото"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
                               onClick={() => handleDeleteItem(item.id)}
                               className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
                               title="Удалить из Neon DB"
@@ -596,6 +805,16 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                             </button>
                           </div>
                         </div>
+
+                        {/* Product Image preview if present */}
+                        {item.imageUrl && (
+                          <div className="relative w-full h-36 rounded-xl overflow-hidden bg-slate-900 border border-slate-700/60 my-1 group">
+                            <img src={item.imageUrl} alt={item.modelName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            <span className="absolute bottom-1.5 right-1.5 px-2 py-0.5 bg-slate-950/80 backdrop-blur-xs text-white text-[9px] font-bold rounded-md flex items-center gap-1">
+                              <Camera className="w-2.5 h-2.5 text-cyan-400" /> Фото товара
+                            </span>
+                          </div>
+                        )}
 
                         {/* Dimensions & Prices highlights */}
                         <div className="grid grid-cols-2 gap-2 pt-1">
@@ -661,6 +880,211 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                   ))}
                 </div>
               )}
+            </div>
+          ) : activeTab === 'suppliers' ? (
+            /* Suppliers View: Neon PostgreSQL Suppliers Table & Cards */
+            <div className="space-y-4">
+              <div className="bg-gradient-to-r from-emerald-950/40 via-teal-950/40 to-slate-900/60 p-4 rounded-2xl border border-emerald-800/40 flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-500/20 rounded-xl text-emerald-400 border border-emerald-500/30">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-emerald-200 uppercase tracking-wider">
+                      Облачная таблица `neon_suppliers` (PostgreSQL)
+                    </h4>
+                    <p className="text-[11px] text-slate-300">
+                      Управление поставщиками, контактами, регионами и статусами реестра ГИСП Минпромторга
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowAddSupplierForm(!showAddSupplierForm)}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Добавить поставщика</span>
+                </button>
+              </div>
+
+              {/* Add Supplier Form Drawer */}
+              {showAddSupplierForm && (
+                <form onSubmit={handleAddNewSupplier} className="p-4 bg-emerald-950/30 border border-emerald-800/60 rounded-2xl space-y-3 animate-fadeIn">
+                  <h4 className="text-xs font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4" />
+                    Новая фабрика / поставщик в Neon PostgreSQL
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Название компании:</label>
+                      <input
+                        type="text"
+                        required
+                        value={supCompany}
+                        onChange={(e) => setSupCompany(e.target.value)}
+                        placeholder='ООО "Фабрика Офисной Мебели"'
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Регион / Город:</label>
+                      <input
+                        type="text"
+                        value={supRegion}
+                        onChange={(e) => setSupRegion(e.target.value)}
+                        placeholder="Москва / Московская обл."
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Специализация:</label>
+                      <input
+                        type="text"
+                        value={supSpec}
+                        onChange={(e) => setSupSpec(e.target.value)}
+                        placeholder="Офисная и школьная мебель"
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Контакты (Тел / Email):</label>
+                      <input
+                        type="text"
+                        value={supContacts}
+                        onChange={(e) => setSupContacts(e.target.value)}
+                        placeholder="+7 (495) 123-45-67 / info@factory.ru"
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Сайт:</label>
+                      <input
+                        type="text"
+                        value={supWebsite}
+                        onChange={(e) => setSupWebsite(e.target.value)}
+                        placeholder="https://factory.ru"
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-4">
+                      <input
+                        type="checkbox"
+                        id="supGisp"
+                        checked={supGisp}
+                        onChange={(e) => setSupGisp(e.target.checked)}
+                        className="w-4 h-4 rounded-md accent-emerald-500 cursor-pointer"
+                      />
+                      <label htmlFor="supGisp" className="text-xs text-slate-300 font-bold cursor-pointer">
+                        Внесено в реестр Минпромторга (ПП 1875)
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-emerald-900/50">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddSupplierForm(false)}
+                      className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-xs font-bold"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={formSaving}
+                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{formSaving ? 'Сохранение...' : 'Сохранить фабрику'}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Suppliers list cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {neonSuppliers.map((sup) => (
+                  <div
+                    key={sup.id}
+                    className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 space-y-3 transition-all hover:border-emerald-500 hover:shadow-md flex flex-col justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                            {sup.companyName}
+                          </h3>
+                          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                            <MapPin className="w-3 h-3 text-emerald-500" />
+                            {sup.region || 'Российская Федерация'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {sup.inGispRegistry && (
+                            <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-md">
+                              ГИСП Минпромторг
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setEditingSupplier(sup)}
+                            className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-950/40 rounded-lg transition-colors cursor-pointer"
+                            title="Редактировать поставщика"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSupplier(sup.id)}
+                            className="p-1 text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
+                            title="Удалить из Neon DB"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-50 dark:bg-slate-900/80 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
+                        <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <Tag className="w-3 h-3 text-emerald-500" />
+                          <span>Специализация:</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                          {sup.specialization || 'Производство продукции'}
+                        </p>
+                      </div>
+
+                      <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                        <p className="flex items-center gap-1">
+                          <PhoneCall className="w-3.5 h-3.5 text-emerald-500" />
+                          <span>{sup.contactsOrWebsite}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {sup.websiteUrl && (
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <a
+                          href={sup.websiteUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-bold text-emerald-500 hover:underline flex items-center gap-1"
+                        >
+                          <Globe className="w-3.5 h-3.5" />
+                          <span>{sup.websiteUrl}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                        <span className="text-[10px] font-mono text-slate-400">ID #{sup.id}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : activeTab === 'catalog' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -940,6 +1364,271 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
       <NeonSchemaModal
         isOpen={showSchemaModal}
         onClose={() => setShowSchemaModal(false)}
+      />
+
+      {/* Item Edit Overlay Modal */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <form
+            onSubmit={handleUpdateItemSubmit}
+            className="bg-slate-900 border border-cyan-700 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden p-6 space-y-4 text-white"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-bold text-white">Редактирование товара (Neon DB #{editingItem.id})</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Наименование модели:</label>
+                <input
+                  type="text"
+                  required
+                  value={editingItem.modelName}
+                  onChange={(e) => setEditingItem({ ...editingItem, modelName: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Поставщик / Производитель:</label>
+                <input
+                  type="text"
+                  value={editingItem.supplierName || ''}
+                  onChange={(e) => setEditingItem({ ...editingItem, supplierName: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Габариты / Размеры:</label>
+                <input
+                  type="text"
+                  value={editingItem.dimensions || ''}
+                  onChange={(e) => setEditingItem({ ...editingItem, dimensions: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Цена (₽):</label>
+                <input
+                  type="number"
+                  value={editingItem.estimatedPrice || 0}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setEditingItem({
+                      ...editingItem,
+                      estimatedPrice: val,
+                      priceFormatted: `${val.toLocaleString('ru-RU')} ₽`
+                    });
+                  }}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Описание ТХ и ГОСТ:</label>
+                <textarea
+                  rows={3}
+                  value={editingItem.description || ''}
+                  onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Статус ГИСП Минпромторга:</label>
+                <input
+                  type="text"
+                  value={editingItem.gispRegistryStatus || ''}
+                  onChange={(e) => setEditingItem({ ...editingItem, gispRegistryStatus: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              {/* Photo Upload for Editing */}
+              <div className="sm:col-span-2 bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2">
+                <label className="text-[10px] font-bold text-cyan-400 block flex items-center gap-1">
+                  <Camera className="w-3.5 h-3.5" />
+                  Изображение товара (Загрузить новое фото или вставить URL):
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editingItem.imageUrl || ''}
+                    onChange={(e) => setEditingItem({ ...editingItem, imageUrl: e.target.value })}
+                    placeholder="https://... или выберите файл"
+                    className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                  <label className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Загрузить фото</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handlePhotoFileUpload(e, (url) => setEditingItem({ ...editingItem, imageUrl: url }))}
+                    />
+                  </label>
+                </div>
+
+                {editingItem.imageUrl && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <img src={editingItem.imageUrl} alt="Предпросмотр" className="w-16 h-16 object-cover rounded-xl border border-slate-700" />
+                    <span className="text-[11px] text-emerald-400 font-bold">✓ Фото загружено</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+              >
+                Отмена
+              </button>
+
+              <button
+                type="submit"
+                disabled={formSaving}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>{formSaving ? 'Сохранение...' : 'Сохранить изменения'}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {/* Supplier Edit Overlay Modal */}
+      {editingSupplier && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <form
+            onSubmit={handleUpdateSupplierSubmit}
+            className="bg-slate-900 border border-emerald-700 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden p-6 space-y-4 text-white"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-bold text-white">Редактирование поставщика (Neon DB #{editingSupplier.id})</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingSupplier(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Название компании:</label>
+                <input
+                  type="text"
+                  required
+                  value={editingSupplier.companyName}
+                  onChange={(e) => setEditingSupplier({ ...editingSupplier, companyName: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">Регион / Город:</label>
+                  <input
+                    type="text"
+                    value={editingSupplier.region || ''}
+                    onChange={(e) => setEditingSupplier({ ...editingSupplier, region: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">Специализация:</label>
+                  <input
+                    type="text"
+                    value={editingSupplier.specialization || ''}
+                    onChange={(e) => setEditingSupplier({ ...editingSupplier, specialization: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Контакты (Тел / Email):</label>
+                <input
+                  type="text"
+                  value={editingSupplier.contactsOrWebsite || ''}
+                  onChange={(e) => setEditingSupplier({ ...editingSupplier, contactsOrWebsite: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">URL Сайта:</label>
+                <input
+                  type="text"
+                  value={editingSupplier.websiteUrl || ''}
+                  onChange={(e) => setEditingSupplier({ ...editingSupplier, websiteUrl: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="editSupGisp"
+                  checked={editingSupplier.inGispRegistry || false}
+                  onChange={(e) => setEditingSupplier({ ...editingSupplier, inGispRegistry: e.target.checked })}
+                  className="w-4 h-4 rounded-md accent-emerald-500 cursor-pointer"
+                />
+                <label htmlFor="editSupGisp" className="text-xs text-slate-300 font-bold cursor-pointer">
+                  Внесено в реестр Минпромторга (ПП 1875)
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingSupplier(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+              >
+                Отмена
+              </button>
+
+              <button
+                type="submit"
+                disabled={formSaving}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>{formSaving ? 'Сохранение...' : 'Сохранить изменения'}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Product Search AI Agent Modal */}
+      <ProductSearchAgentModal
+        isOpen={showSearchAgentModal}
+        onClose={() => setShowSearchAgentModal(false)}
+        procurementProducts={procurementProducts}
+        initialSelectedProduct={selectedAgentProduct}
       />
     </div>
   );

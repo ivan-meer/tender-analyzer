@@ -11,7 +11,7 @@ export const UserFlowSteps: React.FC<UserFlowStepsProps> = ({ currentStep, onSte
     {
       number: 1,
       title: 'Загрузка документов',
-      subtitle: 'Файлы ТЗ, Смета Excel или Шаблон',
+      subtitle: 'Файлы ТЗ, Архивы ZIP/RAR, Смета Excel',
       icon: <FileUp className="w-4 h-4" />,
     },
     {

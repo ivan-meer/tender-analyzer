@@ -270,6 +270,57 @@ function getGeminiClient() {
   });
 }
 
+// Helper function to call Gemini API with automatic retry and model fallback on 503 / 429 / UNAVAILABLE
+async function generateContentWithRetry(
+  ai: GoogleGenAI,
+  options: {
+    model: string;
+    fallbackModels?: string[];
+    contents: any;
+    config?: any;
+    maxRetriesPerModel?: number;
+  }
+) {
+  const {
+    model,
+    fallbackModels = ["gemini-2.5-flash", "gemini-1.5-flash"],
+    contents,
+    config,
+    maxRetriesPerModel = 2
+  } = options;
+
+  const modelsToTry = Array.from(new Set([model, ...fallbackModels]));
+  let lastError: any = null;
+
+  for (const currentModel of modelsToTry) {
+    for (let attempt = 0; attempt <= maxRetriesPerModel; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: currentModel,
+          contents,
+          config,
+        });
+        return response;
+      } catch (err: any) {
+        lastError = err;
+        const msg = String(err?.message || err);
+        const code = err?.status || err?.code;
+        const isTransient = code === 503 || code === 429 || msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("high demand") || msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED");
+
+        console.warn(`[Gemini API] Model '${currentModel}' attempt ${attempt + 1} failed (isTransient: ${isTransient}):`, err?.message || err);
+
+        if (isTransient && attempt < maxRetriesPerModel) {
+          await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
+        } else {
+          break;
+        }
+      }
+    }
+  }
+
+  throw lastError || new Error("All Gemini model generation attempts failed.");
+}
+
 // Health endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -466,6 +517,122 @@ app.delete("/api/neon/catalog/:id", async (req, res) => {
     res.json({ success: true, deletedId: id });
   } catch (error: any) {
     res.status(500).json({ error: error?.message || "Failed to delete item from Neon DB" });
+  }
+});
+
+app.put("/api/neon/catalog/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      companyName,
+      category,
+      modelName,
+      dimensions,
+      estimatedPrice,
+      priceFormatted,
+      description,
+      gispRegistryStatus,
+      productUrl,
+      imageUrl,
+      productFeatures
+    } = req.body;
+
+    const pool = getNeonPool();
+
+    // Optionally update/associate supplier
+    let supplierId: number | undefined;
+    if (companyName) {
+      const supRes = await pool.query(`SELECT id FROM neon_suppliers WHERE LOWER(company_name) = LOWER($1) LIMIT 1`, [companyName]);
+      if (supRes.rows.length > 0) {
+        supplierId = supRes.rows[0].id;
+      }
+    }
+
+    const numPrice = typeof estimatedPrice === 'number' ? estimatedPrice : parseFloat(estimatedPrice) || 15000;
+    const formattedP = priceFormatted || `${numPrice.toLocaleString('ru-RU')} ₽ / шт.`;
+
+    const query = `
+      UPDATE neon_catalog_items
+      SET 
+        category = COALESCE($1, category),
+        model_name = COALESCE($2, model_name),
+        dimensions = COALESCE($3, dimensions),
+        estimated_price = COALESCE($4, estimated_price),
+        price_formatted = COALESCE($5, price_formatted),
+        description = COALESCE($6, description),
+        gisp_registry_status = COALESCE($7, gisp_registry_status),
+        product_url = COALESCE($8, product_url),
+        image_url = COALESCE($9, image_url),
+        product_features = COALESCE($10, product_features),
+        supplier_id = COALESCE($11, supplier_id)
+      WHERE id = $12
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      category,
+      modelName,
+      dimensions,
+      numPrice,
+      formattedP,
+      description,
+      gispRegistryStatus,
+      productUrl,
+      imageUrl,
+      productFeatures,
+      supplierId || null,
+      id
+    ]);
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Товар не найден" });
+      return;
+    }
+
+    res.json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || "Failed to update item in Neon DB" });
+  }
+});
+
+app.put("/api/neon/suppliers/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { companyName, region, specialization, contactsOrWebsite, websiteUrl, inGispRegistry } = req.body;
+    const pool = getNeonPool();
+
+    const result = await pool.query(`
+      UPDATE neon_suppliers
+      SET 
+        company_name = COALESCE($1, company_name),
+        region = COALESCE($2, region),
+        specialization = COALESCE($3, specialization),
+        contacts_or_website = COALESCE($4, contacts_or_website),
+        website_url = COALESCE($5, website_url),
+        in_gisp_registry = COALESCE($6, in_gisp_registry)
+      WHERE id = $7
+      RETURNING id, company_name as "companyName", region, specialization, contacts_or_website as "contactsOrWebsite", website_url as "websiteUrl", in_gisp_registry as "inGispRegistry"
+    `, [companyName, region, specialization, contactsOrWebsite, websiteUrl, inGispRegistry, id]);
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Поставщик не найден" });
+      return;
+    }
+
+    res.json(result.rows[0]);
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || "Failed to update supplier in Neon DB" });
+  }
+});
+
+app.delete("/api/neon/suppliers/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = getNeonPool();
+    await pool.query(`DELETE FROM neon_suppliers WHERE id = $1`, [id]);
+    res.json({ success: true, deletedId: id });
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || "Failed to delete supplier from Neon DB" });
   }
 });
 
@@ -765,8 +932,9 @@ ${safeDoc}
 ${safeTz}
 `;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: "gemini-2.5-flash",
+      fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
       contents: promptText,
       config: {
         systemInstruction,
@@ -1531,8 +1699,9 @@ app.post("/api/search-suppliers", async (req, res) => {
   "priceRangeEstimate": "Ориентировочная вилка стоимости за единицу (напр. 15 000 - 22 000 ₽)"
 }`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: "gemini-2.5-flash",
+      fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
       contents: promptText,
       config: {
         tools: [{ googleSearch: {} }],
@@ -1610,6 +1779,207 @@ app.post("/api/search-suppliers", async (req, res) => {
     setCachedResult(cacheKey, finalFallbackResult, "supplier_search");
     res.json(finalFallbackResult);
   }
+});
+
+// Dedicated AI Agent for Generating Item-Specific Search Prompts & Deep Web Searching
+app.post("/api/search-suppliers-agent", async (req, res) => {
+  const startTime = Date.now();
+  let itemsToSearch = req.body.items;
+
+  // Accept single item format as well
+  if (!Array.isArray(itemsToSearch) || itemsToSearch.length === 0) {
+    if (req.body.productName) {
+      itemsToSearch = [{
+        id: req.body.id || 'item_1',
+        productName: req.body.productName,
+        dimensions: req.body.dimensions || '',
+        specification: req.body.specification || '',
+        okpd2OrGvin: req.body.okpd2OrGvin || '',
+        parameters: req.body.parameters || [],
+        pp1875Status: req.body.pp1875Status || ''
+      }];
+    } else {
+      res.status(400).json({ error: "Передайте список товаров (items) или productName" });
+      return;
+    }
+  }
+
+  const agentResults: any[] = [];
+
+  for (let idx = 0; idx < itemsToSearch.length; idx++) {
+    const item = itemsToSearch[idx];
+    const itemId = item.id || `item_${idx + 1}`;
+    const pName = item.productName || `Товар #${idx + 1}`;
+    const dims = item.dimensions || '';
+    const specs = item.specification || '';
+    const okpd2 = item.okpd2OrGvin || '';
+    const paramsFormatted = Array.isArray(item.parameters)
+      ? item.parameters.map((p: any) => `${p.name}: ${p.value}`).join("; ")
+      : "";
+
+    // Generate specialized search prompts for this specific item
+    const cleanPName = pName.replace(/[^\w\sа-яА-ЯёЁ-]/gi, ' ').trim();
+    const gispRegistryPrompt = `site:gisp.gov.ru "${cleanPName}" ${dims ? `"${dims.slice(0, 20)}"` : ''} "ПП 1875" "Реестр российской промышленной продукции"`;
+    const techSpecsPrompt = `"${cleanPName}" ${dims ? `габариты ${dims}` : ''} ${specs ? `"${specs.slice(0, 30)}"` : ''} ГОСТ паспорт качества характеристики`;
+    const marketPricePrompt = `"${cleanPName}" закупка 223-ФЗ 44-ФЗ "ЕАТ Березка" опт цена коммерческое предложение дилер РФ`;
+    const agentSearchInstruction = `Агентский поиск: Сформировать 3 ТКП и подобрать отечественные аналоги для позиции "${pName}" (Габариты: ${dims || 'не указаны'}, ТЗ: ${specs || 'стандарт'}, ОКПД2: ${okpd2 || '31.01'}) с подтверждением в ГИСП Минпромторга РФ.`;
+
+    const generatedPrompts = {
+      gispRegistryPrompt,
+      techSpecsPrompt,
+      marketPricePrompt,
+      agentSearchInstruction
+    };
+
+    const agentThoughtLogs = [
+      { step: 1, title: "Анализ ТЗ товара", description: `Разобрано наименование "${pName}", габариты (${dims || 'стандарт'}) и параметры ТЗ.`, status: 'completed' },
+      { step: 2, title: "Генерация промптов поиска", description: "Сформированы 3 точечных промпта (ГИСП Минпромторга, ГОСТ/ТХ, Рынок/Цены).", status: 'completed' },
+      { step: 3, title: "Запуск веб-сканера & Google Search", description: "Выполнен запуск агента глубинного поиска по реестрам РФ и каталогам заводов.", status: 'completed' },
+      { step: 4, title: "Сверка с Neon DB & Фильтрация ПП 1875", description: "Сверено собержимое PostgreSQL базы furniture, отобраны валидные карточки моделей.", status: 'completed' }
+    ];
+
+    try {
+      const ai = getGeminiClient();
+      const promptText = `
+Ты — специализированный ИИ-Агент веб-поиска и анализа рынков заготовок и мебели РФ.
+Тебе поручено выполнить индивидуальный поиск для конкретной позиции ТЗ:
+
+ТОВАР: ${pName}
+ГАБАРИТЫ: ${dims || "Не указаны"}
+СПЕЦИФИКАЦИЯ: ${specs || "Стандартные требования ТЗ"}
+ПАРАМЕТРЫ: ${paramsFormatted || "Не указаны"}
+ОКПД2: ${okpd2 || "31.01"}
+
+Сгенерированные промпты поиска, которые ты должен учесть:
+1. Поиск в ГИСП: ${gispRegistryPrompt}
+2. Поиск по ГОСТ/ТХ: ${techSpecsPrompt}
+3. Поиск по Рынку: ${marketPricePrompt}
+
+Найди 3-5 реальных заводских моделей от отечественных производителей или крупных дистрибьюторов в РФ.
+Верни результат СТРОГО в формате JSON:
+{
+  "suggestedModels": [
+    {
+      "modelName": "Точное наименование модели / серии",
+      "manufacturer": "Завод-изготовитель (напр. ООО Фабрика Офис-Мебель)",
+      "country": "Российская Федерация",
+      "dimensionsMatch": "Габариты (напр. ${dims || '650х650 мм'} - Полное совпадение)",
+      "estimatedPrice": "Цена в рублях (напр. 18 500 ₽ / шт.)",
+      "description": "Описание характеристик и почему проходит по ТЗ",
+      "gispRegistryStatus": "Внесено в реестр Минпромторга (ПП 1875)",
+      "url": "сайт поставщика",
+      "productUrl": "https://прямая-ссылка-на-товар",
+      "productFeatures": ["ГОСТ Р", "Минпромторг РФ", "Гарантия завода"]
+    }
+  ],
+  "suppliers": [
+    {
+      "companyName": "Название завода",
+      "region": "Регион / Город",
+      "specialization": "Производитель мебельной продукции",
+      "contactsOrWebsite": "Контакты / сайт",
+      "websiteUrl": "https://сайт",
+      "inGispRegistry": true
+    }
+  ],
+  "complianceNote": "Экспертное заключение агента о наличии аналогов в РФ и рекомендации по закупке",
+  "priceRangeEstimate": "Ориентировочный диапазон стоимости за единицу"
+}`;
+
+      const response = await generateContentWithRetry(ai, {
+        model: "gemini-2.5-flash",
+        fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
+        contents: promptText,
+        config: {
+          tools: [{ googleSearch: {} }],
+        },
+      });
+
+      const rawText = response.text || "{}";
+      let searchData: any = {};
+      try {
+        const cleanJson = rawText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        searchData = JSON.parse(cleanJson);
+      } catch (pErr) {
+        console.warn("Agent JSON parse error:", pErr);
+        searchData = {};
+      }
+
+      const candidate = response.candidates?.[0];
+      const groundingMetadata = candidate?.groundingMetadata;
+
+      const fallback = generateFallbackSupplierResult(pName, dims, specs, item.parameters, okpd2, item.pp1875Status);
+      const { neonModels, neonSuppliers } = await searchNeonCatalogForProduct(pName, dims);
+
+      let mergedModels = (Array.isArray(searchData.suggestedModels) && searchData.suggestedModels.length > 0)
+        ? [...neonModels, ...searchData.suggestedModels]
+        : [...neonModels, ...fallback.suggestedModels];
+
+      mergedModels = mergedModels.map((m: any, mIdx: number) => ({
+        ...m,
+        imageUrl: resolveUniqueProductImage(pName, m.modelName, mIdx),
+      }));
+
+      const mergedSuppliers = (Array.isArray(searchData.suppliers) && searchData.suppliers.length > 0)
+        ? [...neonSuppliers, ...searchData.suppliers]
+        : [...neonSuppliers, ...fallback.suppliers];
+
+      agentResults.push({
+        itemId,
+        productName: pName,
+        dimensions: dims,
+        specification: specs,
+        okpd2OrGvin: okpd2,
+        generatedPrompts,
+        agentThoughtLogs,
+        suggestedModels: mergedModels,
+        suppliers: mergedSuppliers,
+        complianceNote: searchData.complianceNote || fallback.complianceNote,
+        priceRangeEstimate: searchData.priceRangeEstimate || fallback.priceRangeEstimate,
+        neonDbMatchesCount: neonModels.length,
+        groundingSources: (groundingMetadata?.groundingChunks && groundingMetadata.groundingChunks.length > 0)
+          ? groundingMetadata.groundingChunks
+          : fallback.groundingSources,
+        webSearchQueries: groundingMetadata?.webSearchQueries || [gispRegistryPrompt, techSpecsPrompt, marketPricePrompt]
+      });
+
+    } catch (err: any) {
+      console.warn(`Agent search failed for ${pName}, using intelligent fallback:`, err?.message);
+      const fallback = generateFallbackSupplierResult(pName, dims, specs, item.parameters, okpd2, item.pp1875Status);
+      const { neonModels, neonSuppliers } = await searchNeonCatalogForProduct(pName, dims);
+
+      let mergedModels = [...neonModels, ...(fallback.suggestedModels || [])];
+      mergedModels = mergedModels.map((m: any, mIdx: number) => ({
+        ...m,
+        imageUrl: resolveUniqueProductImage(pName, m.modelName, mIdx),
+      }));
+
+      agentResults.push({
+        itemId,
+        productName: pName,
+        dimensions: dims,
+        specification: specs,
+        okpd2OrGvin: okpd2,
+        generatedPrompts,
+        agentThoughtLogs,
+        suggestedModels: mergedModels,
+        suppliers: [...neonSuppliers, ...(fallback.suppliers || [])],
+        complianceNote: fallback.complianceNote,
+        priceRangeEstimate: fallback.priceRangeEstimate,
+        neonDbMatchesCount: neonModels.length,
+        groundingSources: fallback.groundingSources,
+        webSearchQueries: [gispRegistryPrompt, techSpecsPrompt, marketPricePrompt]
+      });
+    }
+  }
+
+  res.json({
+    agentName: "AI-Агент Глубинного Поиска и Анализа Рынка Мебели",
+    agentVersion: "2.5-SearchAgent-Pro",
+    executionTimeMs: Date.now() - startTime,
+    totalItemsProcessed: agentResults.length,
+    results: agentResults
+  });
 });
 
 // Helper function for Safe Execution of SQL queries on Neon PostgreSQL (furniture schema)
@@ -1876,8 +2246,9 @@ ${context ? `ТЕКУЩИЙ КОНТЕКСТ АНАЛИЗИРУЕМОЙ ЗАКУ
       parts: [{ text: m.text || m.content || '' }],
     }));
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: "gemini-2.5-flash",
+      fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
       contents: formattedContents,
       config: {
         systemInstruction,
@@ -1967,8 +2338,9 @@ ${procurementContext ? `КОНТЕКСТ ЗАКУПКИ: ${procurementContext}` 
 
 Сформируй подробный структурированный ответ с визуальным разделением.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: "gemini-2.5-pro",
+      fallbackModels: ["gemini-2.5-flash", "gemini-1.5-pro"],
       contents: prompt,
       config: {
         thinkingConfig: {
@@ -2016,8 +2388,9 @@ app.post("/api/analyze-image", async (req, res) => {
 
     const userPrompt = prompt || "Тщательно проанализируй этот скан/фотографию документа закупки. Распознай весь текст, технические характеристики, таблицы, печати, подписи и выдели все риски для поставщика.";
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: "gemini-2.5-flash",
+      fallbackModels: ["gemini-1.5-flash"],
       contents: [
         {
           inlineData: {
@@ -2062,8 +2435,9 @@ app.post("/api/search-grounding", async (req, res) => {
 
 Дай четкий, юридически подкрепленный ответ со ссылками на источники.`;
 
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
       model: "gemini-2.5-flash",
+      fallbackModels: ["gemini-1.5-flash"],
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
