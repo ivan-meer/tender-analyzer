@@ -11,7 +11,18 @@ const { Pool } = pg;
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// Express body parser error handling middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(413).json({ 
+      error: "Объем загружаемых документов слишком велик (превышен предел 50 МБ). Уменьшите объем прикрепленных сканов/файлов или сжатие изображений." 
+    });
+  }
+  next(err);
+});
 
 // Initialize Neon PostgreSQL pool
 const NEON_DB_URL = process.env.DATABASE_URL || "postgresql://neondb_owner:npg_Y2dyqAEv5SLa@ep-steep-sound-aw10kdi4-pooler.c-12.us-east-1.aws.neon.tech/neondb?sslmode=require";
@@ -600,18 +611,32 @@ app.post("/api/analyze", async (req, res) => {
 Сформируй полнейший, объективный, структурированный юридический и операционный отчет в строго JSON формате.
 Автоматически сгенерируй ГОТОВЫЕ ТЕКСТЫ ДОКУМЕНТОВ и писем (Запрос закрывающих документов, Требование мотивированного отказа, Запрос денег на ЭТП, Запрос в бухгалтерию, Карточка задачи в Юджайл, Шаблон ответа на претензию).`;
 
+    // Truncate overly long text blocks to stay safely under Gemini API token limits (250,000 tokens/min)
+    const MAX_DOC_CHARS = 25000;
+    const safeContract = contractText && contractText.length > MAX_DOC_CHARS
+      ? contractText.slice(0, MAX_DOC_CHARS) + "\n\n[...Текст проекта договора сокращен для оптимизации квоты AI...]"
+      : (contractText || "Не предоставлен");
+
+    const safeDoc = documentationText && documentationText.length > MAX_DOC_CHARS
+      ? documentationText.slice(0, MAX_DOC_CHARS) + "\n\n[...Текст документации закупки сокращен для оптимизации квоты AI...]"
+      : (documentationText || "Не предоставлен");
+
+    const safeTz = tzText && tzText.length > MAX_DOC_CHARS
+      ? tzText.slice(0, MAX_DOC_CHARS) + "\n\n[...Текст ТЗ и спецификации сокращен для оптимизации квоты AI...]"
+      : (tzText || "Не предоставлен");
+
     const promptText = `
 Тип процедуры: ${procedureType || "Не указан"}
 Дополнительные примечания: ${additionalNotes || "Отсутствуют"}
 
 --- ТЕКСТ ПРОЕКТА ДОГОВОРА ---
-${contractText || "Не предоставлен"}
+${safeContract}
 
 --- ТЕКСТ ДОКУМЕНТАЦИИ ЗАКУПКИ ---
-${documentationText || "Не предоставлен"}
+${safeDoc}
 
 --- ТЕКСТ ТЕХНИЧЕСКОГО ЗАДАНИЯ И ТАБЛИЦ ---
-${tzText || "Не предоставлен"}
+${safeTz}
 `;
 
     const response = await ai.models.generateContent({
