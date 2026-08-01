@@ -19,16 +19,23 @@ import {
   MapPin,
   Calendar,
   Bot,
-  Sparkles
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 interface ProductListTableProps {
   products: ProductItem[];
 }
 
+type ProductSortField = 'name' | 'quantity' | 'status' | 'okpd';
+type SortOrder = 'asc' | 'desc';
+
 export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [sortField, setSortField] = useState<ProductSortField>('name');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [selectedProductForSearch, setSelectedProductForSearch] = useState<ProductItem | null>(null);
@@ -37,6 +44,15 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
   // AI Agent Search Modal state
   const [isAgentModalOpen, setIsAgentModalOpen] = useState<boolean>(false);
   const [selectedProductForAgent, setSelectedProductForAgent] = useState<ProductItem | null>(null);
+
+  const handleSortToggle = (field: ProductSortField) => {
+    if (sortField === field) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
 
   const handleOpenSearch = (product: ProductItem) => {
     setSelectedProductForSearch(product);
@@ -73,6 +89,23 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
 
     if (statusFilter === 'ALL') return matchesSearch;
     return matchesSearch && p.pp1875Status === statusFilter;
+  });
+
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    let comparison = 0;
+    if (sortField === 'name') {
+      comparison = a.name.localeCompare(b.name, 'ru');
+    } else if (sortField === 'quantity') {
+      // parse numeric value from quantity string e.g. "10 шт"
+      const numA = parseFloat(a.quantity) || 0;
+      const numB = parseFloat(b.quantity) || 0;
+      comparison = numA - numB;
+    } else if (sortField === 'status') {
+      comparison = (a.pp1875Status || '').localeCompare(b.pp1875Status || '', 'ru');
+    } else if (sortField === 'okpd') {
+      comparison = (a.okpd2OrGvin || '').localeCompare(b.okpd2OrGvin || '', 'ru');
+    }
+    return sortOrder === 'desc' ? -comparison : comparison;
   });
 
   const handleCopyProduct = (product: ProductItem) => {
@@ -185,23 +218,81 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
           <thead>
             <tr className="bg-slate-100/70 dark:bg-slate-800/90 text-slate-900 dark:text-slate-100 font-bold border-b border-slate-200 dark:border-slate-800">
               <th className="py-3 px-4 w-12 text-center">№</th>
-              <th className="py-3 px-4 min-w-[200px]">Наименование продукции</th>
-              <th className="py-3 px-4 w-28">Количество</th>
+              
+              <th className="py-3 px-4 min-w-[200px]">
+                <button
+                  type="button"
+                  onClick={() => handleSortToggle('name')}
+                  className="flex items-center gap-1.5 font-bold hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer group"
+                >
+                  <span>Наименование продукции</span>
+                  {sortField === 'name' ? (
+                    sortOrder === 'desc' ? <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  ) : (
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-50 group-hover:opacity-100" />
+                  )}
+                </button>
+              </th>
+
+              <th className="py-3 px-4 w-28">
+                <button
+                  type="button"
+                  onClick={() => handleSortToggle('quantity')}
+                  className="flex items-center gap-1.5 font-bold hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer group"
+                >
+                  <span>Количество</span>
+                  {sortField === 'quantity' ? (
+                    sortOrder === 'desc' ? <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  ) : (
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-50 group-hover:opacity-100" />
+                  )}
+                </button>
+              </th>
+
               <th className="py-3 px-4 min-w-[320px]">Размеры и Технические Параметры из ТЗ</th>
-              <th className="py-3 px-4 w-32">ОКПД2 / КТРУ</th>
-              <th className="py-3 px-4 min-w-[180px]">Нац. режим (ПП 1875)</th>
+
+              <th className="py-3 px-4 w-32">
+                <button
+                  type="button"
+                  onClick={() => handleSortToggle('okpd')}
+                  className="flex items-center gap-1.5 font-bold hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer group"
+                >
+                  <span>ОКПД2 / КТРУ</span>
+                  {sortField === 'okpd' ? (
+                    sortOrder === 'desc' ? <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  ) : (
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-50 group-hover:opacity-100" />
+                  )}
+                </button>
+              </th>
+
+              <th className="py-3 px-4 min-w-[180px]">
+                <button
+                  type="button"
+                  onClick={() => handleSortToggle('status')}
+                  className="flex items-center gap-1.5 font-bold hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer group"
+                >
+                  <span>Нац. режим (ПП 1875)</span>
+                  {sortField === 'status' ? (
+                    sortOrder === 'desc' ? <ArrowDown className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> : <ArrowUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  ) : (
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 opacity-50 group-hover:opacity-100" />
+                  )}
+                </button>
+              </th>
+
               <th className="py-3 px-4 w-14 text-center">Действие</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-            {filteredProducts.length === 0 ? (
+            {sortedProducts.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-slate-500 dark:text-slate-400 font-medium">
                   По заданным фильтрам позиции не найдены.
                 </td>
               </tr>
             ) : (
-              filteredProducts.map((item, idx) => (
+              sortedProducts.map((item, idx) => (
                 <tr key={item.id || idx} className="hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30 transition-colors align-top">
                   <td className="py-3.5 px-4 font-mono font-bold text-slate-500 dark:text-slate-400 text-center">
                     {idx + 1}
