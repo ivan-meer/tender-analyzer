@@ -21,7 +21,7 @@ import { AnalysisProgressScreen } from './components/AnalysisProgressScreen';
 import { PreAnalysisDashboard } from './components/PreAnalysisDashboard';
 import { PdfReportPreviewModal } from './components/PdfReportPreviewModal';
 import { auth, saveAnalysisToDb } from './lib/firebase';
-import { AnalysisInput, AnalysisResult } from './types';
+import { AnalysisInput, AnalysisResult, ProcedureType } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
 import { getPresetAnalysisResult } from './data/presetResults';
 import { 
@@ -40,12 +40,14 @@ import {
   FileCheck,
   ChevronRight,
   ArrowLeft,
-  History
+  History,
+  BookOpen
 } from 'lucide-react';
 
 export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [activeProcedureType, setActiveProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,15 +87,24 @@ export default function App() {
 
   const handleAnalyze = async (input: AnalysisInput) => {
     setIsAnalyzing(true);
+    setActiveProcedureType(input.procedureType);
     setError(null);
 
     try {
+      const customGuidelines = localStorage.getItem('custom_tender_guidelines');
+      const enrichedInput = {
+        ...input,
+        additionalNotes: customGuidelines 
+          ? `${input.additionalNotes || ''}\n\n[Официальный Регламент и Инструкции Пользователя]:\n${customGuidelines}`
+          : input.additionalNotes
+      };
+
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(input),
+        body: JSON.stringify(enrichedInput),
       });
 
       if (!response.ok) {
@@ -259,7 +270,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
         {/* Screen 2: Splash Loading Progress Screen during analysis */}
         {isAnalyzing && (
-          <AnalysisProgressScreen />
+          <AnalysisProgressScreen procedureType={activeProcedureType} />
         )}
 
         {/* Screen 3: Analysis Results Report Screen */}
@@ -455,6 +466,16 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>Шаблоны писем ({templatesCount})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsGuideOpen(true)}
+                  className="px-3 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  title="Открыть Регламент работы (44-ФЗ & 223-ФЗ)"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Регламент работы</span>
                 </button>
               </div>
             </div>

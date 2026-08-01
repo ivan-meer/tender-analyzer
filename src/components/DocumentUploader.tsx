@@ -293,21 +293,21 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            {/* LAW SELECTOR PILLS */}
-            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+            {/* LAW SELECTOR SEGMENTED CONTROL */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner">
               <button
                 type="button"
                 onClick={() => {
                   setLawType('223_FZ');
                   setProcedureType('223_FZ_QUOTATION');
                 }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
                   lawType === '223_FZ'
-                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    ? 'bg-indigo-600 text-white shadow-xs ring-1 ring-indigo-500/30'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                223-ФЗ
+                <span>223-ФЗ</span>
               </button>
               <button
                 type="button"
@@ -315,13 +315,13 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                   setLawType('44_FZ');
                   setProcedureType('44_FZ_AUCTION');
                 }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
                   lawType === '44_FZ'
-                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500/30'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                44-ФЗ
+                <span>44-ФЗ</span>
               </button>
               <button
                 type="button"
@@ -329,13 +329,13 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                   setLawType('COMMERCIAL');
                   setProcedureType('COMMERCIAL');
                 }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
                   lawType === 'COMMERCIAL'
-                    ? 'bg-amber-600 text-white shadow-2xs'
+                    ? 'bg-amber-600 text-white shadow-xs ring-1 ring-amber-500/30'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                Коммерческая
+                <span>Коммерческая</span>
               </button>
             </div>
 
@@ -627,35 +627,109 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* PROCEDURE TYPE SELECTOR DROPDOWN */}
-            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-2.5 py-1.5 shadow-2xs">
-              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Способ:</span>
-              <select
-                value={procedureType}
-                onChange={(e) => setProcedureType(e.target.value as ProcedureType)}
-                className="text-xs font-bold bg-transparent text-slate-800 dark:text-slate-100 focus:outline-none cursor-pointer"
-              >
-                {lawType === '223_FZ' && (
-                  <>
-                    <option value="223_FZ_QUOTATION">📄 Запрос котировок / предложений (223-ФЗ)</option>
-                    <option value="223_FZ_AUCTION">⚡ Электронный аукцион (223-ФЗ)</option>
-                    <option value="223_FZ_TENDER">🏆 Конкурс / Тендер (223-ФЗ)</option>
-                  </>
-                )}
-                {lawType === '44_FZ' && (
-                  <>
-                    <option value="44_FZ_AUCTION">⚡ Электронный аукцион (44-ФЗ, ЕИС)</option>
-                    <option value="44_FZ_QUOTATION">📄 Запрос котировок в эл. форме (44-ФЗ)</option>
-                    <option value="44_FZ_TENDER">🏆 Открытый конкурс в эл. форме (44-ФЗ)</option>
-                  </>
-                )}
-                {lawType === 'COMMERCIAL' && (
-                  <>
-                    <option value="COMMERCIAL">🏢 Коммерческая закупка / Тендер</option>
-                    <option value="OTHER">📁 Иной вид процедуры</option>
-                  </>
-                )}
-              </select>
+            {/* PROCEDURE TYPE SEGMENTED CONTROL */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/90 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner overflow-x-auto">
+              <span className="text-[10px] font-extrabold uppercase text-slate-400 dark:text-slate-500 px-2 shrink-0">Вид процедуры:</span>
+              {lawType === '223_FZ' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setProcedureType('223_FZ_QUOTATION')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      procedureType === '223_FZ_QUOTATION'
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    📄 Котировки / Предложения
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProcedureType('223_FZ_AUCTION')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      procedureType === '223_FZ_AUCTION'
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    ⚡ Эл. аукцион
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProcedureType('223_FZ_TENDER')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      procedureType === '223_FZ_TENDER'
+                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    🏆 Конкурс
+                  </button>
+                </>
+              )}
+              {lawType === '44_FZ' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setProcedureType('44_FZ_AUCTION')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      procedureType === '44_FZ_AUCTION'
+                        ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    ⚡ Эл. аукцион (ЕИС)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProcedureType('44_FZ_QUOTATION')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      procedureType === '44_FZ_QUOTATION'
+                        ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    📄 Котировки
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProcedureType('44_FZ_TENDER')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      procedureType === '44_FZ_TENDER'
+                        ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    🏆 Конкурс
+                  </button>
+                </>
+              )}
+              {lawType === 'COMMERCIAL' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setProcedureType('COMMERCIAL')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      procedureType === 'COMMERCIAL'
+                        ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    🏢 Коммерческий тендер
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProcedureType('OTHER')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      procedureType === 'OTHER'
+                        ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs border border-slate-200 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    📁 Иной вид
+                  </button>
+                </>
+              )}
             </div>
 
             {onLoadPresetResult && (

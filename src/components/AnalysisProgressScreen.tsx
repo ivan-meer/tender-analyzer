@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, FileSearch, Sparkles, CheckCircle2, Cpu, Building2, Zap, AlertTriangle, Archive, FileArchive } from 'lucide-react';
+import { ShieldCheck, FileSearch, Sparkles, CheckCircle2, Cpu, Building2, Zap, Archive } from 'lucide-react';
+import { ProcedureType } from '../types';
 
 interface AnalysisProgressScreenProps {
+  procedureType?: ProcedureType;
   onCancel?: () => void;
 }
 
-export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = () => {
+export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ procedureType }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(12);
+
+  const is44FZ = Boolean(procedureType && procedureType.startsWith('44_FZ'));
+  const isCommercial = procedureType === 'COMMERCIAL' || procedureType === 'OTHER';
 
   const steps = [
     {
@@ -18,14 +23,22 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = () 
     },
     {
       id: 'ocr',
-      title: 'Парсинг структуры и извлечение юридических формулировок 223-ФЗ',
+      title: is44FZ 
+        ? 'Парсинг структуры и нормативная проверка по 44-ФЗ (ЕИС Закупки)'
+        : isCommercial
+        ? 'Парсинг структуры коммерческого тендера и условий поставки'
+        : 'Парсинг структуры и извлечение юридических формулировок 223-ФЗ',
       subtitle: 'Обработка проекта договора, технического задания и требований к заявке',
       icon: FileSearch,
     },
     {
       id: 'risks',
-      title: 'Анализ рисков договора и кабальных штрафов (3% НМЦК)',
-      subtitle: 'Проверка прав закупки у 3-х лиц, коротких сроков поставки и неустоек',
+      title: is44FZ
+        ? 'Расчет неустоек (ПП РФ № 1042) и права на списание штрафов (ПП РФ № 783)'
+        : 'Анализ рисков договора и кабальных штрафов (3% НМЦК без списания)',
+      subtitle: is44FZ
+        ? 'Оценка условий одностороннего расторжения, ЕРУЗ и риска попасть в РНП'
+        : 'Проверка прав закупки у 3-х лиц, коротких сроков поставки и неустоек',
       icon: ShieldCheck,
     },
     {
@@ -83,14 +96,22 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = () 
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-base sm:text-lg font-bold text-white">ИИ-Экспертиза 223-ФЗ в процессе...</h3>
+              <h3 className="text-base sm:text-lg font-bold text-white">
+                {is44FZ 
+                  ? 'ИИ-Экспертиза 44-ФЗ в процессе...' 
+                  : isCommercial 
+                  ? 'ИИ-Экспертиза коммерческой закупки...' 
+                  : 'ИИ-Экспертиза 223-ФЗ в процессе...'}
+              </h3>
               <span className="px-2 py-0.5 text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-md flex items-center gap-1">
                 <Zap className="w-3 h-3 text-indigo-400 fill-indigo-400" />
                 Gemini 3.5 Flash
               </span>
             </div>
             <p className="text-xs text-slate-400 font-medium">
-              Глубокая проверка контракта, штрафных рисков и требований ПП РФ № 1875
+              {is44FZ 
+                ? 'Глубокая проверка контракта, ПП РФ № 1042, ЕИС и требований ПП РФ № 1875' 
+                : 'Глубокая проверка контракта, штрафных рисков и требований ПП РФ № 1875'}
             </p>
           </div>
         </div>
@@ -168,7 +189,7 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = () 
         <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            Проверка согласно регламенту 223-ФЗ и ПП РФ № 1875
+            {is44FZ ? 'Проверка согласно законодательству 44-ФЗ и ПП РФ № 1875' : 'Проверка согласно регламенту 223-ФЗ и ПП РФ № 1875'}
           </span>
           <span className="font-mono text-[10px] text-slate-500">
             ~3-5 сек.

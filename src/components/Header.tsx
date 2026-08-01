@@ -87,14 +87,16 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Guide Button */}
+          {/* Guide / Regulations Button */}
           <button
             id="open-guide-btn"
+            type="button"
             onClick={onOpenGuide}
-            className="p-1.5 text-xs font-semibold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-colors shrink-0 cursor-pointer"
-            title="Памятка / Регламент 223-ФЗ"
+            className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all shrink-0 cursor-pointer"
+            title="Регламент работы (44-ФЗ & 223-ФЗ)"
           >
             <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span className="hidden md:inline">Регламент</span>
           </button>
         </div>
       </div>
