@@ -13,13 +13,16 @@ import {
   Building2, 
   Scale, 
   Info,
-  Check
+  Check,
+  Zap
 } from 'lucide-react';
+import { ProcedureType } from '../types';
 
 interface GuideModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateGuidelines?: (guidelinesText: string) => void;
+  activeProcedureType?: ProcedureType;
 }
 
 // Default presets for regulations
@@ -57,7 +60,7 @@ const DEFAULT_CORE_INSTRUCTIONS = `### Основные директивы дл�
 3. Проверять условия поставки «по заявкам» и выявлять сжатые сроки (менее 5 рабочих дней).
 4. Оценивать риски одностороннего отказа Заказчика и внесения в РНП.`;
 
-export const GuideModal: React.FC<GuideModalProps> = ({ isOpen, onClose, onUpdateGuidelines }) => {
+export const GuideModal: React.FC<GuideModalProps> = ({ isOpen, onClose, onUpdateGuidelines, activeProcedureType }) => {
   const [activeTab, setActiveTab] = useState<'223_FZ' | '44_FZ' | 'CORE'>('223_FZ');
   const [isEditing, setIsEditing] = useState(false);
   const [isSavedNotice, setIsSavedNotice] = useState(false);
@@ -67,16 +70,35 @@ export const GuideModal: React.FC<GuideModalProps> = ({ isOpen, onClose, onUpdat
   const [text223FZ, setText223FZ] = useState(DEFAULT_223_FZ);
   const [textCore, setTextCore] = useState(DEFAULT_CORE_INSTRUCTIONS);
 
-  // Load saved guidelines on mount
+  // Determine active law for current session
+  const storedLaw = localStorage.getItem('selected_law_type');
+  const isCurrently44FZ = Boolean(
+    (activeProcedureType && activeProcedureType.startsWith('44_FZ')) ||
+    storedLaw === '44_FZ'
+  );
+
+  // Load saved guidelines and active tab on mount
   useEffect(() => {
     const saved44 = localStorage.getItem('regulations_44fz');
     const saved223 = localStorage.getItem('regulations_223fz');
     const savedCore = localStorage.getItem('regulations_core');
+    const savedTab = localStorage.getItem('active_regulations_tab') as '223_FZ' | '44_FZ' | 'CORE' | null;
 
     if (saved44) setText44FZ(saved44);
     if (saved223) setText223FZ(saved223);
     if (savedCore) setTextCore(savedCore);
-  }, []);
+
+    if (savedTab) {
+      setActiveTab(savedTab);
+    } else if (isCurrently44FZ) {
+      setActiveTab('44_FZ');
+    }
+  }, [activeProcedureType]);
+
+  const handleTabChange = (tab: '223_FZ' | '44_FZ' | 'CORE') => {
+    setActiveTab(tab);
+    localStorage.setItem('active_regulations_tab', tab);
+  };
 
   if (!isOpen) return null;
 
@@ -186,11 +208,29 @@ export const GuideModal: React.FC<GuideModalProps> = ({ isOpen, onClose, onUpdat
           </div>
         )}
 
+        {/* ACTIVE LAW INDICATOR BANNER */}
+        <div className="bg-slate-50 dark:bg-slate-950/60 px-4 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 font-medium">Активный законы в сессии:</span>
+            <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] flex items-center gap-1 ${
+              isCurrently44FZ 
+                ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                : 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800'
+            }`}>
+              <Zap className="w-3 h-3 text-current" />
+              {isCurrently44FZ ? 'Выбран 44-ФЗ (ЕИС Закупки)' : 'Выбран 223-ФЗ'}
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">
+            Сохраняется в localStorage & синхронизируется с ИИ
+          </span>
+        </div>
+
         {/* TABS SELECTOR */}
         <div className="bg-slate-100/70 dark:bg-slate-900 px-4 pt-3 pb-0 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 overflow-x-auto">
           <button
             type="button"
-            onClick={() => setActiveTab('223_FZ')}
+            onClick={() => handleTabChange('223_FZ')}
             className={`px-4 py-2 text-xs font-extrabold rounded-t-xl transition-all cursor-pointer flex items-center gap-1.5 border-t border-x ${
               activeTab === '223_FZ'
                 ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-indigo-700 dark:text-indigo-400 border-b-transparent -mb-px'
@@ -199,11 +239,14 @@ export const GuideModal: React.FC<GuideModalProps> = ({ isOpen, onClose, onUpdat
           >
             <Building2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>Регламент 223-ФЗ</span>
+            {!isCurrently44FZ && (
+              <span className="w-2 h-2 rounded-full bg-indigo-500" title="Активен для текущего анализа" />
+            )}
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('44_FZ')}
+            onClick={() => handleTabChange('44_FZ')}
             className={`px-4 py-2 text-xs font-extrabold rounded-t-xl transition-all cursor-pointer flex items-center gap-1.5 border-t border-x ${
               activeTab === '44_FZ'
                 ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-emerald-700 dark:text-emerald-400 border-b-transparent -mb-px'
@@ -212,11 +255,14 @@ export const GuideModal: React.FC<GuideModalProps> = ({ isOpen, onClose, onUpdat
           >
             <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>Регламент 44-ФЗ</span>
+            {isCurrently44FZ && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500" title="Активен для текущего анализа" />
+            )}
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('CORE')}
+            onClick={() => handleTabChange('CORE')}
             className={`px-4 py-2 text-xs font-extrabold rounded-t-xl transition-all cursor-pointer flex items-center gap-1.5 border-t border-x ${
               activeTab === 'CORE'
                 ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-amber-700 dark:text-amber-400 border-b-transparent -mb-px'
