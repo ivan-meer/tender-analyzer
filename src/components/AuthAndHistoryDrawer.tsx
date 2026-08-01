@@ -34,8 +34,18 @@ import {
   Layers,
   CheckCircle2,
   Filter,
-  UserCheck
+  UserCheck,
+  ChevronDown,
+  ChevronUp,
+  Trophy,
+  Clock,
+  XCircle,
+  Tag as TagIcon,
+  ArrowRightLeft,
+  List,
+  FolderTree
 } from 'lucide-react';
+import { TenderCompareModal } from './TenderCompareModal';
 
 interface AuthAndHistoryDrawerProps {
   isOpen: boolean;
@@ -43,6 +53,8 @@ interface AuthAndHistoryDrawerProps {
   currentAnalysisResult: any | null;
   onSelectAnalysis: (analysisResult: any) => void;
 }
+
+const PRESET_TAGS = ['Срочно', 'Малый объем', 'Строительство', 'Оборудование', 'ПП 1875', 'СИЗ', 'ИТ / Софт'];
 
 export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   isOpen,
@@ -60,6 +72,12 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   const [activeTab, setActiveTab] = useState<'tenders' | 'customers'>('tenders');
   const [selectedCustomerFilter, setSelectedCustomerFilter] = useState<string | null>(null);
 
+  // Grouping & Tags & Compare state
+  const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat');
+  const [expandedCustomers, setExpandedCustomers] = useState<Record<string, boolean>>({});
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+  const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
+
   // Edit Modal State
   const [editingItem, setEditingItem] = useState<SavedAnalysis | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -69,6 +87,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   const [editStatus, setEditStatus] = useState('На рассмотрении');
   const [editParticipationStatus, setEditParticipationStatus] = useState<TenderParticipationStatus>('NEW');
   const [editNotes, setEditNotes] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
@@ -201,6 +220,13 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
     setEditStatus(item.status || 'На рассмотрении');
     setEditParticipationStatus(item.participationStatus || 'NEW');
     setEditNotes(item.notes || '');
+    setEditTags(item.tags || []);
+  };
+
+  const handleToggleTagInEdit = (tag: string) => {
+    setEditTags(prev => 
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
   };
 
   const handleSaveEdit = async () => {
@@ -216,6 +242,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
         status: editStatus,
         participationStatus: editParticipationStatus,
         notes: editNotes,
+        tags: editTags,
       });
       setEditingItem(null);
       if (currentUser) fetchAnalysesAndCustomers(currentUser.uid);
@@ -227,12 +254,64 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
     }
   };
 
+  const getStatusBadge = (status?: string, participationStatus?: TenderParticipationStatus) => {
+    if (participationStatus === 'WON' || status === 'Победа (Выигран)' || status === 'Победа') {
+      return (
+        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-500 text-white flex items-center gap-1 shadow-2xs">
+          <Trophy className="w-3 h-3" />
+          <span>Победа</span>
+        </span>
+      );
+    }
+    if (participationStatus === 'PARTICIPATING' || status === 'В работе' || status === 'Участвуем') {
+      return (
+        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500 text-white flex items-center gap-1 shadow-2xs">
+          <Clock className="w-3 h-3" />
+          <span>В работе</span>
+        </span>
+      );
+    }
+    if (participationStatus === 'SUBMITTED' || status === 'Заявка подана') {
+      return (
+        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-600 text-white flex items-center gap-1 shadow-2xs">
+          <CheckCircle2 className="w-3 h-3" />
+          <span>Заявка подана</span>
+        </span>
+      );
+    }
+    if (participationStatus === 'REJECTED' || status === 'Отклонен') {
+      return (
+        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-500 text-white flex items-center gap-1 shadow-2xs">
+          <XCircle className="w-3 h-3" />
+          <span>Отклонен</span>
+        </span>
+      );
+    }
+    if (participationStatus === 'ARCHIVED' || status === 'Архив') {
+      return (
+        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-500 text-white flex items-center gap-1">
+          <span>Архив</span>
+        </span>
+      );
+    }
+    return (
+      <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+        {status || 'На рассмотрении'}
+      </span>
+    );
+  };
+
   if (!isOpen) return null;
 
   const filteredAnalyses = analyses.filter((item) => {
     if (selectedCustomerFilter) {
       const custName = (item.customerName || item.analysisResult?.summary?.customerName || '').toLowerCase().trim();
       if (!custName.includes(selectedCustomerFilter.toLowerCase().trim())) {
+        return false;
+      }
+    }
+    if (selectedTagFilter) {
+      if (!item.tags || !item.tags.includes(selectedTagFilter)) {
         return false;
       }
     }
@@ -243,9 +322,22 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
       (item.title && item.title.toLowerCase().includes(q)) ||
       (item.customerName && item.customerName.toLowerCase().includes(q)) ||
       (item.procurementSum && item.procurementSum.toLowerCase().includes(q)) ||
-      (item.status && item.status.toLowerCase().includes(q))
+      (item.status && item.status.toLowerCase().includes(q)) ||
+      (item.tags && item.tags.some(t => t.toLowerCase().includes(q)))
     );
   });
+
+  const groupedByCustomer = React.useMemo(() => {
+    const map: Record<string, SavedAnalysis[]> = {};
+    filteredAnalyses.forEach(item => {
+      const cust = (item.customerName || item.analysisResult?.summary?.customerName || 'Заказчик 223-ФЗ').trim();
+      if (!map[cust]) {
+        map[cust] = [];
+      }
+      map[cust].push(item);
+    });
+    return map;
+  }, [filteredAnalyses]);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs animate-fade-in">
@@ -404,23 +496,93 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
           </div>
         )}
 
-        {/* Main Body */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          
-          {/* Search Bar */}
-          {currentUser && (
+        {/* Search & Control Tools Bar */}
+        {currentUser && (
+          <div className="p-4 space-y-2.5 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            {/* View Mode & Compare Action */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                <button
+                  onClick={() => setViewMode('flat')}
+                  className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                    viewMode === 'flat' 
+                      ? 'bg-indigo-600 text-white' 
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                  }`}
+                  title="Списком"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Список</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('grouped')}
+                  className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                    viewMode === 'grouped' 
+                      ? 'bg-indigo-600 text-white' 
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                  }`}
+                  title="Сгруппировать по заказчикам"
+                >
+                  <FolderTree className="w-3.5 h-3.5" />
+                  <span>По заказчикам</span>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setIsCompareOpen(true)}
+                className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold transition-all border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>Сравнить 2 закупки</span>
+              </button>
+            </div>
+
+            {/* Search Input */}
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
                 value={historySearch}
                 onChange={(e) => setHistorySearch(e.target.value)}
-                placeholder="Поиск по закупке, заказчику или дате..."
-                className="w-full pl-8 pr-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                placeholder="Поиск по закупке, заказчику, тегам или дате..."
+                className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               />
             </div>
-          )}
 
+            {/* Tag Filter Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[11px]">
+              <span className="text-slate-400 font-bold text-[10px] uppercase shrink-0 flex items-center gap-0.5">
+                <TagIcon className="w-3 h-3" /> Теги:
+              </span>
+              <button
+                onClick={() => setSelectedTagFilter(null)}
+                className={`px-2 py-0.5 rounded-lg font-bold shrink-0 transition-colors cursor-pointer ${
+                  !selectedTagFilter 
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' 
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                Все
+              </button>
+              {PRESET_TAGS.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setSelectedTagFilter(selectedTagFilter === tag ? null : tag)}
+                  className={`px-2 py-0.5 rounded-lg font-bold shrink-0 transition-colors cursor-pointer ${
+                    selectedTagFilter === tag
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-indigo-300'
+                  }`}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Main Body */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {!currentUser ? (
             <div className="text-center py-12 space-y-3 text-slate-400">
               <UserIcon className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
@@ -438,7 +600,101 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                 <FolderOpen className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
                 <p className="text-xs font-medium">Сохраненных закупок пока нет.</p>
               </div>
+            ) : viewMode === 'grouped' ? (
+              /* GROUPED BY CUSTOMER ACCORDION VIEW */
+              <div className="space-y-3">
+                {Object.entries(groupedByCustomer).map(([custName, items]) => {
+                  const isExpanded = expandedCustomers[custName] !== false; // expanded by default
+
+                  return (
+                    <div key={custName} className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden transition-all">
+                      {/* Customer Group Accordion Header */}
+                      <div
+                        onClick={() => setExpandedCustomers(prev => ({ ...prev, [custName]: !isExpanded }))}
+                        className="p-3 bg-white dark:bg-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-200/80 dark:border-slate-700/80"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="p-1.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg shrink-0">
+                            <Building2 className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-extrabold text-xs text-slate-900 dark:text-white truncate" title={custName}>
+                              {custName}
+                            </h4>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                              {items.length} {items.length === 1 ? 'закупка' : 'закупок'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-md text-[10px] font-bold">
+                            {items.length} тенд.
+                          </span>
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                        </div>
+                      </div>
+
+                      {/* Collapsible Tender Cards Body */}
+                      {isExpanded && (
+                        <div className="p-2.5 space-y-2.5 bg-slate-50/50 dark:bg-slate-900/40">
+                          {items.map(item => (
+                            <div
+                              key={item.id}
+                              onClick={() => {
+                                if (item.analysisResult) {
+                                  onSelectAnalysis(item.analysisResult);
+                                  onClose();
+                                }
+                              }}
+                              className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 rounded-xl p-3 space-y-2 cursor-pointer hover:border-indigo-400 transition-all shadow-2xs"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {getStatusBadge(item.status, item.participationStatus)}
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                    Риск: {item.riskScore}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button onClick={(e) => handleStartEdit(item, e)} className="p-1 text-slate-400 hover:text-indigo-600 rounded-lg">
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={(e) => handleDelete(item.id!, e)} className="p-1 text-slate-400 hover:text-rose-600 rounded-lg">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              <h5 className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                {item.projectName || item.title}
+                              </h5>
+
+                              <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                                <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.procurementSum || 'По заявке'}</span>
+                                <span className="text-slate-400">{item.auctionDate || 'Уточняется'}</span>
+                              </div>
+
+                              {item.tags && item.tags.length > 0 && (
+                                <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                  {item.tags.map(t => (
+                                    <span key={t} className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md text-[9px] font-bold">
+                                      #{t}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
+              /* FLAT LIST VIEW */
               filteredAnalyses.map((item) => {
                 const isParticipating = item.participationStatus === 'PARTICIPATING';
 
@@ -459,23 +715,12 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                        {getStatusBadge(item.status, item.participationStatus)}
+
                         {/* Risk level badge */}
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                           Индекс риска: {item.riskScore}
                         </span>
-
-                        {/* Status badge */}
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800">
-                          {item.status || 'На рассмотрении'}
-                        </span>
-
-                        {/* Participating Badge */}
-                        {isParticipating && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 text-white flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span>Участвуем</span>
-                          </span>
-                        )}
                       </div>
 
                       {/* EDIT AND DELETE BUTTONS */}
@@ -540,6 +785,17 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                         </span>
                       </div>
                     </div>
+
+                    {/* Tags Pills */}
+                    {item.tags && item.tags.length > 0 && (
+                      <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                        {item.tags.map(t => (
+                          <span key={t} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md text-[10px] font-bold">
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Quick Action Footer: Participate Button + Open Report */}
                     <div className="flex items-center justify-between pt-1">
@@ -763,6 +1019,31 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                   <option value="REJECTED">Заявка отклонена</option>
                   <option value="ARCHIVED">Архив</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Теги и метки закупки:
+                </label>
+                <div className="flex items-center gap-1.5 flex-wrap p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+                  {PRESET_TAGS.map((tag) => {
+                    const active = editTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => handleToggleTagInEdit(tag)}
+                        className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                          active
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:border-indigo-400'
+                        }`}
+                      >
+                        #{tag} {active && '✓'}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>
