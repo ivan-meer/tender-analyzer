@@ -301,8 +301,6 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
     );
   };
 
-  if (!isOpen) return null;
-
   const filteredAnalyses = analyses.filter((item) => {
     if (selectedCustomerFilter) {
       const custName = (item.customerName || item.analysisResult?.summary?.customerName || '').toLowerCase().trim();
@@ -338,6 +336,8 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
     });
     return map;
   }, [filteredAnalyses]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs animate-fade-in">

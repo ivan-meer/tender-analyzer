@@ -19,6 +19,7 @@ import { AuthAndHistoryDrawer } from './components/AuthAndHistoryDrawer';
 import { SuppliersCatalogModal } from './components/SuppliersCatalogModal';
 import { AnalysisProgressScreen } from './components/AnalysisProgressScreen';
 import { PreAnalysisDashboard } from './components/PreAnalysisDashboard';
+import { PdfReportPreviewModal } from './components/PdfReportPreviewModal';
 import { auth, saveAnalysisToDb } from './lib/firebase';
 import { AnalysisInput, AnalysisResult } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
@@ -57,6 +58,7 @@ export default function App() {
   const [isScanOpen, setIsScanOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSuppliersCatalogOpen, setIsSuppliersCatalogOpen] = useState(false);
+  const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('theme') === 'dark' || 
@@ -301,9 +303,10 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
                 <button
                   id="export-pdf-report-btn"
-                  onClick={handleExportPdf}
+                  onClick={() => setIsPdfPreviewOpen(true)}
                   disabled={isExportingPdf}
                   className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+                  title="Предпросмотр и скачивание PDF-отчета"
                 >
                   {isExportingPdf ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -559,6 +562,16 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         onClose={() => setIsSuppliersCatalogOpen(false)}
       />
 
+      {/* PDF Report Preview Modal */}
+      <PdfReportPreviewModal
+        isOpen={isPdfPreviewOpen}
+        onClose={() => setIsPdfPreviewOpen(false)}
+        analysisResult={analysisResult}
+        onDownloadPdf={handleExportPdf}
+        onExportTxt={handleExportTxt}
+        isExportingPdf={isExportingPdf}
+      />
+
       {/* Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6 mt-12 mb-16 sm:mb-0 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 dark:text-slate-400 space-y-1 font-medium">
@@ -581,7 +594,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
           <button
             type="button"
-            onClick={handleExportPdf}
+            onClick={() => setIsPdfPreviewOpen(true)}
             disabled={isExportingPdf}
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-xs active:scale-95 disabled:opacity-50"
           >

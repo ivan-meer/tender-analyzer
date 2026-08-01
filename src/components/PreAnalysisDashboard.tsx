@@ -7,7 +7,12 @@ import {
   History, 
   ChevronRight,
   ShieldCheck,
-  Coins
+  Coins,
+  Sparkles,
+  ArrowUpRight,
+  Clock,
+  FileCheck2,
+  Award
 } from 'lucide-react';
 import { auth, getUserAnalysesFromDb, getUserCustomersFromDb, SavedAnalysis, SavedCustomer } from '../lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -57,7 +62,7 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({ onOp
         .sort((a, b) => (b.tendersCount || 0) - (a.tendersCount || 0))
         .slice(0, 3);
     }
-    // Fallback benchmark active customers if database is clean
+    // Benchmark active customers if database is fresh
     return [
       { name: 'ГУП «Мосгортранс»', tendersCount: 5 },
       { name: 'ПАО «Россети»', tendersCount: 3 },
@@ -103,7 +108,6 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({ onOp
         .slice(0, 4);
     }
 
-    // Benchmark sample deadlines when database is clean
     return [
       { id: '1', title: 'Поставка спецодежды и СИЗ по ПП 1875', customer: 'ГУП «Мосгортранс»', dateStr: '05.08.2026', sum: '14 200 000 ₽', status: 'PARTICIPATING' },
       { id: '2', title: 'Серверное оборудование и СХД', customer: 'ПАО «Россети»', dateStr: '12.08.2026', sum: '45 000 000 ₽', status: 'SUBMITTED' },
@@ -115,20 +119,21 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({ onOp
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 shadow-xs transition-colors space-y-4">
+      {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-indigo-600 text-white rounded-2xl shadow-xs">
+          <div className="p-2 bg-gradient-to-br from-indigo-500 to-indigo-700 text-white rounded-2xl shadow-sm">
             <TrendingUp className="w-4 h-4" />
           </div>
           <div>
             <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Дашборд закупок & Сводка БД</span>
-              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+              <span>Сводка аналитики & Данные БД</span>
+              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800">
                 223-ФЗ
               </span>
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Статистика проанализированных тендеров и ключевые контрагенты
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              Метрики проанализированных закупщиков, НМЦК и календарь ближайших заседаний
             </p>
           </div>
         </div>
@@ -137,58 +142,71 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({ onOp
           <button
             type="button"
             onClick={onOpenHistory}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/80 text-slate-700 hover:text-indigo-600 dark:text-slate-200 dark:hover:text-indigo-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-slate-700 hover:border-indigo-300 shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/80 text-slate-700 hover:text-indigo-600 dark:text-slate-200 dark:hover:text-indigo-300 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200 dark:border-slate-700 hover:border-indigo-300 shrink-0 shadow-2xs active:scale-95"
           >
             <History className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Открыть всю историю</span>
+            <span>Открыть реестр</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
 
-      {/* 3 Main Widgets Grid */}
+      {/* 3 Main Polished Redesigned Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
         
         {/* Widget 1: Total Saved Tenders */}
-        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 space-y-2 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-700 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Всего сохраненных тендеров
+        <div 
+          onClick={onOpenHistory}
+          className="group relative bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between hover:border-indigo-500/60 dark:hover:border-indigo-500/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-colors" />
+
+          <div className="flex items-center justify-between relative z-10">
+            <span className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-indigo-500" />
+              Всего проверок
             </span>
-            <div className="p-2 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 rounded-xl">
-              <Layers className="w-4 h-4" />
+            <div className="p-2 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 rounded-xl group-hover:scale-110 transition-transform shadow-2xs border border-indigo-200/50 dark:border-indigo-800/50">
+              <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
 
-          <div>
-            <div className="text-2xl font-black font-mono text-slate-900 dark:text-white tracking-tight">
-              {totalTendersCount} <span className="text-xs font-semibold text-slate-400">закупок</span>
+          <div className="pt-3 relative z-10">
+            <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white tracking-tight flex items-baseline gap-2">
+              <span>{totalTendersCount}</span>
+              <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">закупок</span>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Проверено ИИ по 223-ФЗ</span>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-1 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              <span>Проиндексировано с картами рисков</span>
             </p>
           </div>
         </div>
 
-        {/* Widget 2: Top 3 Active Customers */}
-        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 space-y-2 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-700 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Топ-3 активных заказчиков
+        {/* Widget 2: Top Active Customers */}
+        <div 
+          onClick={onOpenHistory}
+          className="group relative bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between hover:border-amber-500/60 dark:hover:border-amber-500/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-colors" />
+
+          <div className="flex items-center justify-between relative z-10">
+            <span className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-amber-500" />
+              Ключевые заказчики
             </span>
-            <div className="p-2 bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 rounded-xl">
-              <Building2 className="w-4 h-4" />
+            <div className="p-2 bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 rounded-xl group-hover:scale-110 transition-transform shadow-2xs border border-amber-200/50 dark:border-amber-800/50">
+              <Award className="w-4 h-4" />
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 pt-2 relative z-10">
             {topCustomers.map((cust, idx) => (
-              <div key={idx} className="flex items-center justify-between text-xs bg-white dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+              <div key={idx} className="flex items-center justify-between text-xs bg-white dark:bg-slate-800/90 px-2.5 py-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60 group-hover:border-amber-200 dark:group-hover:border-amber-900/50 transition-colors">
                 <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate max-w-[170px]" title={cust.name}>
                   {idx + 1}. {cust.name}
                 </span>
-                <span className="font-mono text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-900 shrink-0">
+                <span className="font-mono text-[10px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800/80 shrink-0">
                   {cust.tendersCount || 1} тенд.
                 </span>
               </div>
@@ -197,35 +215,41 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({ onOp
         </div>
 
         {/* Widget 3: Total Sum for Current Month */}
-        <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 space-y-2 flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-700 transition-all">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Сумма контрактов ({currentMonthName})
+        <div 
+          onClick={onOpenHistory}
+          className="group relative bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between hover:border-emerald-500/60 dark:hover:border-emerald-500/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors" />
+
+          <div className="flex items-center justify-between relative z-10">
+            <span className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Coins className="w-3.5 h-3.5 text-emerald-500" />
+              Объем НМЦК ({currentMonthName})
             </span>
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 rounded-xl">
-              <Coins className="w-4 h-4" />
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 rounded-xl group-hover:scale-110 transition-transform shadow-2xs border border-emerald-200/50 dark:border-emerald-800/50">
+              <TrendingUp className="w-4 h-4" />
             </div>
           </div>
 
-          <div>
-            <div className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400 tracking-tight">
+          <div className="pt-3 relative z-10">
+            <div className="text-xl sm:text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 tracking-tight">
               {totalSumCurrentMonth}
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-1 flex items-center gap-1">
               <Calendar className="w-3 h-3 text-slate-400" />
-              <span>Общая НМЦК проанализированных ТЗ</span>
+              <span>Совокупная сумма обработанных смет</span>
             </p>
           </div>
         </div>
 
       </div>
 
-      {/* Widget 4: Deadlines Calendar Bar */}
-      <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+      {/* Widget 4: Deadlines Calendar Strip */}
+      <div className="bg-slate-50/60 dark:bg-slate-800/30 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-3.5 space-y-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-indigo-600 text-white rounded-lg">
-              <Calendar className="w-3.5 h-3.5" />
+            <div className="p-1.5 bg-indigo-600 text-white rounded-lg shadow-2xs">
+              <Clock className="w-3.5 h-3.5" />
             </div>
             <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
               Календарь ближайших дедлайнов (подачи заявок / аукционов)
@@ -234,9 +258,10 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({ onOp
           {onOpenHistory && (
             <button
               onClick={onOpenHistory}
-              className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+              className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer flex items-center gap-0.5"
             >
-              Все дедлайны →
+              <span>Все дедлайны</span>
+              <ArrowUpRight className="w-3 h-3" />
             </button>
           )}
         </div>
@@ -246,7 +271,7 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({ onOp
             <div
               key={dl.id}
               onClick={onOpenHistory}
-              className="bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 p-2.5 rounded-xl flex flex-col justify-between hover:border-indigo-400 transition-all cursor-pointer space-y-1.5"
+              className="bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 p-2.5 rounded-xl flex flex-col justify-between hover:border-indigo-400 dark:hover:border-indigo-500 transition-all cursor-pointer space-y-1.5 shadow-2xs hover:shadow-xs"
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-1" title={dl.title}>
@@ -257,7 +282,7 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({ onOp
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+              <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                 <span className="truncate max-w-[150px]">{dl.customer}</span>
                 <span className="font-bold text-indigo-600 dark:text-indigo-400">{dl.sum}</span>
               </div>

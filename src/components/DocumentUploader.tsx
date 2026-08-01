@@ -337,57 +337,97 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             </div>
           </div>
 
-          {/* DRAG AND DROP ZONE */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-3xl p-5 sm:p-8 text-center transition-all cursor-pointer ${
-              isDragging
-                ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80 scale-[1.01]'
-                : 'border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30'
-            }`}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".zip,.rar,.7z,.tar,.gz,.tgz,.pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.rtf,.json,.md"
-              className="hidden"
-              onChange={(e) => e.target.files && handleFilesAdded(e.target.files)}
-            />
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".zip,.rar,.7z,.tar,.gz,.tgz,.pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.rtf,.json,.md"
+            className="hidden"
+            onChange={(e) => e.target.files && handleFilesAdded(e.target.files)}
+          />
 
-            <div className="max-w-md mx-auto space-y-2.5 pointer-events-none">
-              <div className="w-11 h-11 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-2xs border border-indigo-200/50 dark:border-indigo-800/50">
-                <Upload className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 block">
-                  Перетащите сюда файлы закупочной документации или архивы (.zip)
-                </span>
-                <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium block mt-1">
-                  Поддерживаются: <strong className="text-indigo-600 dark:text-indigo-400">Архивы ZIP/RAR/7Z</strong> (авто-разархивация), <strong>PDF</strong>, <strong>Word</strong>, <strong>Excel</strong>, <strong>TXT</strong>
-                </span>
-              </div>
+          {/* MAIN DRAG AND DROP ZONE (ONLY VISIBLE WHEN NO DOCUMENTS ARE LOADED) */}
+          {parsedFiles.length === 0 ? (
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`relative border-2 border-dashed rounded-3xl p-6 sm:p-9 text-center transition-all duration-300 cursor-pointer overflow-hidden ${
+                isDragging
+                  ? 'border-indigo-500 bg-indigo-50/90 dark:bg-indigo-950/90 scale-[1.02] shadow-xl shadow-indigo-500/10 ring-4 ring-indigo-500/20'
+                  : 'border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30 hover:shadow-lg'
+              }`}
+            >
+              <div className="max-w-md mx-auto space-y-3 pointer-events-none">
+                <div className={`w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-sm border border-indigo-200/50 dark:border-indigo-800/50 transition-transform duration-300 ${isDragging ? 'scale-125 rotate-6' : 'group-hover:scale-110'}`}>
+                  <Upload className="w-6 h-6" />
+                </div>
+                
+                <div>
+                  <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-slate-100 block tracking-tight">
+                    Перетащите сюда файлы документации или кликните для выбора
+                  </span>
+                </div>
 
-              {/* Supported Format Icons */}
-              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800">
-                  <FileCode className="w-3 h-3 text-rose-600 dark:text-rose-400" /> PDF
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Word
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                  <Table className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Excel / Таблицы
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <File className="w-3 h-3 text-slate-500 dark:text-slate-400" /> TXT
-                </span>
+                {/* Supported Format Badges with Archive Icon */}
+                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-lg border border-amber-300/80 dark:border-amber-800/80 shadow-2xs">
+                    <Archive className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                    Архивы ZIP / RAR / 7Z
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800">
+                    <FileCode className="w-3 h-3 text-rose-600 dark:text-rose-400" /> PDF
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Word
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                    <Table className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Excel
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <File className="w-3 h-3 text-slate-500 dark:text-slate-400" /> TXT
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            /* COMPACT "ADD DOCUMENT" BAR (WHEN DOCUMENTS ARE ALREADY PRESENT) */
+            <div 
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                isDragging ? 'ring-2 ring-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80' : ''
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                  <Check className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">
+                    Документы закупки загружены ({parsedFiles.length})
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    Можете добавить еще файлы или начать анализ
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <Archive className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Добавить документ</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Processing Spinner */}
           {isProcessing && (
