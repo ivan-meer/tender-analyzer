@@ -1,4 +1,12 @@
-export type ProcedureType = '223_FZ_QUOTATION' | '223_FZ_AUCTION' | 'COMMERCIAL' | 'OTHER';
+export type ProcedureType = 
+  | '223_FZ_QUOTATION' 
+  | '223_FZ_AUCTION' 
+  | '223_FZ_TENDER'
+  | '44_FZ_AUCTION' 
+  | '44_FZ_QUOTATION' 
+  | '44_FZ_TENDER' 
+  | 'COMMERCIAL' 
+  | 'OTHER';
 
 export type RiskSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFO';
 

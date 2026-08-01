@@ -1105,28 +1105,31 @@ ${safeTz}
     res.json(analysisData);
   } catch (error: any) {
     console.warn("Gemini API error in /api/analyze, returning intelligent fallback analysis:", error?.message);
-    const { contractText, tzText } = req.body || {};
-    const fallbackData = generateFallbackAnalysisResult(contractText, tzText);
+    const { contractText, tzText, procedureType } = req.body || {};
+    const fallbackData = generateFallbackAnalysisResult(contractText, tzText, procedureType);
     res.json(fallbackData);
   }
 });
 
 // Helper function to build structured fallback analysis when Gemini API quota or rate limit is reached
-function generateFallbackAnalysisResult(contractText?: string, tzText?: string) {
+function generateFallbackAnalysisResult(contractText?: string, tzText?: string, procedureType?: string) {
   const hasText = Boolean(contractText || tzText);
+  const is44FZ = Boolean(procedureType && procedureType.startsWith('44_FZ'));
   return {
     summary: {
       procurementTitle: hasText
-        ? 'Анализ закупки по загруженной документации 223-ФЗ (Экспертный расчёт)'
-        : 'Поставка офисного оборудования и мебели для ГУП (Флагманский 223-ФЗ)',
-      projectName: 'Проект №223-894: Поставка офисной мебели и кресел',
-      customerName: 'ГУП "Мосгортранс" / АО "Мослифт"',
-      procurementSum: '12 450 000,00 ₽',
+        ? (is44FZ ? 'Анализ закупки по документации 44-ФЗ (Экспертный расчет)' : 'Анализ закупки по документации 223-ФЗ (Экспертный расчет)')
+        : (is44FZ ? 'Электронный аукцион по 44-ФЗ: Поставка оргтехники и медоборудования' : 'Поставка офисного оборудования и мебели для ГУП (Флагманский 223-ФЗ)'),
+      projectName: is44FZ ? 'Проект №44-1029: Поставка по 44-ФЗ (ЕИС Закупки)' : 'Проект №223-894: Поставка офисной мебели и кресел',
+      customerName: is44FZ ? 'ГБУЗ "Городская Клиническая Больница № 1" (Заказчик по 44-ФЗ)' : 'ГУП "Мосгортранс" / АО "Мослифт"',
+      procurementSum: is44FZ ? '8 750 000,00 ₽' : '12 450 000,00 ₽',
       auctionDate: '15.08.2026 (10:00 МСК)',
-      overallRiskScore: 78,
+      overallRiskScore: is44FZ ? 82 : 78,
       riskLevel: 'CRITICAL',
-      keyTakeaway: 'Договор содержит кабальный штраф 3% от всей стоимости за формальные нарушения, право Заказчика докупать товар у 3-х лиц за ваш счёт, поставку по заявкам за 5 дней и требования нацрежима ПП РФ № 1875.',
-      is223FZ: true,
+      keyTakeaway: is44FZ 
+        ? 'Закупка проводится строго по Закону № 44-ФЗ с применением правил Постановления Правительства № 1042 (неустойка) и Национального режима (ПП РФ № 1875). Проверьте реестровые номера ГИСП и независимую гарантию.'
+        : 'Договор содержит кабальный штраф 3% от всей стоимости за формальные нарушения, право Заказчика докупать товар у 3-х лиц за ваш счёт, поставку по заявкам за 5 дней и требования нацрежима ПП РФ № 1875.',
+      is223FZ: !is44FZ,
     },
     deliveryInfo: {
       deliveryPeriod: 'В течение 15 рабочих дней с даты заключения Договора по письменным заявкам Заказчика.',
@@ -1172,14 +1175,22 @@ function generateFallbackAnalysisResult(contractText?: string, tzText?: string) 
       }
     ],
     submissionRulesCheck: {
-      procedureType: 'Запрос котировок / конкурсы по 223-ФЗ',
+      procedureType: is44FZ ? 'Электронный аукцион / Запрос котировок по 44-ФЗ (ЕИС)' : 'Запрос котировок / конкурсы по 223-ФЗ',
       requestInTableRequired: true,
-      etpAccreditationNotice: 'Проверить баланс ЭТП и аккредитацию за 48 часов до окончания подачи заявок.',
-      requiredFilesStructure: [
-        'Первая часть: Согласие, конкретные характеристики товаров без указания фирменного наименования участника',
-        'Вторая часть: Выписка ЕГРЮЛ, решения об одобрении сделки, декларации соответствия ПП РФ № 1875',
-        'Ценовое предложение на ЭТП'
-      ],
+      etpAccreditationNotice: is44FZ 
+        ? 'Регистрация в ЕРУЗ ЕИС обязательна. Проверьте независимую гарантию в реестре НГ за 24 часа.' 
+        : 'Проверить баланс ЭТП и аккредитацию за 48 часов до окончания подачи заявок.',
+      requiredFilesStructure: is44FZ
+        ? [
+            'Заявка через интерфейс ЭТП (ЕИС): Согласие, конкретные показатели товара (без наименования участника)',
+            'Вторая часть: Документы о соответствии ПП РФ № 1875 (реестровые номера ГИСП/РЭП), решения ЕГРЮЛ',
+            'Предложение о цене контракта (в процессе аукциона на ЭТП)'
+          ]
+        : [
+            'Первая часть: Согласие, конкретные характеристики товаров без указания фирменного наименования участника',
+            'Вторая часть: Выписка ЕГРЮЛ, решения об одобрении сделки, декларации соответствия ПП РФ № 1875',
+            'Ценовое предложение на ЭТП'
+          ],
       formsRequirement: 'Заполнить все установленные формы Заказчика. Опись вложений заполнять не обязательно.',
       pp1875Applies: true,
       pp1875Details: 'Требуются реестровые номера ГИСП Минпромторга РФ для подтверждения минимальной доли отечественных товаров.',

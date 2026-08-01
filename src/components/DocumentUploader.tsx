@@ -38,6 +38,8 @@ interface DocumentUploaderProps {
   onOpenHistory?: () => void;
 }
 
+const ALLOWED_EXTENSIONS = ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'pdf', 'docx', 'doc', 'rtf', 'xlsx', 'xls', 'csv', 'txt', 'json', 'md'];
+
 export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ 
   onAnalyze, 
   onLoadPresetResult, 
@@ -45,10 +47,12 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   onOpenScanModal,
   onOpenHistory,
 }) => {
+  const [lawType, setLawType] = useState<'223_FZ' | '44_FZ' | 'COMMERCIAL'>('223_FZ');
   const [procedureType, setProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
   const [parsedFiles, setParsedFiles] = useState<ParsedDocument[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   
   // Single-window workspace text inputs & modals
   const [pastedText, setPastedText] = useState('');
@@ -105,14 +109,37 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     setPastedText('');
   };
 
-  // Process selected or dropped files (supports PDF, DOCX, XLSX, and ZIP/RAR/7Z Archives)
+  // Process selected or dropped files with format validation
   const handleFilesAdded = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
-    setIsProcessing(true);
+    setUploadError(null);
 
+    const fileArray = Array.from(files);
+    const validFiles: File[] = [];
+    const rejectedFiles: { name: string; ext: string }[] = [];
+
+    fileArray.forEach(file => {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      if (ALLOWED_EXTENSIONS.includes(ext)) {
+        validFiles.push(file);
+      } else {
+        rejectedFiles.push({ name: file.name, ext: ext ? `.${ext}` : 'без расширения' });
+      }
+    });
+
+    if (rejectedFiles.length > 0) {
+      const rejectedListStr = rejectedFiles.map(f => `"${f.name}" (${f.ext})`).join(', ');
+      setUploadError(
+        `Формат файла ${rejectedListStr} не поддерживается системой. Загружайте файлы в форматах: PDF, Word (.docx/.doc), Excel (.xlsx/.xls/.csv), Текст (.txt/.rtf/.json/.md) и архивы (.zip/.rar/.7z).`
+      );
+    }
+
+    if (validFiles.length === 0) return;
+
+    setIsProcessing(true);
     const newParsedList: ParsedDocument[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const parsedResults = await parseFileOrArchive(files[i]);
+    for (let i = 0; i < validFiles.length; i++) {
+      const parsedResults = await parseFileOrArchive(validFiles[i]);
       newParsedList.push(...parsedResults);
     }
 
@@ -244,163 +271,210 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xs overflow-hidden space-y-0 transition-colors duration-200">
-      {/* Top Banner: Quick Shortcuts */}
-      <div className="bg-indigo-50/50 dark:bg-indigo-950/40 p-3 sm:p-4 border-b border-indigo-100/80 dark:border-indigo-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/80 rounded-xl text-indigo-700 dark:text-indigo-300">
-            <Sparkles className="w-4 h-4 shrink-0" />
-          </div>
-          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
-            Загрузка документации 223-ФЗ
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {onOpenHistory && (
-            <button
-              type="button"
-              onClick={onOpenHistory}
-              className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
-              title="Открыть историю сохраненных проверок"
-            >
-              <FolderUp className="w-3.5 h-3.5 text-indigo-500" />
-              <span>📜 История запросов</span>
-            </button>
-          )}
-
-          {onLoadPresetResult && (
-            <button
-              type="button"
-              onClick={() => onLoadPresetResult('sample-furniture-223fz')}
-              className="text-xs bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-extrabold px-3 py-1.5 rounded-xl transition-all shadow-sm hover:shadow-md cursor-pointer flex items-center gap-1.5"
-              title="Открыть готовый эталонный результат со всеми картами рисков и функциями"
-            >
-              <span>⚡ Флагманский демо-отчет</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5">
-        {/* STANDARDIZED UNIFIED DOCUMENT WINDOW */}
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 gap-2">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xs overflow-hidden transition-colors duration-200">
+      <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
+        {/* UNIFIED SINGLE HEADER BAR */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3.5 gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-100 dark:bg-indigo-950/80 rounded-xl text-indigo-600 dark:text-indigo-400 shrink-0 border border-indigo-200/60 dark:border-indigo-800/60">
+              <FolderUp className="w-4 h-4" />
+            </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <FolderUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
                 <span>Единое окно загрузки документации закупки</span>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 uppercase tracking-wider">
+                  {lawType === '44_FZ' ? '44-ФЗ' : lawType === '223_FZ' ? '223-ФЗ' : 'Коммерческая'}
+                </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                Загрузите файлы: Таблицы Excel (.xlsx/.csv), PDF (.pdf), Word (.docx) или Текст
+                Индексация проекта договора, ТЗ, смет и архивов (.zip, .pdf, .docx, .xlsx)
               </p>
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setIsNotesModalOpen(true)}
-                className={`text-xs font-bold flex items-center gap-1.5 transition-all px-3 py-1.5 rounded-xl border cursor-pointer ${
-                  pastedText.trim() || additionalNotes.trim()
-                    ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-                title="Добавить особые указания или вставить текст вручную"
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>
-                  {pastedText.trim() || additionalNotes.trim() ? '💬 Инструкция (Добавлена)' : '💬 Инструкция / Текст'}
-                </span>
-              </button>
-
-              {onOpenScanModal && (
-                <button
-                  type="button"
-                  onClick={onOpenScanModal}
-                  className="text-xs text-indigo-700 dark:text-indigo-300 hover:text-indigo-800 font-bold flex items-center gap-1.5 transition-colors bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 cursor-pointer"
-                  title="Распознать скан или фото документа (Gemini Vision)"
-                >
-                  <Camera className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                  <span>Скан (OCR)</span>
-                </button>
-              )}
-
-              {hasContent && (
-                <button
-                  type="button"
-                  onClick={handleClearAll}
-                  className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-bold flex items-center gap-1 transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Очистить
-                </button>
-              )}
             </div>
           </div>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".zip,.rar,.7z,.tar,.gz,.tgz,.pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.rtf,.json,.md"
-            className="hidden"
-            onChange={(e) => e.target.files && handleFilesAdded(e.target.files)}
-          />
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {/* LAW SELECTOR PILLS */}
+            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setLawType('223_FZ');
+                  setProcedureType('223_FZ_QUOTATION');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  lawType === '223_FZ'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                223-ФЗ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLawType('44_FZ');
+                  setProcedureType('44_FZ_AUCTION');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  lawType === '44_FZ'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                44-ФЗ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLawType('COMMERCIAL');
+                  setProcedureType('COMMERCIAL');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  lawType === 'COMMERCIAL'
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                Коммерческая
+              </button>
+            </div>
 
-          {/* MAIN DRAG AND DROP ZONE (ONLY VISIBLE WHEN NO DOCUMENTS ARE LOADED) */}
-          {parsedFiles.length === 0 ? (
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`relative border-2 border-dashed rounded-3xl p-6 sm:p-9 text-center transition-all duration-300 cursor-pointer overflow-hidden ${
-                isDragging
-                  ? 'border-indigo-500 bg-indigo-50/90 dark:bg-indigo-950/90 scale-[1.02] shadow-xl shadow-indigo-500/10 ring-4 ring-indigo-500/20'
-                  : 'border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30 hover:shadow-lg'
+            {onLoadPresetResult && (
+              <button
+                type="button"
+                onClick={() => onLoadPresetResult('sample-furniture-223fz')}
+                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1.5"
+                title="Открыть готовый эталонный результат со всеми картами рисков и функциями"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Демо-отчет</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsNotesModalOpen(true)}
+              className={`text-xs font-bold flex items-center gap-1.5 transition-all px-3 py-1.5 rounded-xl border cursor-pointer ${
+                pastedText.trim() || additionalNotes.trim()
+                  ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
+              title="Добавить особые указания или вставить текст вручную"
             >
-              <div className="max-w-md mx-auto space-y-3 pointer-events-none">
-                <div className={`w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-sm border border-indigo-200/50 dark:border-indigo-800/50 transition-transform duration-300 ${isDragging ? 'scale-125 rotate-6' : 'group-hover:scale-110'}`}>
-                  <Upload className="w-6 h-6" />
-                </div>
-                
-                <div>
-                  <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-slate-100 block tracking-tight">
-                    Перетащите сюда файлы документации или кликните для выбора
-                  </span>
-                </div>
+              <MessageSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>
+                {pastedText.trim() || additionalNotes.trim() ? '💬 Инструкция (Есть)' : '💬 Инструкция'}
+              </span>
+            </button>
 
-                {/* Supported Format Badges with Archive Icon */}
-                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-lg border border-amber-300/80 dark:border-amber-800/80 shadow-2xs">
-                    <Archive className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                    Архивы ZIP / RAR / 7Z
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800">
-                    <FileCode className="w-3 h-3 text-rose-600 dark:text-rose-400" /> PDF
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Word
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                    <Table className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Excel
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <File className="w-3 h-3 text-slate-500 dark:text-slate-400" /> TXT
-                  </span>
-                </div>
+            {onOpenScanModal && (
+              <button
+                type="button"
+                onClick={onOpenScanModal}
+                className="text-xs text-indigo-700 dark:text-indigo-300 hover:text-indigo-800 font-bold flex items-center gap-1.5 transition-colors bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                title="Распознать скан или фото документа (Gemini Vision)"
+              >
+                <Camera className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Скан (OCR)</span>
+              </button>
+            )}
+
+            {hasContent && (
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-bold flex items-center gap-1 transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Очистить
+              </button>
+            )}
+          </div>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".zip,.rar,.7z,.tar,.gz,.tgz,.pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.rtf,.json,.md"
+          className="hidden"
+          onChange={(e) => e.target.files && handleFilesAdded(e.target.files)}
+        />
+
+        {/* ERROR MESSAGE FOR UNSUPPORTED FILE FORMATS */}
+        {uploadError && (
+          <div className="bg-rose-50 dark:bg-rose-950/70 border border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-100 text-xs sm:text-sm p-3.5 sm:p-4 rounded-2xl flex items-start justify-between gap-3 shadow-xs animate-shake">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="font-extrabold block text-rose-950 dark:text-rose-100 mb-0.5">
+                  Ошибка загрузки файла
+                </strong>
+                <span className="text-rose-800 dark:text-rose-200 leading-snug">{uploadError}</span>
               </div>
             </div>
-          ) : (
-            /* COMPACT "ADD DOCUMENT" BAR (WHEN DOCUMENTS ARE ALREADY PRESENT) */
-            <div 
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
-                isDragging ? 'ring-2 ring-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80' : ''
-              }`}
+            <button
+              type="button"
+              onClick={() => setUploadError(null)}
+              className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-200 p-1 transition-colors cursor-pointer rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50"
+              title="Закрыть предупреждение"
             >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* MINIMALIST DRAG AND DROP ZONE */}
+        {parsedFiles.length === 0 ? (
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`document-uploader-section relative border-2 border-dashed rounded-2xl p-5 sm:p-7 text-center transition-all duration-200 cursor-pointer overflow-hidden ${
+              isDragging
+                ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80 ring-2 ring-indigo-500/20'
+                : 'border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20'
+            }`}
+          >
+            <div className="max-w-md mx-auto space-y-2.5 pointer-events-none">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-2xs border border-indigo-200/60 dark:border-indigo-800/60">
+                <Upload className="w-5 h-5" />
+              </div>
+              
+              <div>
+                <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 block tracking-tight">
+                  Перетащите сюда файлы закупки или кликните для выбора
+                </span>
+              </div>
+
+              {/* Minimal Format Badges */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-0.5">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-md border border-amber-200/80 dark:border-amber-800/80">
+                  <Archive className="w-3 h-3 text-amber-600 dark:text-amber-400" /> ZIP / RAR
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded-md border border-rose-200/80 dark:border-rose-800/80">
+                  <FileCode className="w-3 h-3 text-rose-600 dark:text-rose-400" /> PDF
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-md border border-blue-200/80 dark:border-blue-800/80">
+                  <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Word
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-200/80 dark:border-emerald-800/80">
+                  <Table className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Excel
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* COMPACT "ADD DOCUMENT" BAR WHEN FILES ARE PRESENT */
+          <div 
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+              isDragging ? 'ring-2 ring-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80' : ''
+            }`}
+          >
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg">
                   <Check className="w-4 h-4" />
@@ -536,8 +610,6 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             </div>
           )}
 
-        </div>
-
         {/* Live Token & Price Estimator Calculator */}
         <TokenPriceEstimator totalChars={totalChars} />
 
@@ -555,6 +627,37 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* PROCEDURE TYPE SELECTOR DROPDOWN */}
+            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-2.5 py-1.5 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Способ:</span>
+              <select
+                value={procedureType}
+                onChange={(e) => setProcedureType(e.target.value as ProcedureType)}
+                className="text-xs font-bold bg-transparent text-slate-800 dark:text-slate-100 focus:outline-none cursor-pointer"
+              >
+                {lawType === '223_FZ' && (
+                  <>
+                    <option value="223_FZ_QUOTATION">📄 Запрос котировок / предложений (223-ФЗ)</option>
+                    <option value="223_FZ_AUCTION">⚡ Электронный аукцион (223-ФЗ)</option>
+                    <option value="223_FZ_TENDER">🏆 Конкурс / Тендер (223-ФЗ)</option>
+                  </>
+                )}
+                {lawType === '44_FZ' && (
+                  <>
+                    <option value="44_FZ_AUCTION">⚡ Электронный аукцион (44-ФЗ, ЕИС)</option>
+                    <option value="44_FZ_QUOTATION">📄 Запрос котировок в эл. форме (44-ФЗ)</option>
+                    <option value="44_FZ_TENDER">🏆 Открытый конкурс в эл. форме (44-ФЗ)</option>
+                  </>
+                )}
+                {lawType === 'COMMERCIAL' && (
+                  <>
+                    <option value="COMMERCIAL">🏢 Коммерческая закупка / Тендер</option>
+                    <option value="OTHER">📁 Иной вид процедуры</option>
+                  </>
+                )}
+              </select>
+            </div>
+
             {onLoadPresetResult && (
               <button
                 type="button"
@@ -562,7 +665,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                 className="px-3.5 py-2.5 rounded-2xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
                 title="Показать эталонный отчёт без обращения к API ИИ"
               >
-                <span>⚡ Быстрый отчет по шаблону</span>
+                <span>⚡ Быстрый отчет</span>
               </button>
             )}
 
@@ -579,12 +682,12 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               {isAnalyzing ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Выполняется юридический анализ 223-ФЗ...</span>
+                  <span>Выполняется ИИ-анализ ({lawType === '44_FZ' ? '44-ФЗ' : lawType === '223_FZ' ? '223-ФЗ' : 'Закупка'})...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 text-white" />
-                  <span>Проанализировать и Сформировать Отчет</span>
+                  <span>Проанализировать закупку</span>
                 </>
               )}
             </button>
