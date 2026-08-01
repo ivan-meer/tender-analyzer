@@ -12,6 +12,21 @@
       },
       "required": ["id", "email"]
     },
+    "Customer": {
+      "title": "Customer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "normalizedName": { "type": "string" },
+        "inn": { "type": "string" },
+        "tendersCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name"]
+    },
     "Analysis": {
       "title": "Analysis",
       "type": "object",
@@ -19,8 +34,14 @@
         "id": { "type": "string" },
         "userId": { "type": "string" },
         "userEmail": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
         "title": { "type": "string" },
+        "projectName": { "type": "string" },
         "procurementNumber": { "type": "string" },
+        "auctionDate": { "type": "string" },
+        "procurementSum": { "type": "string" },
+        "status": { "type": "string" },
         "riskScore": { "type": "number" },
         "riskLevel": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
@@ -30,6 +51,20 @@
         "notes": { "type": "string" }
       },
       "required": ["id", "userId", "title", "riskScore", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile collection"
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Unique customer accounts per user"
+    },
+    "/analyses/{analysisId}": {
+      "schema": { "$ref": "#/entities/Analysis" },
+      "description": "Tender analysis history linked to customer account"
     }
   }
 }

@@ -18,6 +18,7 @@ import { ScanAnalyzerModal } from './components/ScanAnalyzerModal';
 import { AuthAndHistoryDrawer } from './components/AuthAndHistoryDrawer';
 import { SuppliersCatalogModal } from './components/SuppliersCatalogModal';
 import { AnalysisProgressScreen } from './components/AnalysisProgressScreen';
+import { PreAnalysisDashboard } from './components/PreAnalysisDashboard';
 import { auth, saveAnalysisToDb } from './lib/firebase';
 import { AnalysisInput, AnalysisResult } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
@@ -225,15 +226,18 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 sm:space-y-8 flex-1 w-full">
-        {/* Screen 1: Document Uploader (Only displayed when not analyzing and no report result) */}
+        {/* Screen 1: Dashboard & Document Uploader (Only displayed when not analyzing and no report result) */}
         {!isAnalyzing && !analysisResult && (
-          <DocumentUploader
-            onAnalyze={handleAnalyze}
-            onLoadPresetResult={handleLoadPresetResult}
-            isAnalyzing={isAnalyzing}
-            onOpenScanModal={() => setIsScanOpen(true)}
-            onOpenHistory={() => setIsHistoryOpen(true)}
-          />
+          <>
+            <PreAnalysisDashboard onOpenHistory={() => setIsHistoryOpen(true)} />
+            <DocumentUploader
+              onAnalyze={handleAnalyze}
+              onLoadPresetResult={handleLoadPresetResult}
+              isAnalyzing={isAnalyzing}
+              onOpenScanModal={() => setIsScanOpen(true)}
+              onOpenHistory={() => setIsHistoryOpen(true)}
+            />
+          </>
         )}
 
         {/* Error Alert */}

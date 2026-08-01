@@ -12,16 +12,30 @@ export const db = firebaseConfig.firestoreDatabaseId
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
 
+export interface SavedCustomer {
+  id?: string;
+  userId: string;
+  name: string;
+  normalizedName: string;
+  inn?: string;
+  tendersCount: number;
+  totalProcurementSum?: string;
+  createdAt: any;
+  updatedAt?: any;
+}
+
 export interface SavedAnalysis {
   id?: string;
   userId: string;
   userEmail?: string;
+  customerId?: string;
+  customerName?: string;
   title: string;
   projectName?: string;
-  customerName?: string;
   procurementSum?: string;
   auctionDate?: string;
   procurementNumber?: string;
+  status?: string;
   riskScore: number;
   riskLevel: string;
   createdAt: any;
@@ -32,20 +46,94 @@ export interface SavedAnalysis {
   tags?: string[];
 }
 
+/**
+ * Finds or creates a unique Customer account for the user, ensuring a customer is stored ONLY ONCE.
+ * Repeat tenders from the same customer link to the existing account ID.
+ */
+export async function getOrCreateCustomerRecord(userId: string, customerName: string, procurementSumStr?: string): Promise<SavedCustomer> {
+  const rawName = (customerName || 'Заказчик 223-ФЗ').trim();
+  const normalizedName = rawName.toLowerCase().replace(/["'«»]/g, '').replace(/\s+/g, ' ').trim();
+
+  try {
+    const custCollection = collection(db, 'customers');
+    const q = query(custCollection, where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+
+    const existingDoc = snapshot.docs.find(d => {
+      const data = d.data();
+      const n = (data.normalizedName || data.name || '').toLowerCase().replace(/["'«»]/g, '').replace(/\s+/g, ' ').trim();
+      return n === normalizedName;
+    });
+
+    if (existingDoc) {
+      const existingData = existingDoc.data() as SavedCustomer;
+      const currentCount = existingData.tendersCount || 1;
+      const updatedCount = currentCount + 1;
+
+      // Update tender count on existing customer account
+      const docRef = doc(db, 'customers', existingDoc.id);
+      await updateDoc(docRef, {
+        tendersCount: updatedCount,
+        updatedAt: serverTimestamp(),
+      });
+
+      return {
+        id: existingDoc.id,
+        ...existingData,
+        tendersCount: updatedCount
+      };
+    }
+
+    // Create new unique Customer account
+    const newCustData = {
+      userId,
+      name: rawName,
+      normalizedName,
+      tendersCount: 1,
+      totalProcurementSum: procurementSumStr || '',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const newDocRef = await addDoc(custCollection, newCustData);
+    return {
+      id: newDocRef.id,
+      ...newCustData
+    };
+  } catch (err) {
+    console.warn('Customer account resolution warning:', err);
+    return {
+      id: 'local_cust_' + Date.now(),
+      userId,
+      name: rawName,
+      normalizedName,
+      tendersCount: 1,
+      createdAt: new Date().toISOString()
+    };
+  }
+}
+
 // Helper functions for analysis database operations
 export async function saveAnalysisToDb(userId: string, userEmail: string, result: any, title?: string): Promise<string> {
   const collectionRef = collection(db, 'analyses');
   const docTitle = title || result.summary?.projectName || result.summary?.procurementTitle || 'Анализ закупки 223-ФЗ';
+  const rawCustomer = result.summary?.customerName || 'Заказчик по 223-ФЗ';
+  const procSum = result.summary?.procurementSum || 'Определяется заявкой';
+
+  // Ensure Customer Account uniqueness: linking repeat tenders to existing account
+  const customerAccount = await getOrCreateCustomerRecord(userId, rawCustomer, procSum);
   
   const docRef = await addDoc(collectionRef, {
     userId,
     userEmail: userEmail || 'анонимный',
+    customerId: customerAccount.id || '',
+    customerName: customerAccount.name,
     title: docTitle,
     projectName: result.summary?.projectName || docTitle,
-    customerName: result.summary?.customerName || 'Заказчик по 223-ФЗ',
-    procurementSum: result.summary?.procurementSum || 'Сумма определяется заявкой',
-    auctionDate: result.summary?.auctionDate || 'Срок подачи уточняется',
-    procurementNumber: result.submissionRulesCheck?.procedureType || '223-ФЗ',
+    procurementSum: procSum,
+    auctionDate: result.summary?.auctionDate || new Date().toLocaleDateString('ru-RU'),
+    procurementNumber: result.submissionRulesCheck?.procedureType || result.summary?.procurementNumber || '223-ФЗ',
+    status: result.summary?.status || 'На рассмотрении',
     riskScore: result.summary?.overallRiskScore ?? 50,
     riskLevel: result.summary?.riskLevel || 'MEDIUM',
     createdAt: serverTimestamp(),
@@ -86,9 +174,32 @@ export async function getUserAnalysesFromDb(userId: string): Promise<SavedAnalys
   }
 }
 
+export async function getUserCustomersFromDb(userId: string): Promise<SavedCustomer[]> {
+  try {
+    const custRef = collection(db, 'customers');
+    const q = query(custRef, where('userId', '==', userId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    })) as SavedCustomer[];
+  } catch (err) {
+    console.warn('Error fetching customers:', err);
+    return [];
+  }
+}
+
 export async function deleteAnalysisFromDb(analysisId: string): Promise<void> {
   const docRef = doc(db, 'analyses', analysisId);
   await deleteDoc(docRef);
+}
+
+export async function updateAnalysisInDb(analysisId: string, updates: Partial<SavedAnalysis>): Promise<void> {
+  const docRef = doc(db, 'analyses', analysisId);
+  await updateDoc(docRef, {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function toggleFavoriteAnalysisInDb(analysisId: string, currentStatus: boolean): Promise<void> {

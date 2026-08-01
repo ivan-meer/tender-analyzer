@@ -6,7 +6,7 @@ import {
   ExternalLink, Tag, Activity, CheckCircle2, Clock, Layers, Cpu, Play,
   Trash2, Image as ImageIcon, RotateCcw, Paperclip, Mic, MicOff, Volume2, VolumeX,
   Calculator, FileText, Upload, Plus, FileJson, DownloadCloud, Wrench, FileUp,
-  Pencil, Camera, Save, Link, Eye
+  Pencil, Camera, Save, Link, Eye, CheckCircle, MapPin, Globe, Phone, Mail
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -14,6 +14,7 @@ import { dbService, SqlResultTable, AgentActionLog } from '../lib/dbService';
 import { useSqlExecutor } from '../hooks/useSqlExecutor';
 import { getUniqueProductImageUrl } from '../utils/imageMapper';
 import { MermaidDiagram } from './MermaidDiagram';
+import { VERIFIED_SUPPLIERS } from '../data/verifiedSuppliers';
 
 export interface AttachedFile {
   id: string;
@@ -60,7 +61,7 @@ interface Message {
 interface TenderChatModalProps {
   isOpen: boolean;
   onClose: () => void;
-  activeAnalysisContext?: string;
+  activeAnalysisContext?: any;
 }
 
 // User-friendly prompt chips
@@ -99,39 +100,12 @@ const COLUMN_HUMAN_NAMES: Record<string, string> = {
 const INITIAL_WELCOME_MESSAGE: Message = {
   id: 'welcome',
   role: 'assistant',
-  content: `### 👋 Здравствуйте! Я ваш ИИ-консультант по закупкам и базе PostgreSQL
+  content: `### 👋 Здравствуйте! Я ваш ИИ-консультант по закупкам (223-ФЗ)
 
-Я умею выполнять точно сопоставленные выборки по схеме **furniture** через \`dbService.ts\`, строить интерактивные таблицы, карточки моделей и визуализировать процессы с помощью **Mermaid диаграмм**.
+Готов проанализировать ТЗ, проверить поставщиков, подобрать товары из реестра ГИСП/Neon DB и сформировать отчет.
 
-#### 🚀 Что можно сделать:
-1. **Подобрать мебель** с интервальными допусками (например, *высота сиденья 450–550 мм* по ГОСТ 19917-2014)
-2. **Проверить полноту каталога** (\`v_requirement_coverage\`) и сгенерировать советы для ТЗ
-3. **Нарисовать схемы и процессы** (протоколы разногласий, закупки по 223-ФЗ/44-ФЗ)
-4. **Загрузить и просмотреть фотографии** позиций с анализом аномалий (\`v_data_issues\`)`,
-  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  sqlQuery: `SELECT label_ru, pct_models, suppliers_with_value, tender_advice_ru FROM furniture.v_requirement_coverage ORDER BY pct_models DESC LIMIT 5;`,
-  sqlTable: {
-    sqlExecuted: `SELECT label_ru, pct_models, suppliers_with_value, tender_advice_ru FROM furniture.v_requirement_coverage ORDER BY pct_models DESC LIMIT 5;`,
-    columns: ['label_ru', 'pct_models', 'suppliers_with_value', 'tender_advice_ru'],
-    rows: [
-      { label_ru: "Габаритная высота (overall_height)", pct_models: "77.5%", suppliers_with_value: "8 из 9", tender_advice_ru: "Можно делать обязательным" },
-      { label_ru: "Высота сиденья до верха (seat_height_top)", pct_models: "77.2%", suppliers_with_value: "8 из 9", tender_advice_ru: "Можно делать обязательным" },
-      { label_ru: "Ширина сиденья (seat_width)", pct_models: "68.6%", suppliers_with_value: "7 из 9", tender_advice_ru: "Можно делать обязательным" },
-      { label_ru: "Глубина сиденья (seat_depth)", pct_models: "63.1%", suppliers_with_value: "7 из 9", tender_advice_ru: "Можно делать обязательным" },
-      { label_ru: "Максимальная нагрузка (load_max)", pct_models: "19.2%", suppliers_with_value: "2 из 9", tender_advice_ru: "НЕ ДЕЛАТЬ ОБЯЗАТЕЛЬНЫМ! Сжимает выдачу до 10 моделей" }
-    ],
-    rowCount: 5,
-    executionTimeMs: 12,
-    fromLiveDb: true,
-    note: "Сводка полноты каталога Neon DB (furniture.v_requirement_coverage)"
-  },
-  agentLogs: [
-    { step: 1, title: "Интент-анализ ТЗ", description: "Определена цель: получение сводки заполненности каталога", status: "completed", timestamp: "08:00:01" },
-    { step: 2, title: "Генерация SQL", description: "Сформирован запрос к furniture.v_requirement_coverage", status: "completed", timestamp: "08:00:01", sql: "SELECT label_ru, pct_models FROM furniture.v_requirement_coverage" },
-    { step: 3, title: "Исполнение dbService.ts", description: "Запрос выполнен успешно за 12 мс", status: "completed", timestamp: "08:00:02" },
-    { step: 4, title: "Визуализация", description: "Подготовлены интерактивные таблицы и карточки", status: "completed", timestamp: "08:00:02" }
-  ],
-  executionTimeTotalMs: 12
+Переключайтесь между вкладками **Чат**, **Поставщики**, **Товары** и **Детали закупки** выше для быстрого доступа!`,
+  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 };
 
 export const TenderChatModal: React.FC<TenderChatModalProps> = ({
@@ -150,6 +124,11 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
   const [activeZoomImage, setActiveZoomImage] = useState<{ url: string; title: string } | null>(null);
   const [isExecutingManualSql, setIsExecutingManualSql] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // Main Modal View Mode: 'chat' | 'suppliers' | 'products' | 'details'
+  const [modalMode, setModalMode] = useState<'chat' | 'suppliers' | 'products' | 'details'>('chat');
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [productSearch, setProductSearch] = useState('');
 
   // File Attachments State & Ref
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -1081,20 +1060,348 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
           </div>
         </div>
 
-        {/* Quick prompt suggestions */}
-        <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 overflow-x-auto scrollbar-none text-xs">
-          <span className="text-[10px] text-slate-400 font-bold uppercase shrink-0 pl-1">Быстрый поиск:</span>
-          {QUICK_PROMPTS.map((prompt, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSend(prompt.query)}
-              disabled={isLoading}
-              className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 text-slate-700 dark:text-slate-200 rounded-full shrink-0 text-xs font-medium transition-all cursor-pointer hover:shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
-            >
-              {prompt.label}
-            </button>
-          ))}
+        {/* Modal Navigation Tabs Bar */}
+        <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => setModalMode('chat')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              modalMode === 'chat'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span>Чат с ИИ</span>
+          </button>
+
+          <button
+            onClick={() => setModalMode('suppliers')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              modalMode === 'suppliers'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>Поставщики ({VERIFIED_SUPPLIERS.length})</span>
+          </button>
+
+          <button
+            onClick={() => setModalMode('products')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              modalMode === 'products'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Каталог товаров</span>
+          </button>
+
+          <button
+            onClick={() => setModalMode('details')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              modalMode === 'details'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Детали закупки</span>
+          </button>
         </div>
+
+        {modalMode === 'suppliers' ? (
+          /* SUPPLIERS VIEW COMPONENT */
+          <div className="flex-1 p-4 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-amber-500" />
+                  Реестр проверенных отечественных поставщиков (ГИСП / Минпромторг)
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Фабрики полного цикла с локализацией производства в РФ и ЕАЭС
+                </p>
+              </div>
+
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={supplierSearch}
+                  onChange={(e) => setSupplierSearch(e.target.value)}
+                  placeholder="Поиск по бренду, региону, специализации..."
+                  className="pl-8 pr-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {VERIFIED_SUPPLIERS
+                .filter(sup => {
+                  if (!supplierSearch.trim()) return true;
+                  const q = supplierSearch.toLowerCase();
+                  return (
+                    sup.brandName.toLowerCase().includes(q) ||
+                    sup.category.toLowerCase().includes(q) ||
+                    sup.region.toLowerCase().includes(q) ||
+                    sup.description.toLowerCase().includes(q)
+                  );
+                })
+                .map(sup => (
+                  <div key={sup.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3 shadow-2xs hover:border-indigo-400 transition-all">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">{sup.brandName}</h4>
+                          {sup.isDomesticProducer ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3 text-emerald-500" />
+                              ГИСП / Минпромторг РФ
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
+                              ЕАЭС / Импорт
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-1">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          {sup.region}
+                        </span>
+                      </div>
+
+                      {sup.website && (
+                        <a
+                          href={sup.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-600 dark:text-slate-300 transition-colors shrink-0"
+                          title="Официальный сайт"
+                        >
+                          <Globe className="w-4 h-4 text-indigo-500" />
+                        </a>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{sup.description}</p>
+
+                    <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl text-[11px] space-y-1.5 border border-slate-100 dark:border-slate-800">
+                      <div className="text-slate-700 dark:text-slate-200 font-semibold">
+                        🏷️ <strong>Профиль:</strong> {sup.category}
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400 font-mono">
+                        📞 <strong>Контакты:</strong> {sup.contacts}
+                      </div>
+                    </div>
+
+                    {sup.sampleProducts && sup.sampleProducts.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Примеры моделей в каталоге:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sup.sampleProducts.map((sp, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 rounded-lg text-[10px] font-medium text-indigo-800 dark:text-indigo-200">
+                              {sp.name} ({sp.priceRange})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setModalMode('chat');
+                        handleSend(`Покажи подходящие модели и сертификаты фабрики ${sup.brandName} из базы данных PostgreSQL`);
+                      }}
+                      className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold border border-indigo-200 dark:border-indigo-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Bot className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Запросить подбор моделей в ИИ-чате</span>
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        ) : modalMode === 'products' ? (
+          /* PRODUCTS CATALOG VIEW COMPONENT */
+          <div className="flex-1 p-4 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-cyan-500" />
+                  Каталог позиций мебели и оборудования (ГОСТ 19917-2014)
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Базовые образцы с кодами ОКПД2 и диапазонами габаритов
+                </p>
+              </div>
+
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Поиск товара по наименованию, ОКПД2..."
+                  className="pl-8 pr-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+              {VERIFIED_SUPPLIERS.flatMap(s => (s.sampleProducts || []).map(p => ({ ...p, supplier: s.brandName })))
+                .filter(p => {
+                  if (!productSearch.trim()) return true;
+                  const q = productSearch.toLowerCase();
+                  return p.name.toLowerCase().includes(q) || p.supplier.toLowerCase().includes(q) || (p.okpd2 && p.okpd2.includes(q));
+                })
+                .map((prod, idx) => (
+                  <div key={idx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2.5 shadow-2xs hover:border-indigo-400 transition-all flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="h-32 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden relative border border-slate-200 dark:border-slate-700">
+                        <img 
+                          src={MOCK_CHAIR_IMAGES[idx % MOCK_CHAIR_IMAGES.length].url} 
+                          alt={prod.name} 
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute top-2 right-2 px-2 py-0.5 bg-slate-900/80 text-white font-mono text-[10px] font-bold rounded-md backdrop-blur-xs">
+                          ОКПД2 {prod.okpd2 || '31.01.12'}
+                        </span>
+                      </div>
+
+                      <h4 className="font-extrabold text-xs text-slate-900 dark:text-white leading-snug">
+                        {prod.name}
+                      </h4>
+
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <div>🏭 <strong>Фабрика:</strong> {prod.supplier}</div>
+                        <div>📐 <strong>Габариты:</strong> {prod.dimensions}</div>
+                        <div className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                          💰 <strong>Цена:</strong> {prod.priceRange}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setModalMode('chat');
+                        handleSend(`Проверь соответствие позиции «${prod.name}» требованием ГОСТ 19917-2014 и покажи допуски в таблице`);
+                      }}
+                      className="w-full py-1.5 bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950 text-slate-700 hover:text-indigo-600 dark:text-slate-200 dark:hover:text-indigo-300 rounded-xl text-[11px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Bot className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Сравнить с ТЗ в чате</span>
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        ) : modalMode === 'details' ? (
+          /* PROCUREMENT DETAILS VIEW COMPONENT */
+          <div className="flex-1 p-4 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-4">
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-600 text-white rounded-xl">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                      {activeAnalysisContext?.summary?.procurementTitle || 'Поставки кресел и офисной мебели для нужд ГУП'}
+                    </h3>
+                    <p className="text-xs text-slate-400">Паспорт закупки 223-ФЗ / Извлеченные параметры</p>
+                  </div>
+                </div>
+
+                <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  Индекс риска: {activeAnalysisContext?.riskAssessment?.riskIndex || 15} / 100
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Заказчик</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block truncate">
+                    {activeAnalysisContext?.summary?.customerName || 'ГУП «Мосгортранс»'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Сумма НМЦК</span>
+                  <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 block">
+                    {activeAnalysisContext?.summary?.procurementSum || '12 450 000 ₽'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Дата аукциона</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block">
+                    {activeAnalysisContext?.summary?.auctionDate || '15.08.2026'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Статус аудита</span>
+                  <span className="font-bold text-indigo-600 dark:text-indigo-400 block">
+                    {activeAnalysisContext?.summary?.status || 'Проверено ИИ'}
+                  </span>
+                </div>
+              </div>
+
+              {activeAnalysisContext?.requirements && activeAnalysisContext.requirements.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                    📋 Позиции спецификации ТЗ ({activeAnalysisContext.requirements.length}):
+                  </h4>
+                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                    {activeAnalysisContext.requirements.map((req: any, idx: number) => (
+                      <div key={idx} className="p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-slate-900 dark:text-white block">{req.name || req.title}</span>
+                          <span className="text-[11px] text-slate-500">{req.specs || req.description}</span>
+                        </div>
+                        <span className="font-mono font-bold text-indigo-600 dark:text-indigo-300 text-[11px] shrink-0 ml-2">
+                          {req.quantity ? `${req.quantity} шт.` : '100 шт.'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setModalMode('chat');
+                    handleSend("Сформируй подробный Протокол разногласий к этой закупке с указанием всех жестких требований ТЗ");
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>Сгенерировать Протокол разногласий в чате</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* CHAT MODE VIEW (Existing Chat Interface) */
+          <>
+            {/* Quick prompt suggestions */}
+            <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 overflow-x-auto scrollbar-none text-xs">
+              <span className="text-[10px] text-slate-400 font-bold uppercase shrink-0 pl-1">Быстрый поиск:</span>
+              {QUICK_PROMPTS.map((prompt, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSend(prompt.query)}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 text-slate-700 dark:text-slate-200 rounded-full shrink-0 text-xs font-medium transition-all cursor-pointer hover:shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {prompt.label}
+                </button>
+              ))}
+            </div>
+
 
         {/* Messages List */}
         <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-50/50 dark:bg-slate-950/40">
@@ -1870,7 +2177,9 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
             <span className="hidden sm:inline">Отправить</span>
           </button>
         </form>
-      </div>
+      </>
+    )}
+  </div>
 
       {/* Penalty Calculator Modal */}
       {showPenaltyCalc && (

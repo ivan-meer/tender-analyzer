@@ -51,10 +51,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenChat}
-            className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+            className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
             title="Открыть ИИ-Чат Консультант 223-ФЗ"
           >
-            <MessageSquare className="w-4 h-4" />
+            <MessageSquare className="w-4 h-4 text-white" />
             <span className="hidden sm:inline">ИИ-Чат</span>
           </button>
 
@@ -62,10 +62,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenSearch}
-            className="flex items-center gap-1.5 text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
             title="Поиск законов, постановлений ПП 1875 и практики ФАС"
           >
-            <Globe className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span className="hidden md:inline">Поиск Законов</span>
           </button>
 
@@ -73,10 +73,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenDeepAudit}
-            className="flex items-center gap-1.5 text-xs font-bold bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
             title="Режим глубокого юридического мышления (High Thinking)"
           >
-            <BrainCircuit className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <BrainCircuit className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span className="hidden lg:inline">Deep-Аудит</span>
           </button>
 
@@ -85,10 +85,10 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onOpenSuppliersCatalog}
-              className="flex items-center gap-1.5 text-xs font-bold bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
               title="Каталог проверенных отечественных фабрик и поставщиков"
             >
-              <Building2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <Building2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span className="hidden sm:inline">Поставщики РФ</span>
             </button>
           )}
@@ -97,7 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenHistory}
-            className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
             title="База данных результатов проверок (Firestore)"
           >
             <History className="w-4 h-4 text-slate-600 dark:text-slate-400" />
@@ -144,18 +144,18 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenSearch}
-          className="flex items-center gap-1.5 text-xs font-bold bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-xl shrink-0"
+          className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
         >
-          <Globe className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+          <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
           <span>Поиск Законов</span>
         </button>
 
         <button
           type="button"
           onClick={onOpenDeepAudit}
-          className="flex items-center gap-1.5 text-xs font-bold bg-purple-50 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 px-3 py-1.5 rounded-xl shrink-0"
+          className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
         >
-          <BrainCircuit className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+          <BrainCircuit className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
           <span>Deep-Аудит</span>
         </button>
 
@@ -163,9 +163,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenSuppliersCatalog}
-            className="flex items-center gap-1.5 text-xs font-bold bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 px-3 py-1.5 rounded-xl shrink-0"
+            className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
           >
-            <Building2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <Building2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>Поставщики РФ</span>
           </button>
         )}
@@ -173,7 +173,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenHistory}
-          className="flex items-center gap-1.5 text-xs font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
+          className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
         >
           <History className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
           <span>База БД</span>
