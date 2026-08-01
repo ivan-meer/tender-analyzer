@@ -39,7 +39,7 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({ risks })
     CRITICAL: 4,
     HIGH: 3,
     MEDIUM: 2,
-    LOW: 1
+    INFO: 1
   };
 
   const handleSortToggle = (field: SortField) => {

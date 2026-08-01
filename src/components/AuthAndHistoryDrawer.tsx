@@ -9,7 +9,8 @@ import {
   toggleFavoriteAnalysisInDb, 
   updateAnalysisInDb,
   SavedAnalysis,
-  SavedCustomer
+  SavedCustomer,
+  TenderParticipationStatus
 } from '../lib/firebase';
 import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, User, signInAnonymously } from 'firebase/auth';
 import { 
@@ -19,12 +20,8 @@ import {
   User as UserIcon, 
   Star, 
   Trash2, 
-  Download, 
-  ExternalLink, 
   X, 
-  Bookmark, 
   Edit3, 
-  Check, 
   Sparkles, 
   Plus, 
   RefreshCw,
@@ -33,13 +30,11 @@ import {
   ArrowRight,
   Building2,
   Calendar,
-  DollarSign,
-  Tag,
   Save,
   Layers,
-  CheckCircle,
-  Clock,
-  XCircle
+  CheckCircle2,
+  Filter,
+  UserCheck
 } from 'lucide-react';
 
 interface AuthAndHistoryDrawerProps {
@@ -63,6 +58,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   const [saveTitle, setSaveTitle] = useState('');
   const [historySearch, setHistorySearch] = useState('');
   const [activeTab, setActiveTab] = useState<'tenders' | 'customers'>('tenders');
+  const [selectedCustomerFilter, setSelectedCustomerFilter] = useState<string | null>(null);
 
   // Edit Modal State
   const [editingItem, setEditingItem] = useState<SavedAnalysis | null>(null);
@@ -71,6 +67,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   const [editAuctionDate, setEditAuctionDate] = useState('');
   const [editProcurementSum, setEditProcurementSum] = useState('');
   const [editStatus, setEditStatus] = useState('На рассмотрении');
+  const [editParticipationStatus, setEditParticipationStatus] = useState<TenderParticipationStatus>('NEW');
   const [editNotes, setEditNotes] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -146,7 +143,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
       );
       setSaveTitle('');
       await fetchAnalysesAndCustomers(currentUser.uid);
-      alert('Результат анализа успешно сохранен в облачную БД Firestore с автоматически привязанным аккаунтом заказчика!');
+      alert('Результат анализа успешно сохранен в облачную БД Firestore!');
     } catch (err: any) {
       console.error('Save error:', err);
       alert('Ошибка при сохранении в базу данных: ' + err?.message);
@@ -157,7 +154,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Вы уверены, что хотите удалить эту запись из истории БД?')) return;
+    if (!confirm('Вы уверены, что хотите удалить эту запись из базы данных?')) return;
     try {
       await deleteAnalysisFromDb(id);
       if (currentUser) fetchAnalysesAndCustomers(currentUser.uid);
@@ -170,10 +167,27 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   const handleToggleFavorite = async (id: string, currentFav: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await toggleFavoriteAnalysisInDb(id, !!currentFav);
+      await toggleFavoriteAnalysisInDb(id, !currentFav);
       if (currentUser) fetchAnalysesAndCustomers(currentUser.uid);
     } catch (err) {
       console.error('Favorite toggle error:', err);
+    }
+  };
+
+  const handleToggleParticipate = async (item: SavedAnalysis, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!item.id) return;
+    const isCurrentlyParticipating = item.participationStatus === 'PARTICIPATING';
+    const nextStatus: TenderParticipationStatus = isCurrentlyParticipating ? 'NEW' : 'PARTICIPATING';
+
+    // Optimistic UI update
+    setAnalyses(prev => prev.map(a => a.id === item.id ? { ...a, participationStatus: nextStatus } : a));
+
+    try {
+      await updateAnalysisInDb(item.id, { participationStatus: nextStatus });
+      if (currentUser) fetchAnalysesAndCustomers(currentUser.uid);
+    } catch (err) {
+      console.error('Error updating participation status:', err);
     }
   };
 
@@ -185,6 +199,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
     setEditAuctionDate(item.auctionDate || item.analysisResult?.summary?.auctionDate || '');
     setEditProcurementSum(item.procurementSum || item.analysisResult?.summary?.procurementSum || '');
     setEditStatus(item.status || 'На рассмотрении');
+    setEditParticipationStatus(item.participationStatus || 'NEW');
     setEditNotes(item.notes || '');
   };
 
@@ -199,11 +214,11 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
         auctionDate: editAuctionDate,
         procurementSum: editProcurementSum,
         status: editStatus,
+        participationStatus: editParticipationStatus,
         notes: editNotes,
       });
       setEditingItem(null);
       if (currentUser) fetchAnalysesAndCustomers(currentUser.uid);
-      alert('Изменения успешно сохранены в Firestore!');
     } catch (err: any) {
       console.error('Update error:', err);
       alert('Ошибка при обновлении: ' + err?.message);
@@ -214,79 +229,96 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
 
   if (!isOpen) return null;
 
+  const filteredAnalyses = analyses.filter((item) => {
+    if (selectedCustomerFilter) {
+      const custName = (item.customerName || item.analysisResult?.summary?.customerName || '').toLowerCase().trim();
+      if (!custName.includes(selectedCustomerFilter.toLowerCase().trim())) {
+        return false;
+      }
+    }
+    if (!historySearch.trim()) return true;
+    const q = historySearch.toLowerCase();
+    return (
+      (item.projectName && item.projectName.toLowerCase().includes(q)) ||
+      (item.title && item.title.toLowerCase().includes(q)) ||
+      (item.customerName && item.customerName.toLowerCase().includes(q)) ||
+      (item.procurementSum && item.procurementSum.toLowerCase().includes(q)) ||
+      (item.status && item.status.toLowerCase().includes(q))
+    );
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-xs animate-fade-in">
       <div className="bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 w-full max-w-lg h-full flex flex-col shadow-2xl overflow-hidden">
         
-        {/* Header */}
+        {/* Sleek Minimalist Header */}
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-600 rounded-2xl text-white shadow-md">
+            <div className="p-2 bg-indigo-600 rounded-xl text-white">
               <History className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">База данных результатов анализа</h3>
-              <p className="text-xs text-slate-400">История закупок & Аккаунты заказчиков (Firestore)</p>
+              <h3 className="font-extrabold text-sm text-white tracking-tight">База данных результатов анализа</h3>
+              <p className="text-[11px] text-slate-400 font-medium">Реестр проверок & Заказчики (Firestore)</p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* User Auth Info Bar */}
-        <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
+        {/* User Auth Status */}
+        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
           {currentUser ? (
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
                 {currentUser.photoURL ? (
-                  <img src={currentUser.photoURL} alt="Avatar" className="w-8 h-8 rounded-full border border-indigo-400" />
+                  <img src={currentUser.photoURL} alt="Avatar" className="w-7 h-7 rounded-full border border-indigo-500 shrink-0" />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">
+                  <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                     {currentUser.email ? currentUser.email[0].toUpperCase() : 'A'}
                   </div>
                 )}
-                <div>
-                  <span className="text-xs font-bold text-slate-900 dark:text-white block truncate max-w-[180px]">
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">
                     {currentUser.displayName || currentUser.email || 'Гость (Анонимно)'}
                   </span>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase block">
-                    Подключено к Firestore DB
+                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold block">
+                    Синхронизировано с Firestore
                   </span>
                 </div>
               </div>
 
               <button
                 onClick={handleSignOut}
-                className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
-                title="Выйти из аккаунта"
+                className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Выйти</span>
               </button>
             </div>
           ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                Войдите, чтобы автоматически сохранять историю всех проверок в облачную БД:
-              </p>
-              <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                Войдите для сохранения истории:
+              </span>
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={handleGoogleSignIn}
-                  className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  <span>Google Вход</span>
+                  <span>Google</span>
                 </button>
                 <button
                   onClick={handleAnonymousSignIn}
-                  className="px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold cursor-pointer"
                 >
-                  <span>Быстрый Гость</span>
+                  Гость
                 </button>
               </div>
             </div>
@@ -294,14 +326,16 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
         </div>
 
         {/* View Mode Switcher: Tenders vs Unique Customers */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl w-full">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full">
             <button
-              onClick={() => setActiveTab('tenders')}
-              className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              onClick={() => {
+                setActiveTab('tenders');
+              }}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeTab === 'tenders'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
@@ -309,25 +343,45 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
             </button>
 
             <button
-              onClick={() => setActiveTab('customers')}
-              className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              onClick={() => {
+                setActiveTab('customers');
+              }}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeTab === 'customers'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Building2 className="w-3.5 h-3.5 text-amber-400" />
+              <Building2 className="w-3.5 h-3.5" />
               <span>Заказчики ({customers.length})</span>
             </button>
           </div>
         </div>
 
-        {/* Save Current Analysis Section */}
+        {/* Selected Customer Filter Banner */}
+        {selectedCustomerFilter && (
+          <div className="mx-4 mt-3 p-2.5 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 truncate">
+              <Filter className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span className="text-slate-800 dark:text-slate-200 font-bold truncate">
+                Закупки заказчика: <span className="text-indigo-600 dark:text-indigo-400">{selectedCustomerFilter}</span>
+              </span>
+            </div>
+            <button
+              onClick={() => setSelectedCustomerFilter(null)}
+              className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold text-[11px] shrink-0 ml-2"
+            >
+              Сбросить
+            </button>
+          </div>
+        )}
+
+        {/* Save Current Analysis Bar */}
         {currentAnalysisResult && currentUser && (
-          <div className="p-3.5 bg-indigo-50/70 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-900/60 space-y-2">
-            <div className="flex items-center gap-2 text-indigo-900 dark:text-indigo-200 text-xs font-bold">
-              <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span>Сохранить результат текущего анализа:</span>
+          <div className="mx-4 mt-3 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-2">
+            <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200 text-xs font-bold">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>Сохранить текущий анализ в БД:</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -336,12 +390,12 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                 value={saveTitle}
                 onChange={(e) => setSaveTitle(e.target.value)}
                 placeholder={currentAnalysisResult.summary?.procurementTitle || 'Название закупки...'}
-                className="flex-1 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 text-slate-900 dark:text-white px-3 py-1.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white px-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500"
               />
               <button
                 onClick={handleSaveCurrentAnalysis}
                 disabled={isSaving}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
               >
                 {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                 <span>Сохранить</span>
@@ -353,7 +407,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
         {/* Main Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           
-          {/* Search bar */}
+          {/* Search Bar */}
           {currentUser && (
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
@@ -361,7 +415,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                 type="text"
                 value={historySearch}
                 onChange={(e) => setHistorySearch(e.target.value)}
-                placeholder="Поиск по названию закупки, заказчику, дате или сумме..."
+                placeholder="Поиск по закупке, заказчику или дате..."
                 className="w-full pl-8 pr-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               />
             </div>
@@ -370,7 +424,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
           {!currentUser ? (
             <div className="text-center py-12 space-y-3 text-slate-400">
               <UserIcon className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
-              <p className="text-xs">Авторизуйтесь, чтобы хранить и редактировать данные закупок.</p>
+              <p className="text-xs">Авторизуйтесь, чтобы вести реестр сохраненных закупок.</p>
             </div>
           ) : isLoading ? (
             <div className="text-center py-12 space-y-2 text-slate-400">
@@ -379,26 +433,16 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
             </div>
           ) : activeTab === 'tenders' ? (
             /* Tenders List View */
-            analyses.length === 0 ? (
-              <div className="text-center py-12 space-y-2 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+            filteredAnalyses.length === 0 ? (
+              <div className="text-center py-12 space-y-2 text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-6">
                 <FolderOpen className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
-                <p className="text-xs font-medium">Сохраненных анализов пока нет.</p>
-                <p className="text-[11px] text-slate-500">Загрузите документацию и нажмите "Сохранить".</p>
+                <p className="text-xs font-medium">Сохраненных закупок пока нет.</p>
               </div>
             ) : (
-              analyses
-                .filter((item) => {
-                  if (!historySearch.trim()) return true;
-                  const q = historySearch.toLowerCase();
-                  return (
-                    (item.projectName && item.projectName.toLowerCase().includes(q)) ||
-                    (item.title && item.title.toLowerCase().includes(q)) ||
-                    (item.customerName && item.customerName.toLowerCase().includes(q)) ||
-                    (item.procurementSum && item.procurementSum.toLowerCase().includes(q)) ||
-                    (item.status && item.status.toLowerCase().includes(q))
-                  );
-                })
-                .map((item) => (
+              filteredAnalyses.map((item) => {
+                const isParticipating = item.participationStatus === 'PARTICIPATING';
+
+                return (
                   <div
                     key={item.id}
                     onClick={() => {
@@ -407,78 +451,110 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                         onClose();
                       }
                     }}
-                    className="group bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-3.5 space-y-2.5 transition-all cursor-pointer shadow-2xs hover:shadow-md relative"
+                    className={`group bg-white dark:bg-slate-800/90 border ${
+                      isParticipating 
+                        ? 'border-indigo-500 dark:border-indigo-500 ring-1 ring-indigo-500/20' 
+                        : 'border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600'
+                    } rounded-2xl p-3.5 space-y-2.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs relative`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase shrink-0 ${
-                            item.riskScore > 60
-                              ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300'
-                              : item.riskScore > 30
-                              ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
-                              : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
-                          }`}
-                        >
-                          Индекс {item.riskScore}
+                      <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                        {/* Risk level badge */}
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                          Индекс риска: {item.riskScore}
                         </span>
 
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 shrink-0 border border-indigo-200 dark:border-indigo-800">
+                        {/* Status badge */}
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800">
                           {item.status || 'На рассмотрении'}
                         </span>
+
+                        {/* Participating Badge */}
+                        {isParticipating && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 text-white flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Участвуем</span>
+                          </span>
+                        )}
                       </div>
 
                       {/* EDIT AND DELETE BUTTONS */}
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={(e) => handleStartEdit(item, e)}
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 rounded-lg transition-colors cursor-pointer"
-                          title="Редактировать закупку (Название, Дата, Сумма, Статус, Заказчик)"
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                          title="Редактировать параметры закупки"
                         >
-                          <Edit3 className="w-4 h-4 text-indigo-500" />
+                          <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={(e) => handleToggleFavorite(item.id!, !!item.isFavorite, e)}
-                          className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/60 rounded-lg transition-colors cursor-pointer"
+                          className="p-1 text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
                           title="В избранное"
                         >
-                          <Star className={`w-4 h-4 ${item.isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
+                          <Star className={`w-3.5 h-3.5 ${item.isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
                         </button>
                         <button
                           onClick={(e) => handleDelete(item.id!, e)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer"
-                          title="Удалить из истории БД"
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                          title="Удалить закупку"
                         >
-                          <Trash2 className="w-4 h-4 text-rose-500" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
 
-                    <h4 className="text-xs font-extrabold text-slate-900 dark:text-white leading-snug">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
                       {item.projectName || item.title}
                     </h4>
 
-                    {/* Extracted Project Metadata Badges: Customer, Sum, Auction Date */}
+                    {/* Metadata Grid */}
                     <div className="space-y-1 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 text-[11px]">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-slate-700 dark:text-slate-200 truncate font-semibold">
-                          🏛️ <strong>Заказчик:</strong> {item.customerName || item.analysisResult?.summary?.customerName || 'Организация 223-ФЗ'}
+                        <span className="text-slate-700 dark:text-slate-200 truncate font-medium">
+                          <strong>Заказчик:</strong> {item.customerName || item.analysisResult?.summary?.customerName || 'Организация 223-ФЗ'}
                         </span>
+                        
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const cust = item.customerName || item.analysisResult?.summary?.customerName;
+                            if (cust) {
+                              setSelectedCustomerFilter(cust);
+                            }
+                          }}
+                          className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline shrink-0"
+                          title="Показать все закупки этого заказчика"
+                        >
+                          Все закупки
+                        </button>
                       </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          💰 <strong>Сумма:</strong> {item.procurementSum || item.analysisResult?.summary?.procurementSum || 'По заявке'}
+
+                      <div className="flex items-center justify-between gap-2 pt-0.5">
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                          {item.procurementSum || item.analysisResult?.summary?.procurementSum || 'По заявке'}
                         </span>
-                        <span className="text-slate-500 dark:text-slate-400 font-medium">
-                          📅 <strong>Дата:</strong> {item.auctionDate || item.analysisResult?.summary?.auctionDate || 'Уточняется'}
+                        <span className="text-slate-500 dark:text-slate-400">
+                          Аукцион: {item.auctionDate || item.analysisResult?.summary?.auctionDate || 'Уточняется'}
                         </span>
                       </div>
                     </div>
 
+                    {/* Quick Action Footer: Participate Button + Open Report */}
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-[10px] text-slate-400">
-                        Сохранено: {item.createdAt?.seconds ? new Date(item.createdAt.seconds * 1000).toLocaleDateString('ru-RU') : 'Сегодня'}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleParticipate(item, e)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          isParticipating
+                            ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600'
+                        }`}
+                      >
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>{isParticipating ? 'Участвуем ✓' : 'Участвовать'}</span>
+                      </button>
 
                       <button
                         type="button"
@@ -489,57 +565,63 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                             onClose();
                           }
                         }}
-                        className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-lg text-[11px] font-bold border border-indigo-200 dark:border-indigo-800 transition-colors flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
                       >
-                        <span>Открыть отчёт</span>
+                        <span>Отчёт</span>
                         <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
 
-                    {/* Notes section */}
                     {item.notes && (
-                      <p className="text-[11px] bg-slate-50 dark:bg-slate-900 p-2 rounded-xl text-slate-600 dark:text-slate-300 italic border border-slate-100 dark:border-slate-800">
+                      <p className="text-[11px] bg-slate-50 dark:bg-slate-900 p-2 rounded-lg text-slate-600 dark:text-slate-300 italic border border-slate-100 dark:border-slate-800">
                         «{item.notes}»
                       </p>
                     )}
                   </div>
-                ))
+                );
+              })
             )
           ) : (
             /* Customers View Tab */
             customers.length === 0 ? (
-              <div className="text-center py-12 space-y-2 text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+              <div className="text-center py-12 space-y-2 text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-6">
                 <Building2 className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
-                <p className="text-xs font-medium">Аккаунты заказчиков формируются автоматически.</p>
-                <p className="text-[11px] text-slate-500">При повторных тендерах от одного заказчика они автоматически объединяются!</p>
+                <p className="text-xs font-medium">База заказчиков формируется автоматически.</p>
               </div>
             ) : (
               customers.map(cust => {
                 const linkedTenders = analyses.filter(a => (a.customerName || '').toLowerCase().trim() === (cust.name || '').toLowerCase().trim() || a.customerId === cust.id);
                 return (
-                  <div key={cust.id} className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
+                  <div key={cust.id} className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <div className="p-2 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 rounded-xl">
+                        <div className="p-2 bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 rounded-xl">
                           <Building2 className="w-4 h-4" />
                         </div>
                         <div>
-                          <h4 className="text-xs font-extrabold text-slate-900 dark:text-white">
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                             {cust.name}
                           </h4>
                           <span className="text-[10px] text-slate-400">
-                            Заказчик по 223-ФЗ / ЕИС
+                            Заказчик по 223-ФЗ
                           </span>
                         </div>
                       </div>
 
-                      <span className="px-2.5 py-1 bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 font-mono font-extrabold text-xs rounded-lg border border-amber-200 dark:border-amber-800">
-                        {linkedTenders.length || cust.tendersCount || 1} тендеров
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCustomerFilter(cust.name);
+                          setActiveTab('tenders');
+                        }}
+                        className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-lg border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors cursor-pointer"
+                      >
+                        {linkedTenders.length || cust.tendersCount || 1} закупок
+                      </button>
                     </div>
 
                     <div className="space-y-1.5 pt-1">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Привязанные закупки:</span>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block">Закупки организации:</span>
                       {linkedTenders.length > 0 ? (
                         linkedTenders.map(lt => (
                           <div 
@@ -555,13 +637,13 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                             <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
                               {lt.title || lt.projectName}
                             </span>
-                            <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
+                            <span className="font-bold text-indigo-600 dark:text-indigo-400 text-[11px]">
                               {lt.procurementSum || 'По заявке'}
                             </span>
                           </div>
                         ))
                       ) : (
-                        <p className="text-[11px] text-slate-400 italic">Тендеры сохранены в общей базе.</p>
+                        <p className="text-[11px] text-slate-400 italic">Закупки в общей базе.</p>
                       )}
                     </div>
                   </div>
@@ -588,51 +670,48 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
               </div>
               <button
                 onClick={() => setEditingItem(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
-              {/* Tender Name */}
               <div>
                 <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Название тендера / предмета закупки:
+                  Название тендера / закупки:
                 </label>
                 <input
                   type="text"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-medium"
                 />
               </div>
 
-              {/* Customer Name */}
               <div>
                 <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Заказчик (Организация 223-ФЗ):
+                  Заказчик (223-ФЗ):
                 </label>
                 <input
                   type="text"
                   value={editCustomerName}
                   onChange={(e) => setEditCustomerName(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-medium"
                 />
               </div>
 
-              {/* Date & Sum Grid */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Дата подачи / аукциона:
+                    Дата аукциона / подачи:
                   </label>
                   <input
                     type="text"
                     value={editAuctionDate}
                     onChange={(e) => setEditAuctionDate(e.target.value)}
                     placeholder="15.08.2026"
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-medium"
                   />
                 </div>
 
@@ -645,41 +724,57 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                     value={editProcurementSum}
                     onChange={(e) => setEditProcurementSum(e.target.value)}
                     placeholder="12 450 000 ₽"
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium font-mono"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-medium font-mono"
                   />
                 </div>
               </div>
 
-              {/* Status Select */}
               <div>
                 <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Статус процедуры:
+                  Статус процедуры в системе:
                 </label>
                 <select
                   value={editStatus}
                   onChange={(e) => setEditStatus(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-medium"
                 >
-                  <option value="На рассмотрении">⏳ На рассмотрении</option>
-                  <option value="Заявка подана">📩 Заявка подана</option>
-                  <option value="Аудит пройден">🛡️ Аудит пройден</option>
-                  <option value="Победа (Выигран)">🏆 Победа (Выигран)</option>
-                  <option value="Отклонен">❌ Отклонен</option>
-                  <option value="Архив">📦 В архиве</option>
+                  <option value="На рассмотрении">На рассмотрении</option>
+                  <option value="Заявка подана">Заявка подана</option>
+                  <option value="Аудит пройден">Аудит пройден</option>
+                  <option value="Победа (Выигран)">Победа (Выигран)</option>
+                  <option value="Отклонен">Отклонен</option>
+                  <option value="Архив">В архиве</option>
                 </select>
               </div>
 
-              {/* Notes */}
               <div>
                 <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  Заметки / Примечания тендерного отдела:
+                  Статус участия нашей компании:
+                </label>
+                <select
+                  value={editParticipationStatus}
+                  onChange={(e) => setEditParticipationStatus(e.target.value as TenderParticipationStatus)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-medium"
+                >
+                  <option value="NEW">Новая закупка (Не участвуем)</option>
+                  <option value="PARTICIPATING">Участвуем</option>
+                  <option value="SUBMITTED">Заявка официально подана</option>
+                  <option value="WON">Победа в закупке</option>
+                  <option value="REJECTED">Заявка отклонена</option>
+                  <option value="ARCHIVED">Архив</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Заметки / Примечания:
                 </label>
                 <textarea
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
                   rows={2}
                   placeholder="Добавьте комментарий..."
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 font-medium"
                 />
               </div>
             </div>

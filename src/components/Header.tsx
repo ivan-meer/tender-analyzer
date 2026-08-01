@@ -47,61 +47,27 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* AI Chat Bot Trigger Button */}
+          {/* Main Unified AI Chat Consultant */}
           <button
             type="button"
             onClick={onOpenChat}
-            className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+            className="flex items-center gap-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
             title="Открыть ИИ-Чат Консультант 223-ФЗ"
           >
             <MessageSquare className="w-4 h-4 text-white" />
-            <span className="hidden sm:inline">ИИ-Чат</span>
+            <span>ИИ-Чат Консультант</span>
           </button>
 
-          {/* Legal Search Grounding Trigger Button */}
-          <button
-            type="button"
-            onClick={onOpenSearch}
-            className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
-            title="Поиск законов, постановлений ПП 1875 и практики ФАС"
-          >
-            <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span className="hidden md:inline">Поиск Законов</span>
-          </button>
-
-          {/* Deep Audit High Thinking Trigger Button */}
-          <button
-            type="button"
-            onClick={onOpenDeepAudit}
-            className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
-            title="Режим глубокого юридического мышления (High Thinking)"
-          >
-            <BrainCircuit className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span className="hidden lg:inline">Deep-Аудит</span>
-          </button>
-
-          {/* Our Verified Suppliers Catalog Trigger Button */}
-          {onOpenSuppliersCatalog && (
-            <button
-              type="button"
-              onClick={onOpenSuppliersCatalog}
-              className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
-              title="Каталог проверенных отечественных фабрик и поставщиков"
-            >
-              <Building2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span className="hidden sm:inline">Поставщики РФ</span>
-            </button>
-          )}
-
-          {/* History & Firestore DB Drawer Button */}
+          {/* Unified Database & History Drawer Trigger */}
           <button
             type="button"
             onClick={onOpenHistory}
-            className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 px-2.5 sm:px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
-            title="База данных результатов проверок (Firestore)"
+            className="flex items-center gap-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 px-3 py-2 rounded-xl transition-all cursor-pointer shrink-0"
+            title="База данных сохраненных закупок (Firestore)"
           >
             <History className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-            <span className="hidden sm:inline">База БД</span>
+            <span className="hidden sm:inline">База БД & История</span>
+            <span className="sm:hidden">История</span>
           </button>
 
           {/* Dark Mode Switcher */}
@@ -122,7 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="open-guide-btn"
             onClick={onOpenGuide}
-            className="p-2 sm:px-3 sm:py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors shrink-0"
+            className="p-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors shrink-0"
             title="Памятка / Регламент"
           >
             <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -131,52 +97,23 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Mobile-Only Horizontal Scroll Tool Strip */}
-      <div className="sm:hidden border-t border-slate-100 dark:border-slate-800/80 px-3 py-2 bg-slate-50/80 dark:bg-slate-900/90 overflow-x-auto flex items-center gap-2 no-scrollbar">
+      <div className="sm:hidden border-t border-slate-100 dark:border-slate-800/80 px-3 py-2 bg-slate-50/80 dark:bg-slate-900/90 flex items-center justify-between text-xs">
         <button
           type="button"
           onClick={onOpenChat}
-          className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 text-white px-3 py-1.5 rounded-xl shrink-0 shadow-2xs active:scale-95"
+          className="flex items-center gap-1.5 font-bold bg-indigo-600 text-white px-3 py-1.5 rounded-xl shrink-0 shadow-2xs active:scale-95"
         >
           <MessageSquare className="w-3.5 h-3.5" />
-          <span>ИИ-Чат</span>
+          <span>ИИ-Чат Консультант</span>
         </button>
-
-        <button
-          type="button"
-          onClick={onOpenSearch}
-          className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
-        >
-          <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>Поиск Законов</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenDeepAudit}
-          className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
-        >
-          <BrainCircuit className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>Deep-Аудит</span>
-        </button>
-
-        {onOpenSuppliersCatalog && (
-          <button
-            type="button"
-            onClick={onOpenSuppliersCatalog}
-            className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
-          >
-            <Building2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            <span>Поставщики РФ</span>
-          </button>
-        )}
 
         <button
           type="button"
           onClick={onOpenHistory}
-          className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
+          className="flex items-center gap-1.5 font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl shrink-0"
         >
           <History className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
-          <span>База БД</span>
+          <span>База БД & История</span>
         </button>
       </div>
     </header>

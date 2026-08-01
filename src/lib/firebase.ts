@@ -24,6 +24,8 @@ export interface SavedCustomer {
   updatedAt?: any;
 }
 
+export type TenderParticipationStatus = 'NEW' | 'PARTICIPATING' | 'SUBMITTED' | 'WON' | 'REJECTED' | 'ARCHIVED';
+
 export interface SavedAnalysis {
   id?: string;
   userId: string;
@@ -36,6 +38,7 @@ export interface SavedAnalysis {
   auctionDate?: string;
   procurementNumber?: string;
   status?: string;
+  participationStatus?: TenderParticipationStatus;
   riskScore: number;
   riskLevel: string;
   createdAt: any;
@@ -134,6 +137,7 @@ export async function saveAnalysisToDb(userId: string, userEmail: string, result
     auctionDate: result.summary?.auctionDate || new Date().toLocaleDateString('ru-RU'),
     procurementNumber: result.submissionRulesCheck?.procedureType || result.summary?.procurementNumber || '223-ФЗ',
     status: result.summary?.status || 'На рассмотрении',
+    participationStatus: 'NEW',
     riskScore: result.summary?.overallRiskScore ?? 50,
     riskLevel: result.summary?.riskLevel || 'MEDIUM',
     createdAt: serverTimestamp(),
