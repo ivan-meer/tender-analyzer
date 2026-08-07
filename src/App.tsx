@@ -5,6 +5,7 @@ import { UserFlowSteps } from './components/UserFlowSteps';
 import { DocumentUploader } from './components/DocumentUploader';
 import { RiskSummaryCard } from './components/RiskSummaryCard';
 import { RiskMapCard } from './components/RiskMapCard';
+import { RiskDynamicsChart } from './components/RiskDynamicsChart';
 import { DeliveryLogisticsCard } from './components/DeliveryLogisticsCard';
 import { ContractRisksTable } from './components/ContractRisksTable';
 import { ProductListTable } from './components/ProductListTable';
@@ -90,13 +91,50 @@ export default function App() {
     setActiveProcedureType(input.procedureType);
     setError(null);
 
+    // Persist active procedure and law choice to localStorage
+    const is44FZ = input.procedureType.startsWith('44_FZ');
+    const lawCategory = is44FZ ? '44_FZ' : (input.procedureType === 'COMMERCIAL' || input.procedureType === 'OTHER') ? 'COMMERCIAL' : '223_FZ';
+    localStorage.setItem('selected_procedure_type', input.procedureType);
+    localStorage.setItem('selected_law_type', lawCategory);
+
     try {
+      // Load saved law-specific regulations and guidelines from localStorage
+      const saved44FZ = localStorage.getItem('regulations_44fz');
+      const saved223FZ = localStorage.getItem('regulations_223fz');
+      const savedCore = localStorage.getItem('regulations_core');
       const customGuidelines = localStorage.getItem('custom_tender_guidelines');
+
+      let combinedGuidelines = is44FZ ? (saved44FZ || '') : (saved223FZ || '');
+      if (savedCore) {
+        combinedGuidelines += `\n\n[Базовые Инструкции]:\n${savedCore}`;
+      }
+      if (customGuidelines) {
+        combinedGuidelines += `\n\n[Дополнительный Регламент]:\n${customGuidelines}`;
+      }
+
+      // Directives for statutory deadline controls and national mode (44-FZ vs 223-FZ)
+      let statutoryNotes = '';
+      if (is44FZ) {
+        statutoryNotes = `
+[ТРЕБОВАНИЯ И ЖЕСТКИЙ КОНТРОЛЬ СРОКОВ ПО 44-ФЗ]:
+1. Срок оплаты Заказчиком: НЕ БОЛЕЕ 7 РАБОЧИХ ДНЕЙ со дня подписания электронного УПД в ЕИС (ч. 13.1 ст. 34 ФЗ № 44).
+2. Срок заключения контракта: не ранее 10 дней с даты итогового протокола и не более 5 дней на подписание победителем на ЭТП.
+3. Протокол разногласий: направляется не более 1 раза в течение 5 дней.
+4. Национальный режим: проверка запретов ПП РФ № 616, правил ограничения ПП РФ № 617 ("Третий лишний") и минимальной доли по ПП РФ № 1875.
+5. Расчет пеней (1/300 ключевой ставки ЦБ) и ОБЯЗАТЕЛЬНОЕ списание штрафов/пеней по ПП РФ № 783 при сумме до 5% от ЦК.
+`;
+      } else {
+        statutoryNotes = `
+[СПЕЦИФИКА 223-ФЗ И КОММЕРЧЕСКИХ ТОРГОВ]:
+1. Штрафы и пени по 223-ФЗ НЕ СПИСЫВАЮТСЯ! Оценивать риски задержек поставки как критические.
+2. Проверка условий одностороннего отказа Заказчика и права закупки у 3-х лиц за счет Поставщика.
+3. Проверка сроков поставки по заявкам (риск сжатых сроков менее 5 рабочих дней).
+`;
+      }
+
       const enrichedInput = {
         ...input,
-        additionalNotes: customGuidelines 
-          ? `${input.additionalNotes || ''}\n\n[Официальный Регламент и Инструкции Пользователя]:\n${customGuidelines}`
-          : input.additionalNotes
+        additionalNotes: `${input.additionalNotes || ''}\n${statutoryNotes}\n${combinedGuidelines ? `\n[Официальный Регламент Проверки]:\n${combinedGuidelines}` : ''}`.trim()
       };
 
       const response = await fetch('/api/analyze', {
@@ -488,6 +526,10 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
                   summary={analysisResult.summary} 
                   contractRisks={analysisResult.contractRisks} 
                 />
+                <RiskDynamicsChart
+                  summary={analysisResult.summary}
+                  contractRisks={analysisResult.contractRisks}
+                />
               </div>
             )}
 
@@ -526,6 +568,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
       <GuideModal
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
+        activeProcedureType={activeProcedureType}
       />
 
       {/* AI Tender Chatbot Modal */}

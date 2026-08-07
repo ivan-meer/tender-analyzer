@@ -47,12 +47,31 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   onOpenScanModal,
   onOpenHistory,
 }) => {
-  const [lawType, setLawType] = useState<'223_FZ' | '44_FZ' | 'COMMERCIAL'>('223_FZ');
-  const [procedureType, setProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
+  const [lawType, setLawType] = useState<'223_FZ' | '44_FZ' | 'COMMERCIAL'>(() => {
+    const saved = localStorage.getItem('selected_law_type');
+    return (saved as '223_FZ' | '44_FZ' | 'COMMERCIAL') || '223_FZ';
+  });
+  const [procedureType, setProcedureType] = useState<ProcedureType>(() => {
+    const saved = localStorage.getItem('selected_procedure_type');
+    if (saved) return saved as ProcedureType;
+    const law = localStorage.getItem('selected_law_type');
+    if (law === '44_FZ') return '44_FZ_AUCTION';
+    if (law === 'COMMERCIAL') return 'COMMERCIAL';
+    return '223_FZ_QUOTATION';
+  });
   const [parsedFiles, setParsedFiles] = useState<ParsedDocument[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Sync with localStorage
+  React.useEffect(() => {
+    localStorage.setItem('selected_law_type', lawType);
+  }, [lawType]);
+
+  React.useEffect(() => {
+    localStorage.setItem('selected_procedure_type', procedureType);
+  }, [procedureType]);
   
   // Single-window workspace text inputs & modals
   const [pastedText, setPastedText] = useState('');
