@@ -26,6 +26,7 @@ import {
 import { AnalysisInput, ProcedureType } from '../types';
 import { SAMPLE_PROCUREMENTS } from '../data/sampleProcurements';
 import { parseDocumentFile, parseFileOrArchive, ParsedDocument, formatFileSize } from '../utils/documentParser';
+import { detectLawTypeFromContent, LawDetectionResult } from '../utils/lawDetector';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { TokenPriceEstimator } from './TokenPriceEstimator';
 import { Camera } from 'lucide-react';
@@ -79,6 +80,25 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const [previewingFileId, setPreviewingFileId] = useState<string | null>(null);
   const [modalDocument, setModalDocument] = useState<ParsedDocument | null>(null);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+
+  // Automatic Law Type Detection (44-FZ / 223-FZ / Commercial)
+  const [autoDetectedInfo, setAutoDetectedInfo] = useState<LawDetectionResult | null>(null);
+  const [userOverridden, setUserOverridden] = useState(false);
+
+  // Auto-detect law type when documents or pasted text change
+  React.useEffect(() => {
+    const combinedText = parsedFiles.map(f => `${f.fileName}\n${f.content}`).join('\n\n') + '\n\n' + pastedText;
+    const detected = detectLawTypeFromContent(combinedText);
+    if (detected) {
+      setAutoDetectedInfo(detected);
+      if (!userOverridden) {
+        setLawType(detected.lawType);
+        setProcedureType(detected.procedureType);
+      }
+    } else {
+      setAutoDetectedInfo(null);
+    }
+  }, [parsedFiles, pastedText, userOverridden]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -202,6 +222,8 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     setPastedText('');
     setAdditionalNotes('');
     setPreviewingFileId(null);
+    setUserOverridden(false);
+    setAutoDetectedInfo(null);
   };
 
   // Compile all loaded documents and text into the unified AnalysisInput
@@ -299,10 +321,16 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               <FolderUp className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight flex-wrap">
                 <span>Единое окно загрузки документации закупки</span>
-                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 uppercase tracking-wider">
-                  {lawType === '44_FZ' ? '44-ФЗ' : lawType === '223_FZ' ? '223-ФЗ' : 'Коммерческая'}
+                <span className="text-[10px] sm:text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 tracking-wider flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>
+                    {autoDetectedInfo 
+                      ? `${autoDetectedInfo.lawType === '44_FZ' ? '44-ФЗ' : autoDetectedInfo.lawType === '223_FZ' ? '223-ФЗ' : 'Коммерческая'} • ${autoDetectedInfo.procedureName}`
+                      : `${lawType === '44_FZ' ? '44-ФЗ' : lawType === '223_FZ' ? '223-ФЗ' : 'Коммерческая'}`
+                    }
+                  </span>
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
@@ -312,52 +340,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            {/* LAW SELECTOR SEGMENTED CONTROL */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner">
-              <button
-                type="button"
-                onClick={() => {
-                  setLawType('223_FZ');
-                  setProcedureType('223_FZ_QUOTATION');
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
-                  lawType === '223_FZ'
-                    ? 'bg-indigo-600 text-white shadow-xs ring-1 ring-indigo-500/30'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <span>223-ФЗ</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLawType('44_FZ');
-                  setProcedureType('44_FZ_AUCTION');
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
-                  lawType === '44_FZ'
-                    ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500/30'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <span>44-ФЗ</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLawType('COMMERCIAL');
-                  setProcedureType('COMMERCIAL');
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
-                  lawType === 'COMMERCIAL'
-                    ? 'bg-amber-600 text-white shadow-xs ring-1 ring-amber-500/30'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <span>Коммерческая</span>
-              </button>
-            </div>
-
+            {/* DEMO REPORT BUTTON */}
             {onLoadPresetResult && (
               <button
                 type="button"
@@ -419,6 +402,43 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           className="hidden"
           onChange={(e) => e.target.files && handleFilesAdded(e.target.files)}
         />
+
+        {/* AUTO-DETECTION NOTICE BANNER */}
+        {autoDetectedInfo && (
+          <div className="bg-gradient-to-r from-emerald-500/10 via-indigo-500/10 to-emerald-500/10 border border-emerald-500/30 dark:border-emerald-500/40 text-slate-800 dark:text-slate-100 text-xs p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-xs animate-fade-in">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
+                <Zap className="w-4 h-4 animate-bounce" />
+              </div>
+              <div>
+                <span className="font-extrabold text-emerald-700 dark:text-emerald-400">
+                  ⚡ Автоопределение законодательства:
+                </span>{' '}
+                <strong className="font-bold">{autoDetectedInfo.lawName}</strong> ({autoDetectedInfo.procedureName}).{' '}
+                <span className="text-slate-500 dark:text-slate-400 hidden sm:inline">{autoDetectedInfo.reason}</span>
+              </div>
+            </div>
+
+            {userOverridden ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setUserOverridden(false);
+                  setLawType(autoDetectedInfo.lawType);
+                  setProcedureType(autoDetectedInfo.procedureType);
+                }}
+                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shrink-0 cursor-pointer shadow-2xs"
+              >
+                Вернуть автовыбор ({autoDetectedInfo.lawType === '44_FZ' ? '44-ФЗ' : autoDetectedInfo.lawType === '223_FZ' ? '223-ФЗ' : 'Коммерческая'})
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 px-2 py-1 rounded-lg shrink-0">
+                <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                Применено автоматически
+              </span>
+            )}
+          </div>
+        )}
 
         {/* ERROR MESSAGE FOR UNSUPPORTED FILE FORMATS */}
         {uploadError && (
@@ -645,120 +665,16 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* PROCEDURE TYPE SEGMENTED CONTROL */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/90 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner overflow-x-auto">
-              <span className="text-[10px] font-extrabold uppercase text-slate-400 dark:text-slate-500 px-2 shrink-0">Вид процедуры:</span>
-              {lawType === '223_FZ' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setProcedureType('223_FZ_QUOTATION')}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      procedureType === '223_FZ_QUOTATION'
-                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-700'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    📄 Котировки / Предложения
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProcedureType('223_FZ_AUCTION')}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      procedureType === '223_FZ_AUCTION'
-                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-700'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    ⚡ Эл. аукцион
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProcedureType('223_FZ_TENDER')}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      procedureType === '223_FZ_TENDER'
-                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-700'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    🏆 Конкурс
-                  </button>
-                </>
-              )}
-              {lawType === '44_FZ' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setProcedureType('44_FZ_AUCTION')}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      procedureType === '44_FZ_AUCTION'
-                        ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200 dark:border-slate-700'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    ⚡ Эл. аукцион (ЕИС)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProcedureType('44_FZ_QUOTATION')}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      procedureType === '44_FZ_QUOTATION'
-                        ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200 dark:border-slate-700'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    📄 Котировки
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProcedureType('44_FZ_TENDER')}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      procedureType === '44_FZ_TENDER'
-                        ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200 dark:border-slate-700'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    🏆 Конкурс
-                  </button>
-                </>
-              )}
-              {lawType === 'COMMERCIAL' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setProcedureType('COMMERCIAL')}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      procedureType === 'COMMERCIAL'
-                        ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs border border-slate-200 dark:border-slate-700'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    🏢 Коммерческий тендер
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProcedureType('OTHER')}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      procedureType === 'OTHER'
-                        ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs border border-slate-200 dark:border-slate-700'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    📁 Иной вид
-                  </button>
-                </>
-              )}
-            </div>
-
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
             {onLoadPresetResult && (
               <button
                 type="button"
                 onClick={() => onLoadPresetResult('sample-furniture-223fz')}
-                className="px-3.5 py-2.5 rounded-2xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                className="flex-1 sm:flex-initial px-3.5 py-2.5 min-h-[44px] rounded-2xl text-xs font-bold bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
                 title="Показать эталонный отчёт без обращения к API ИИ"
               >
-                <span>⚡ Быстрый отчет</span>
+                <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+                <span>Быстрый демо-отчет</span>
               </button>
             )}
 
@@ -766,7 +682,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               id="start-analysis-btn"
               type="submit"
               disabled={!hasContent || isAnalyzing || isProcessing}
-              className={`px-5 py-2.5 sm:px-6 sm:py-3 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-5 py-3 min-h-[44px] rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
                 hasContent && !isAnalyzing && !isProcessing
                   ? 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white shadow-indigo-200 dark:shadow-indigo-950 active:scale-95'
                   : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'

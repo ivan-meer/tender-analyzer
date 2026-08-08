@@ -41,6 +41,11 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
   const [result, setResult] = useState<SupplierSearchResult | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [activeZoomImage, setActiveZoomImage] = useState<{ url: string; title: string } | null>(null);
+  
+  // Interactive Filter & Search Controls
+  const [filterText, setFilterText] = useState<string>('');
+  const [onlyGisp, setOnlyGisp] = useState<boolean>(false);
+  const [sortOrder, setSortOrder] = useState<'default' | 'price_asc' | 'price_desc'>('default');
 
   useEffect(() => {
     if (isOpen && product) {
@@ -86,6 +91,44 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
   };
 
   if (!isOpen || !product) return null;
+
+  const queryClean = filterText.trim().toLowerCase();
+
+  const filteredSuppliers = (result?.suppliers || []).filter((s) => {
+    if (onlyGisp && !s.inGispRegistry) return false;
+    if (!queryClean) return true;
+    return (
+      (s.companyName || '').toLowerCase().includes(queryClean) ||
+      (s.specialization || '').toLowerCase().includes(queryClean) ||
+      (s.region || '').toLowerCase().includes(queryClean) ||
+      (s.contactsOrWebsite || '').toLowerCase().includes(queryClean)
+    );
+  });
+
+  let filteredModels = (result?.suggestedModels || []).filter((m) => {
+    if (onlyGisp && !(m.gispRegistryStatus || '').toLowerCase().includes('реестр') && !(m.gispRegistryStatus || '').toLowerCase().includes('минпромторг') && !(m.gispRegistryStatus || '').toLowerCase().includes('пп 1875')) return false;
+    if (!queryClean) return true;
+    return (
+      (m.modelName || '').toLowerCase().includes(queryClean) ||
+      (m.manufacturer || '').toLowerCase().includes(queryClean) ||
+      (m.description || '').toLowerCase().includes(queryClean) ||
+      (m.dimensionsMatch || '').toLowerCase().includes(queryClean)
+    );
+  });
+
+  if (sortOrder === 'price_asc') {
+    filteredModels = [...filteredModels].sort((a, b) => {
+      const pA = parseInt((a.estimatedPrice || '').replace(/\D/g, '')) || 0;
+      const pB = parseInt((b.estimatedPrice || '').replace(/\D/g, '')) || 0;
+      return pA - pB;
+    });
+  } else if (sortOrder === 'price_desc') {
+    filteredModels = [...filteredModels].sort((a, b) => {
+      const pA = parseInt((a.estimatedPrice || '').replace(/\D/g, '')) || 0;
+      const pB = parseInt((b.estimatedPrice || '').replace(/\D/g, '')) || 0;
+      return pB - pA;
+    });
+  }
 
   const handleCopySummary = () => {
     if (!result) return;
@@ -235,6 +278,53 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
                 </button>
               </div>
 
+              {/* Interactive Search & Filter Toolbar */}
+              <div className="p-3.5 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex-1 min-w-[200px] relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={filterText}
+                    onChange={(e) => setFilterText(e.target.value)}
+                    placeholder="Фильтр по наименованию, заводу, ГОСТ или городу..."
+                    className="w-full pl-9 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  {filterText && (
+                    <button
+                      onClick={() => setFilterText('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOnlyGisp(!onlyGisp)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      onlyGisp
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-2xs'
+                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400'
+                    }`}
+                  >
+                    <ShieldCheck className={`w-3.5 h-3.5 ${onlyGisp ? 'text-white' : 'text-emerald-500'}`} />
+                    <span>Только ГИСП Минпромторг</span>
+                  </button>
+
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as any)}
+                    className="px-3 py-2 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="default">Сортировка: Сначала релевантные</option>
+                    <option value="price_asc">Цена: Сначала недорогие</option>
+                    <option value="price_desc">Цена: Сначала дорогие</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Section 1: Suppliers & Manufacturers */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -242,68 +332,74 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
                     <Building2 className="w-4 h-4" />
                   </div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide">
-                    1. Заводы-производители и поставщики в РФ ({result.suppliers?.length || 0})
+                    1. Заводы-производители и поставщики в РФ ({filteredSuppliers.length})
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {result.suppliers?.map((supp, sIdx) => {
-                    const rawUrl = supp.websiteUrl || (supp.contactsOrWebsite.includes('.ru') || supp.contactsOrWebsite.includes('.com')
-                      ? supp.contactsOrWebsite.split('|')[0].trim()
-                      : null);
-                    const href = rawUrl
-                      ? (rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`)
-                      : null;
+                {filteredSuppliers.length === 0 ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 italic p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl">
+                    Поставщики по заданному фильтру не найдены.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {filteredSuppliers.map((supp, sIdx) => {
+                      const rawUrl = supp.websiteUrl || (supp.contactsOrWebsite.includes('.ru') || supp.contactsOrWebsite.includes('.com')
+                        ? supp.contactsOrWebsite.split('|')[0].trim()
+                        : null);
+                      const href = rawUrl
+                        ? (rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`)
+                        : null;
 
-                    return (
-                      <div 
-                        key={sIdx}
-                        className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl space-y-2.5 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all flex flex-col justify-between"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="font-bold text-sm text-slate-900 dark:text-white leading-snug">
-                              {supp.companyName}
+                      return (
+                        <div 
+                          key={sIdx}
+                          className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl space-y-2.5 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all flex flex-col justify-between"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-bold text-sm text-slate-900 dark:text-white leading-snug">
+                                {supp.companyName}
+                              </div>
+                              {supp.inGispRegistry && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded-md shrink-0">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                  ГИСП Минпромторг
+                                </span>
+                              )}
                             </div>
-                            {supp.inGispRegistry && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded-md shrink-0">
-                                <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                                ГИСП Минпромторг
-                              </span>
-                            )}
-                          </div>
 
-                          <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1 font-medium">
-                            {supp.region && (
-                              <p className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
-                                <MapPin className="w-3 h-3 shrink-0 text-slate-400 dark:text-slate-500" />
-                                <span>{supp.region}</span>
+                            <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1 font-medium">
+                              {supp.region && (
+                                <p className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                                  <MapPin className="w-3 h-3 shrink-0 text-slate-400 dark:text-slate-500" />
+                                  <span>{supp.region}</span>
+                                </p>
+                              )}
+                              <p><span className="text-slate-400 dark:text-slate-500 font-bold">Специализация:</span> {supp.specialization}</p>
+                              <p className="text-indigo-700 dark:text-indigo-300 font-semibold break-all">
+                                <span className="text-slate-400 dark:text-slate-500 font-bold">Контакты/Сайт:</span> {supp.contactsOrWebsite}
                               </p>
-                            )}
-                            <p><span className="text-slate-400 dark:text-slate-500 font-bold">Специализация:</span> {supp.specialization}</p>
-                            <p className="text-indigo-700 dark:text-indigo-300 font-semibold break-all">
-                              <span className="text-slate-400 dark:text-slate-500 font-bold">Контакты/Сайт:</span> {supp.contactsOrWebsite}
-                            </p>
+                            </div>
                           </div>
-                        </div>
 
-                        {href && (
-                          <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60">
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 rounded-xl text-xs font-bold transition-all shadow-2xs"
-                            >
-                              <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                              <span>Перейти на сайт поставщика ↗</span>
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                          {href && (
+                            <div className="pt-2 border-t border-slate-200 dark:border-slate-700/60">
+                              <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 rounded-xl text-xs font-bold transition-all shadow-2xs"
+                              >
+                                <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                                <span>Перейти на сайт поставщика ↗</span>
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Section 2: Product Models & Analogs */}
@@ -313,12 +409,17 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
                     <Package className="w-4 h-4" />
                   </div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide">
-                    2. Рекомендуемые модели, карточки и фото товаров ({result.suggestedModels?.length || 0})
+                    2. Рекомендуемые модели, карточки и фото товаров ({filteredModels.length})
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                  {result.suggestedModels?.map((model, mIdx) => {
+                {filteredModels.length === 0 ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 italic p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl">
+                    Модели товаров по заданному фильтру не найдены.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {filteredModels.map((model, mIdx) => {
                     const directUrl = model.productUrl || (model.url 
                       ? (model.url.startsWith('http') ? model.url : `https://${model.url}`)
                       : null);
@@ -442,7 +543,8 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({
                     );
                   })}
                 </div>
-              </div>
+              )}
+            </div>
 
               {/* Section 3: Compliance & Expert Note */}
               <div className="p-4 bg-indigo-50/80 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/80 rounded-2xl space-y-1.5">

@@ -2096,15 +2096,15 @@ async function executeSafeFurnitureSql(sqlInput: string) {
       };
     }
 
-    if (lowerSql.includes('match_tender')) {
+    if (lowerSql.includes('match_tender') || lowerSql.includes('find_analogs') || lowerSql.includes('product_model')) {
       return {
         sqlExecuted: cleanSql,
-        columns: ['model_id', 'supplier', 'model_name', 'score', 'reqs_covered', 'reqs_no_data', 'price_min', 'match_status', 'detail'],
+        columns: ['model_id', 'supplier', 'model_name', 'score', 'reqs_covered', 'reqs_no_data', 'price_min', 'match_status', 'detail', 'image_url'],
         rows: [
-          { model_id: 104, supplier: "UTFC", model_name: "Айкью СН-710 пластик", score: 1.0, reqs_covered: 3, reqs_no_data: 0, price_min: "18 500 ₽", match_status: "ПОКРЫВАЕТ", detail: "seat_height_top: 450-550 мм (ПОКРЫВАЕТ 100%), seat_width: 500 мм" },
-          { model_id: 211, supplier: "Метта", model_name: "Samurai SL-1.04", score: 0.88, reqs_covered: 2, reqs_no_data: 0, price_min: "24 200 ₽", match_status: "В ДОПУСКЕ", detail: "seat_height_top: 460-540 мм (В ДОПУСКЕ ±20мм ГОСТ 19917-2014)" },
-          { model_id: 312, supplier: "Бюрократ", model_name: "CH-868N/Black", score: 0.72, reqs_covered: 2, reqs_no_data: 1, price_min: "По запросу", match_status: "ПЕРЕСЕКАЕТ", detail: "seat_height_top: 480-560 мм (ПЕРЕСЕКАЕТчастично)" },
-          { model_id: 405, supplier: "Chairman", model_name: "Chairman 696", score: 0.50, reqs_covered: 1, reqs_no_data: 2, price_min: "По запросу", match_status: "НЕТ ДАННЫХ", detail: "seat_height_top: Нет данных у поставщика" }
+          { model_id: 104, supplier: "UTFC", model_name: "Айкью СН-710 пластик", score: 1.0, reqs_covered: 3, reqs_no_data: 0, price_min: "18 500 ₽", match_status: "ПОКРЫВАЕТ", detail: "seat_height_top: 450-550 мм (ПОКРЫВАЕТ 100%), seat_width: 500 мм", image_url: "https://images.unsplash.com/photo-1580481072645-022f9a6d8310?auto=format&fit=crop&w=600&q=80" },
+          { model_id: 211, supplier: "Метта", model_name: "Samurai SL-1.04", score: 0.88, reqs_covered: 2, reqs_no_data: 0, price_min: "24 200 ₽", match_status: "В ДОПУСКЕ", detail: "seat_height_top: 460-540 мм (В ДОПУСКЕ ±20мм ГОСТ 19917-2014)", image_url: "https://images.unsplash.com/photo-1505797149-43b0069ec26b?auto=format&fit=crop&w=600&q=80" },
+          { model_id: 312, supplier: "Бюрократ", model_name: "CH-868N/Black", score: 0.72, reqs_covered: 2, reqs_no_data: 1, price_min: "15 900 ₽", match_status: "ПЕРЕСЕКАЕТ", detail: "seat_height_top: 480-560 мм (ПЕРЕСЕКАЕТ частично)", image_url: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=600&q=80" },
+          { model_id: 405, supplier: "Chairman", model_name: "Chairman 696", score: 0.50, reqs_covered: 1, reqs_no_data: 2, price_min: "13 400 ₽", match_status: "НЕТ ДАННЫХ", detail: "seat_height_top: Нет данных у поставщика", image_url: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=600&q=80" }
         ],
         rowCount: 4,
         executionTimeMs,
@@ -2116,13 +2116,13 @@ async function executeSafeFurnitureSql(sqlInput: string) {
     // Default fallback rows for general furniture SQL queries
     return {
       sqlExecuted: cleanSql,
-      columns: ['model_key', 'supplier', 'model_name', 'subcat', 'seat_height_top', 'seat_width', 'status'],
+      columns: ['model_key', 'supplier', 'model_name', 'subcat', 'seat_height_top', 'seat_width', 'status', 'price_min', 'image_url'],
       rows: [
-        { model_key: "utfc::Айкью СН-710", supplier: "UTFC", model_name: "Айкью СН-710", subcat: "office_chair", seat_height_top: "450–550 мм", seat_width: "500 мм", status: "ПОКРЫВАЕТ" },
-        { model_key: "metta::Samurai SL-1.04", supplier: "Метта", model_name: "Samurai SL-1.04", subcat: "office_chair", seat_height_top: "460–540 мм", seat_width: "510 мм", status: "В ДОПУСКЕ" },
-        { model_key: "bureaucrat::CH-868N", supplier: "Бюрократ", model_name: "CH-868N", subcat: "office_chair", seat_height_top: "480–560 мм", seat_width: "490 мм", status: "ПЕРЕСЕКАЕТ" },
-        { model_key: "chairman::696", supplier: "Chairman", model_name: "Chairman 696", subcat: "office_chair", seat_height_top: "НЕТ ДАННЫХ", seat_width: "470 мм", status: "НЕТ ДАННЫХ" },
-        { model_key: "mirey::ErgoPro 500", supplier: "Мирей", model_name: "ErgoPro 500", subcat: "office_chair", seat_height_top: "450–530 мм", seat_width: "500 мм", status: "ПОКРЫВАЕТ" }
+        { model_key: "utfc::Айкью СН-710", supplier: "UTFC", model_name: "Айкью СН-710", subcat: "office_chair", seat_height_top: "450–550 мм", seat_width: "500 мм", status: "ПОКРЫВАЕТ", price_min: "18 500 ₽", image_url: "https://images.unsplash.com/photo-1580481072645-022f9a6d8310?auto=format&fit=crop&w=600&q=80" },
+        { model_key: "metta::Samurai SL-1.04", supplier: "Метта", model_name: "Samurai SL-1.04", subcat: "office_chair", seat_height_top: "460–540 мм", seat_width: "510 мм", status: "В ДОПУСКЕ", price_min: "24 200 ₽", image_url: "https://images.unsplash.com/photo-1505797149-43b0069ec26b?auto=format&fit=crop&w=600&q=80" },
+        { model_key: "bureaucrat::CH-868N", supplier: "Бюрократ", model_name: "CH-868N", subcat: "office_chair", seat_height_top: "480–560 мм", seat_width: "490 мм", status: "ПЕРЕСЕКАЕТ", price_min: "15 900 ₽", image_url: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=600&q=80" },
+        { model_key: "chairman::696", supplier: "Chairman", model_name: "Chairman 696", subcat: "office_chair", seat_height_top: "НЕТ ДАННЫХ", seat_width: "470 мм", status: "НЕТ ДАННЫХ", price_min: "13 400 ₽", image_url: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=600&q=80" },
+        { model_key: "mirey::ErgoPro 500", supplier: "Мирей", model_name: "ErgoPro 500", subcat: "office_chair", seat_height_top: "450–530 мм", seat_width: "500 мм", status: "ПОКРЫВАЕТ", price_min: "19 800 ₽", image_url: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=600&q=80" }
       ],
       rowCount: 5,
       executionTimeMs,
