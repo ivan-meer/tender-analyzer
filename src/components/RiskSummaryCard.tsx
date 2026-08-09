@@ -5,9 +5,10 @@ import { CountdownTimer } from './CountdownTimer';
 
 interface RiskSummaryCardProps {
   summary: AnalysisResult['summary'];
+  onOpenCustomerVerification?: (inn?: string, customerName?: string) => void;
 }
 
-export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary }) => {
+export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary, onOpenCustomerVerification }) => {
   const getBadgeStyle = (level: string) => {
     switch (level) {
       case 'CRITICAL':
@@ -41,7 +42,7 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary }) => 
         <div className="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs flex flex-col justify-between space-y-4 transition-colors duration-200">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className={`text-[11px] font-bold px-3 py-1 rounded-full border uppercase tracking-wider ${getBadgeStyle(summary.riskLevel)}`}>
                   Уровень риска: {summary.riskLevel}
                 </span>
@@ -49,6 +50,16 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary }) => 
                   <span className="text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-3 py-1 rounded-full">
                     Регламент 223-ФЗ
                   </span>
+                )}
+                {onOpenCustomerVerification && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenCustomerVerification(summary.customerInn, summary.customerName)}
+                    className="text-[11px] font-extrabold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <span>🏢 Проверить ИНН заказчика</span>
+                    {summary.customerName && <span className="font-semibold opacity-80">({summary.customerName})</span>}
+                  </button>
                 )}
               </div>
               <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">

@@ -35,7 +35,7 @@ interface LegalNormInfo {
 
 type SortField = 'severity' | 'clause' | 'title';
 type SortOrder = 'asc' | 'desc';
-type QuickRiskFilter = 'ALL' | 'CRITICAL' | 'FINANCIAL';
+type QuickRiskFilter = 'ALL' | 'NEW' | 'CRITICAL' | 'FINANCIAL';
 
 const isFinancialRisk = (r: ContractRiskItem): boolean => {
   if (r.category === 'PENALTIES' || r.category === 'THIRD_PARTY_PURCHASE') return true;
@@ -85,6 +85,7 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
   }, [externalSeverityFilter]);
 
   const countAll = risks.length;
+  const countNew = risks.filter(r => r.isNew).length;
   const countCritical = risks.filter(r => r.severity === 'CRITICAL' || r.severity === 'HIGH').length;
   const countFinancial = risks.filter(r => isFinancialRisk(r)).length;
 
@@ -106,6 +107,9 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
 
   const filteredRisks = risks.filter(r => {
     // Quick filter check
+    if (quickFilter === 'NEW' && !r.isNew) {
+      return false;
+    }
     if (quickFilter === 'CRITICAL' && !(r.severity === 'CRITICAL' || r.severity === 'HIGH')) {
       return false;
     }
@@ -261,8 +265,8 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
           </p>
         </div>
 
-        {/* Quick Filter Switcher (All / Critical / Financial) */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0">
+        {/* Quick Filter Switcher (All / New / Critical / Financial) */}
+        <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0">
           <button
             type="button"
             onClick={() => setQuickFilter('ALL')}
@@ -279,6 +283,26 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
               {countAll}
             </span>
           </button>
+
+          {countNew > 0 && (
+            <button
+              type="button"
+              onClick={() => setQuickFilter('NEW')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer animate-pulse ${
+                quickFilter === 'NEW'
+                  ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-400/50'
+                  : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-800'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+              <span>⚡ Новые риски</span>
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                quickFilter === 'NEW' ? 'bg-white/20 text-white' : 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200'
+              }`}>
+                +{countNew}
+              </span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -422,24 +446,36 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
               <div
                 key={item.id}
                 className={`border rounded-2xl p-5 space-y-3 transition-all ${
-                  isHighlighted ? 'ring-2 ring-indigo-500 shadow-md scale-[1.002]' : ''
+                  item.isNew
+                    ? 'ring-2 ring-amber-500/90 border-amber-400 bg-amber-50/80 dark:bg-amber-950/30 shadow-md'
+                    : isHighlighted
+                    ? 'ring-2 ring-indigo-500 shadow-md scale-[1.002]'
+                    : ''
                 } ${
-                  item.severity === 'CRITICAL'
+                  item.severity === 'CRITICAL' && !item.isNew
                     ? 'bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900/60'
-                    : item.severity === 'HIGH'
+                    : item.severity === 'HIGH' && !item.isNew
                     ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60'
-                    : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                    : !item.isNew
+                    ? 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+                    : ''
                 }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/60 pb-2.5">
                   <div className="flex flex-wrap items-center gap-2">
+                    {item.isNew && (
+                      <span className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black rounded-lg flex items-center gap-1 shadow-xs animate-pulse">
+                        <Sparkles className="w-3.5 h-3.5 fill-white" />
+                        <span>⚡ НОВЫЙ РИСК{item.versionAdded ? ` (v${item.versionAdded})` : ''}</span>
+                      </span>
+                    )}
                     <span className="text-[11px] font-mono text-indigo-700 dark:text-indigo-300 font-extrabold bg-indigo-50 dark:bg-indigo-950 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800">
                       {item.clauseNumber || 'Пункт договора'}
                     </span>
                     <span className="text-sm font-bold text-slate-900 dark:text-white">
                       {item.title}
                     </span>
-                    {isHighlighted && (
+                    {isHighlighted && !item.isNew && (
                       <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-extrabold rounded-md flex items-center gap-1 shadow-2xs">
                         <Sparkles className="w-3 h-3" />
                         <span>Выбрано на карте</span>

@@ -22,6 +22,8 @@ import { AnalysisProgressScreen } from './components/AnalysisProgressScreen';
 import { PreAnalysisDashboard } from './components/PreAnalysisDashboard';
 import { PdfReportPreviewModal } from './components/PdfReportPreviewModal';
 import { TenderDeadlinesCalendarModal } from './components/TenderDeadlinesCalendarModal';
+import { CustomerInnVerificationModal } from './components/CustomerInnVerificationModal';
+import { AnalysisVersionHistoryBanner } from './components/AnalysisVersionHistoryBanner';
 import { auth, saveAnalysisToDb } from './lib/firebase';
 import { AnalysisInput, AnalysisResult, ProcedureType } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
@@ -74,6 +76,15 @@ export default function App() {
   const [isSuppliersCatalogOpen, setIsSuppliersCatalogOpen] = useState(false);
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isCustomerVerificationOpen, setIsCustomerVerificationOpen] = useState(false);
+  const [verificationInn, setVerificationInn] = useState('');
+  const [verificationCustomerName, setVerificationCustomerName] = useState('');
+
+  const openCustomerVerification = (inn?: string, name?: string) => {
+    setVerificationInn(inn || '');
+    setVerificationCustomerName(name || '');
+    setIsCustomerVerificationOpen(true);
+  };
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('theme') === 'dark' || 
@@ -290,6 +301,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenSuppliersCatalog={() => setIsSuppliersCatalogOpen(true)}
         onOpenCalendar={() => setIsCalendarOpen(true)}
+        onOpenCustomerVerification={() => openCustomerVerification()}
       />
 
       {/* Main Content Area */}
@@ -537,7 +549,14 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
             {/* SCREEN 1: Overview & Risk Analysis */}
             {(activeTab === 'all' || activeTab === 'overview') && (
               <div className="space-y-6">
-                <RiskSummaryCard summary={analysisResult.summary} />
+                <AnalysisVersionHistoryBanner 
+                  analysis={analysisResult} 
+                  onUpdateAnalysisVersion={(updated) => setAnalysisResult(updated)} 
+                />
+                <RiskSummaryCard 
+                  summary={analysisResult.summary} 
+                  onOpenCustomerVerification={openCustomerVerification}
+                />
                 <RiskMapCard 
                   summary={analysisResult.summary} 
                   contractRisks={analysisResult.contractRisks} 
@@ -678,6 +697,14 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         onDownloadPdf={handleExportPdf}
         onExportTxt={handleExportTxt}
         isExportingPdf={isExportingPdf}
+      />
+
+      {/* Customer Reliability INN Verification Modal */}
+      <CustomerInnVerificationModal
+        isOpen={isCustomerVerificationOpen}
+        onClose={() => setIsCustomerVerificationOpen(false)}
+        initialInn={verificationInn}
+        initialCustomerName={verificationCustomerName}
       />
 
       {/* Footer */}

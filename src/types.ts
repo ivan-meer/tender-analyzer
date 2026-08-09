@@ -1,3 +1,36 @@
+export type LLMProvider = 
+  | 'gemini' 
+  | 'mistral' 
+  | 'openai' 
+  | 'anthropic' 
+  | 'deepseek' 
+  | 'ollama' 
+  | 'custom';
+
+export interface LLMConfig {
+  provider: LLMProvider;
+  modelName: string;
+  apiKey?: string;
+  baseUrl?: string;
+  mistralApiKey?: string;
+  temperature?: number;
+  useMistralOcrForPdf?: boolean;
+}
+
+export interface MistralOcrPage {
+  index: number;
+  markdown: string;
+  images?: string[];
+}
+
+export interface MistralOcrResult {
+  markdownText: string;
+  pagesCount: number;
+  pages?: MistralOcrPage[];
+  modelUsed: string;
+  processingTimeMs?: number;
+}
+
 export type ProcedureType = 
   | '223_FZ_QUOTATION' 
   | '223_FZ_AUCTION' 
@@ -19,6 +52,58 @@ export interface ContractRiskItem {
   title: string;
   explanation: string;
   recommendation: string;
+  isNew?: boolean; // Флаг: новый риск, обнаруженный при повторном сканировании
+  versionAdded?: number; // Номер версии анализа, в которой впервые обнаружен риск
+  isResolved?: boolean; // Флаг: риск устранен в текущей версии
+}
+
+export interface AnalysisVersion {
+  version: number;
+  id: string;
+  createdAt: string;
+  note?: string; // Напр.: "Первоначальный сканирование", "Правки проекта договора Извещение №2"
+  overallRiskScore: number;
+  riskLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  contractRisksCount: number;
+  newRisksCount: number;
+  resolvedRisksCount: number;
+  analysisResultSnapshot?: AnalysisResult;
+}
+
+export interface CustomerVerificationReport {
+  customerName: string;
+  inn: string;
+  ogrn?: string;
+  kpp?: string;
+  status: 'ACTIVE' | 'LIQUIDATION' | 'BANKRUPT';
+  statusText: string;
+  registrationDate?: string;
+  address?: string;
+  ceoName?: string;
+  capital?: string;
+  rnpStatus: boolean; // Включен ли в РНП
+  rnpDetails: string;
+  arbitrationSummary: {
+    totalCases: number;
+    asDefendantCount: number;
+    asPlaintiffCount: number;
+    claimsSum: string;
+  };
+  fsspSummary: {
+    activeExecutionsCount: number;
+    totalDebtSum: string;
+  };
+  fnsTaxDebts: string;
+  reliabilityScore: number; // 0..100
+  reliabilityLevel: 'HIGH' | 'MEDIUM' | 'RISKY' | 'CRITICAL';
+  paymentDelayStats: {
+    avgDelayDays: number;
+    onTimePaymentRatePct: number;
+    delayRiskNote: string;
+  };
+  riskMarkers: string[];
+  recommendation: string;
+  verifiedAt?: string;
 }
 
 export interface SubmissionRulesCheck {
@@ -118,10 +203,18 @@ export interface ProductItem {
 }
 
 export interface AnalysisResult {
+  version?: number; // Номер текущей версии документации (1, 2, 3...)
+  versionTimestamp?: string;
+  versionNote?: string; // Описание версии (напр., "Повторный скан Извещения №2")
+  previousVersionScore?: number; // Предыдущий риск-балл для сравнения
+  newRisksCount?: number; // Кол-во новых рисков
+  resolvedRisksCount?: number; // Кол-во устраненных рисков
+  versionHistory?: AnalysisVersion[]; // Полная история прошлых версий анализа
   summary: {
     procurementTitle: string;
     projectName?: string; // Понятное название проекта (напр. "Проект №223-894: Поставка офисной мебели")
     customerName?: string; // Заказчик (напр. "ГУП Мосгортранс", "ПАО Газпром")
+    customerInn?: string; // ИНН заказчика (напр. "7707083893")
     procurementSum?: string; // НМЦК / Сумма закупки (напр. "12 450 000 ₽")
     auctionDate?: string; // Дата аукциона / окончания подачи (напр. "15.08.2026")
     overallRiskScore: number; // 0 to 100

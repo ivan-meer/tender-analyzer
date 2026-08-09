@@ -12,6 +12,7 @@ interface HeaderProps {
   onOpenHistory: () => void;
   onOpenSuppliersCatalog?: () => void;
   onOpenCalendar?: () => void;
+  onOpenCustomerVerification?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenHistory,
   onOpenSuppliersCatalog,
   onOpenCalendar,
+  onOpenCustomerVerification,
 }) => {
   return (
     <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 sticky top-0 z-30 shadow-xs transition-colors duration-200">
@@ -60,6 +62,19 @@ export const Header: React.FC<HeaderProps> = ({
             <MessageSquare className="w-3.5 h-3.5 text-white" />
             <span>ИИ-Чат</span>
           </button>
+
+          {/* Customer INN Reliability Check Button */}
+          {onOpenCustomerVerification && (
+            <button
+              type="button"
+              onClick={onOpenCustomerVerification}
+              className="flex items-center gap-1.5 text-xs font-extrabold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
+              title="Проверка добросовестности заказчика по ИНН (ФНС, РНП, Арбитраж)"
+            >
+              <Building2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span className="hidden sm:inline">Проверка ИНН</span>
+            </button>
+          )}
 
           {/* Deadlines Calendar Button */}
           {onOpenCalendar && (
