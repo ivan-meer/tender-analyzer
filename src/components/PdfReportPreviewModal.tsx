@@ -73,22 +73,22 @@ export const PdfReportPreviewModal: React.FC<PdfReportPreviewModalProps> = ({
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto animate-scale-up">
         
         {/* Modal Top Header Toolbar */}
-        <div className="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-2xl">
+        <div className="p-4 sm:p-5 bg-slate-900/90 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-2xl shrink-0">
               <Eye className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider shrink-0">
                   Предпросмотр PDF-отчета
                 </span>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-400 font-mono shrink-0">
                   {new Date().toLocaleDateString('ru-RU')}
                 </span>
               </div>
-              <h3 className="text-sm sm:text-base font-extrabold text-white truncate max-w-md sm:max-w-xl">
-                {summary.projectName || summary.procurementTitle}
+              <h3 className="text-sm sm:text-base font-extrabold text-white truncate max-w-full">
+                {summary?.projectName || summary?.procurementTitle || 'Отчет по закупке'}
               </h3>
             </div>
           </div>

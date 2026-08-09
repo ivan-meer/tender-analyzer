@@ -9,19 +9,19 @@ interface SubmissionChecklistProps {
 export const SubmissionChecklist: React.FC<SubmissionChecklistProps> = ({ check }) => {
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-6 transition-colors duration-200">
-      <div className="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-xl">
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 truncate">
+            <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
               <CheckSquare className="w-5 h-5" />
             </div>
-            <span>Правила подготовки и подачи заявки</span>
+            <span className="truncate">Правила подготовки и подачи заявки</span>
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5 truncate">
             Контрольный чек-лист подготовки документов менеджеру и тендерному специалисту
           </p>
         </div>
-        <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-300">
+        <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-300 shrink-0 self-start sm:self-center">
           {check.procedureType === '223_FZ_AUCTION'
             ? 'Электронный Аукцион'
             : check.procedureType === '223_FZ_QUOTATION'

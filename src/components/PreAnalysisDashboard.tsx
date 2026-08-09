@@ -433,19 +433,19 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
       )}
 
       {/* Header Bar & Main Navigation Tabs */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-        <div className="flex items-center gap-2.5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div className="p-2 bg-gradient-to-br from-indigo-500 to-indigo-700 text-white rounded-2xl shadow-sm shrink-0">
             <TrendingUp className="w-4 h-4" />
           </div>
-          <div>
-            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Дашборд закупок & Управление базой</span>
-              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800">
+          <div className="min-w-0">
+            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
+              <span className="truncate">Дашборд закупок & Управление базой</span>
+              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 shrink-0">
                 44-ФЗ / 223-ФЗ
               </span>
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
               Центр аналитики, реестра заявок, заказчиков и дедлайнов
             </p>
           </div>

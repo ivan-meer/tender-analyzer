@@ -40,8 +40,8 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary, onOpe
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Main Title & Risk Score Card */}
         <div className="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs flex flex-col justify-between space-y-4 transition-colors duration-200">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
+            <div className="space-y-1.5 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`text-[11px] font-bold px-3 py-1 rounded-full border uppercase tracking-wider ${getBadgeStyle(summary.riskLevel)}`}>
                   Уровень риска: {summary.riskLevel}
@@ -55,14 +55,14 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary, onOpe
                   <button
                     type="button"
                     onClick={() => onOpenCustomerVerification(summary.customerInn, summary.customerName)}
-                    className="text-[11px] font-extrabold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    className="text-[11px] font-extrabold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs truncate max-w-full"
                   >
-                    <span>🏢 Проверить ИНН заказчика</span>
-                    {summary.customerName && <span className="font-semibold opacity-80">({summary.customerName})</span>}
+                    <span className="shrink-0">🏢 Проверить ИНН заказчика</span>
+                    {summary.customerName && <span className="font-semibold opacity-80 truncate">({summary.customerName})</span>}
                   </button>
                 )}
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight break-words">
                 {summary.procurementTitle || 'Результат комплексного анализа закупки'}
               </h2>
             </div>

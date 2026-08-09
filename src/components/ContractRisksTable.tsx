@@ -254,19 +254,19 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
       )}
 
       {/* Header and Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-4">
-        <div>
-          <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-            <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            <span>Реестр рисков проекта договора ({risks.length})</span>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-4 min-w-0">
+        <div className="min-w-0">
+          <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2 truncate">
+            <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="truncate">Реестр рисков проекта договора ({risks.length})</span>
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5 truncate">
             Детальный аудит спорных, кабальных и повышенных условий договора по регламенту 223-ФЗ
           </p>
         </div>
 
         {/* Quick Filter Switcher (All / New / Critical / Financial) */}
-        <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0">
+        <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0 max-w-full overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setQuickFilter('ALL')}

@@ -4,9 +4,22 @@ import { AnalysisResult } from '../types';
 import { SavedAnalysis } from '../lib/firebase';
 
 /**
- * Utility to generate and download a clean PDF report for 223-FZ Procurement Analysis
+ * Utility to generate and download a clean PDF report for Procurement Analysis
  */
 export async function generatePdfReport(result: AnalysisResult, fileNamePrefix = 'Отчет_223_ФЗ'): Promise<void> {
+  // Ensure robust fallbacks for all nested objects and arrays
+  const summary = result?.summary || ({} as Partial<NonNullable<AnalysisResult['summary']>>);
+  const riskLevel = summary.riskLevel || 'MEDIUM';
+  const overallRiskScore = summary.overallRiskScore ?? 0;
+  const procurementTitle = summary.procurementTitle || summary.projectName || 'Комплексный анализ закупки';
+  const keyTakeaway = summary.keyTakeaway || 'Анализ закупки выполнен успешно.';
+
+  const contractRisks = Array.isArray(result?.contractRisks) ? result.contractRisks : [];
+  const productList = Array.isArray(result?.productList) ? result.productList : [];
+  const submissionRulesCheck = result?.submissionRulesCheck || ({} as Partial<NonNullable<AnalysisResult['submissionRulesCheck']>>);
+  const postAwardWorkflow = result?.postAwardWorkflow || ({} as Partial<NonNullable<AnalysisResult['postAwardWorkflow']>>);
+  const deliveryInfo = result?.deliveryInfo || null;
+
   // Create an offscreen HTML container styled specifically for PDF rendering
   const container = document.createElement('div');
   container.style.position = 'absolute';
@@ -26,29 +39,29 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
   });
 
   const riskBadgeBg =
-    result.summary.riskLevel === 'CRITICAL'
+    riskLevel === 'CRITICAL'
       ? '#fef2f2'
-      : result.summary.riskLevel === 'HIGH'
+      : riskLevel === 'HIGH'
       ? '#fff7ed'
-      : result.summary.riskLevel === 'MEDIUM'
+      : riskLevel === 'MEDIUM'
       ? '#fefce8'
       : '#f0fdf4';
 
   const riskBadgeColor =
-    result.summary.riskLevel === 'CRITICAL'
+    riskLevel === 'CRITICAL'
       ? '#991b1b'
-      : result.summary.riskLevel === 'HIGH'
+      : riskLevel === 'HIGH'
       ? '#9a3412'
-      : result.summary.riskLevel === 'MEDIUM'
+      : riskLevel === 'MEDIUM'
       ? '#854d0e'
       : '#166534';
 
   const riskLevelRu =
-    result.summary.riskLevel === 'CRITICAL'
+    riskLevel === 'CRITICAL'
       ? 'КРИТИЧЕСКИЙ РИСК'
-      : result.summary.riskLevel === 'HIGH'
+      : riskLevel === 'HIGH'
       ? 'ВЫСОКИЙ РИСК'
-      : result.summary.riskLevel === 'MEDIUM'
+      : riskLevel === 'MEDIUM'
       ? 'СРЕДНИЙ РИСК'
       : 'НИЗКИЙ РИСК';
 
@@ -58,7 +71,7 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
           <h1 style="font-size: 20px; font-weight: 800; color: #1e1b4b; margin: 0 0 4px 0;">
-            ЭКСПЕРТНОЕ ЮРИДИЧЕСКОЕ ЗАКЛЮЧЕНИЕ 223-ФЗ
+            ЭКСПЕРТНОЕ ЮРИДИЧЕСКОЕ ЗАКЛЮЧЕНИЕ (TenderAgent)
           </h1>
           <p style="font-size: 11px; color: #64748b; margin: 0; font-weight: 600;">
             Официальный регламент тендерного отдела компании • Дата анализа: ${dateStr}
@@ -66,7 +79,7 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
         </div>
         <div style="text-align: right;">
           <span style="display: inline-block; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; background-color: ${riskBadgeBg}; color: ${riskBadgeColor}; border: 1px solid ${riskBadgeColor}40;">
-            ${riskLevelRu} (${result.summary.overallRiskScore}/100)
+            ${riskLevelRu} (${overallRiskScore}/100)
           </span>
         </div>
       </div>
@@ -74,25 +87,25 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
 
     <!-- Executive Summary Box -->
     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-      <h2 style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; text-transform: uppercase; tracking: 0.05em;">
-        1. ОБЩЕЕ ЗАКЛЮЧЕНИЕ ПО ЗАКУПКЕ: ${result.summary.procurementTitle}
+      <h2 style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; text-transform: uppercase;">
+        1. ОБЩЕЕ ЗАКЛЮЧЕНИЕ ПО ЗАКУПКЕ: ${procurementTitle}
       </h2>
       <p style="font-size: 11px; line-height: 1.6; color: #334155; margin: 0; font-weight: 500;">
-        ${result.summary.keyTakeaway}
+        ${keyTakeaway}
       </p>
     </div>
 
     <!-- Delivery & Logistics Box if present -->
-    ${result.deliveryInfo ? `
+    ${deliveryInfo ? `
       <div style="background-color: #eef2ff; border: 1.5px solid #c7d2fe; border-radius: 12px; padding: 14px; margin-bottom: 20px;">
         <h2 style="font-size: 12px; font-weight: 800; color: #312e81; margin: 0 0 8px 0; text-transform: uppercase;">
           🚚 2. СРОКИ, ГРАФИК И АДРЕСА ПОСТАВКИ
         </h2>
         <div style="font-size: 10px; color: #1e1b4b; line-height: 1.5;">
-          <div style="margin-bottom: 4px;"><b>Срок поставки:</b> ${result.deliveryInfo.deliveryPeriod}</div>
-          ${result.deliveryInfo.deliveryScheduleNotice ? `<div style="margin-bottom: 4px;"><b>Порядок графика:</b> ${result.deliveryInfo.deliveryScheduleNotice}</div>` : ''}
-          <div style="margin-bottom: 4px;"><b>Адреса и пункты назначения:</b> ${result.deliveryInfo.deliveryAddresses.join('; ')}</div>
-          ${result.deliveryInfo.unloadingAndAccessConditions ? `<div><b>Условия разгрузки:</b> ${result.deliveryInfo.unloadingAndAccessConditions}</div>` : ''}
+          ${deliveryInfo.deliveryPeriod ? `<div style="margin-bottom: 4px;"><b>Срок поставки:</b> ${deliveryInfo.deliveryPeriod}</div>` : ''}
+          ${deliveryInfo.deliveryScheduleNotice ? `<div style="margin-bottom: 4px;"><b>Порядок графика:</b> ${deliveryInfo.deliveryScheduleNotice}</div>` : ''}
+          ${deliveryInfo.deliveryAddresses && Array.isArray(deliveryInfo.deliveryAddresses) && deliveryInfo.deliveryAddresses.length > 0 ? `<div style="margin-bottom: 4px;"><b>Адреса и пункты назначения:</b> ${deliveryInfo.deliveryAddresses.join('; ')}</div>` : ''}
+          ${deliveryInfo.unloadingAndAccessConditions ? `<div><b>Условия разгрузки:</b> ${deliveryInfo.unloadingAndAccessConditions}</div>` : ''}
         </div>
       </div>
     ` : ''}
@@ -100,39 +113,45 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
     <!-- Contract Risks Table -->
     <div style="margin-bottom: 24px;">
       <h2 style="font-size: 14px; font-weight: 800; color: #1e1b4b; margin: 0 0 12px 0; border-left: 4px solid #ef4444; padding-left: 8px;">
-        2. РЕЕСТР ВЫЯВЛЕННЫХ ДОГОВОРНЫХ РИСКОВ И ШТРАФОВ (${result.contractRisks.length})
+        2. РЕЕСТР ВЫЯВЛЕННЫХ ДОГОВОРНЫХ РИСКОВ И ШТРАФОВ (${contractRisks.length})
       </h2>
-      <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
-        <thead>
-          <tr style="background-color: #f1f5f9; color: #0f172a; font-weight: 800; border-bottom: 1px solid #cbd5e1;">
-            <th style="padding: 8px; width: 60px;">Пункт</th>
-            <th style="padding: 8px; width: 80px;">Уровень</th>
-            <th style="padding: 8px;">Цитата / Категория</th>
-            <th style="padding: 8px;">Разъяснение и Оценка Риска</th>
-            <th style="padding: 8px;">Рекомендация Поставщику</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${result.contractRisks.map(risk => `
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 8px; font-weight: 700; color: #475569;">${risk.clauseNumber || '—'}</td>
-              <td style="padding: 8px; font-weight: 800; color: ${risk.severity === 'CRITICAL' ? '#991b1b' : risk.severity === 'HIGH' ? '#c2410c' : '#854d0e'};">
-                ${risk.severity}
-              </td>
-              <td style="padding: 8px; color: #1e293b; font-weight: 600;">
-                <div style="font-weight: 800; margin-bottom: 2px; color: #0f172a;">${risk.title}</div>
-                <div style="font-style: italic; color: #64748b; font-size: 9px;">"${risk.clauseQuote || '—'}"</div>
-              </td>
-              <td style="padding: 8px; color: #334155; line-height: 1.4;">${risk.explanation}</td>
-              <td style="padding: 8px; color: #047857; font-weight: 600; line-height: 1.4;">${risk.recommendation}</td>
+      ${contractRisks.length > 0 ? `
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+          <thead>
+            <tr style="background-color: #f1f5f9; color: #0f172a; font-weight: 800; border-bottom: 1px solid #cbd5e1;">
+              <th style="padding: 8px; width: 60px;">Пункт</th>
+              <th style="padding: 8px; width: 80px;">Уровень</th>
+              <th style="padding: 8px;">Цитата / Категория</th>
+              <th style="padding: 8px;">Разъяснение и Оценка Риска</th>
+              <th style="padding: 8px;">Рекомендация Поставщику</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            ${contractRisks.map(risk => `
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 8px; font-weight: 700; color: #475569;">${risk?.clauseNumber || '—'}</td>
+                <td style="padding: 8px; font-weight: 800; color: ${risk?.severity === 'CRITICAL' ? '#991b1b' : risk?.severity === 'HIGH' ? '#c2410c' : '#854d0e'};">
+                  ${risk?.severity || 'MEDIUM'}
+                </td>
+                <td style="padding: 8px; color: #1e293b; font-weight: 600;">
+                  <div style="font-weight: 800; margin-bottom: 2px; color: #0f172a;">${risk?.title || 'Риск в договоре'}</div>
+                  <div style="font-style: italic; color: #64748b; font-size: 9px;">"${risk?.clauseQuote || '—'}"</div>
+                </td>
+                <td style="padding: 8px; color: #334155; line-height: 1.4;">${risk?.explanation || 'Требует внимания.'}</td>
+                <td style="padding: 8px; color: #047857; font-weight: 600; line-height: 1.4;">${risk?.recommendation || 'Соблюдать регламент.'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : `
+        <div style="font-size: 11px; color: #047857; background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px; border-radius: 8px; font-weight: 600;">
+          Критических и повышенных рисков в тексте договора не выявлено. Условия стандартные.
+        </div>
+      `}
     </div>
 
     <!-- Product Specification Table if exists -->
-    ${result.productList && result.productList.length > 0 ? `
+    ${productList.length > 0 ? `
       <div style="margin-bottom: 24px;">
         <h2 style="font-size: 14px; font-weight: 800; color: #1e1b4b; margin: 0 0 12px 0; border-left: 4px solid #10b981; padding-left: 8px;">
           3. СПЕЦИФИКАЦИЯ ПРОДУКЦИИ И НАЦИОНАЛЬНЫЙ РЕЖИМ (ПП РФ № 1875)
@@ -148,23 +167,23 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
             </tr>
           </thead>
           <tbody>
-            ${result.productList.map((item, i) => `
+            ${productList.map((item, i) => `
               <tr style="border-bottom: 1px solid #e2e8f0;">
                 <td style="padding: 8px; font-weight: 700; text-align: center;">${i + 1}</td>
-                <td style="padding: 8px; font-weight: 800; color: #0f172a;">${item.name}</td>
-                <td style="padding: 8px; font-weight: 800; color: #4338ca;">${item.quantity}</td>
+                <td style="padding: 8px; font-weight: 800; color: #0f172a;">${item?.name || 'Позиция'}</td>
+                <td style="padding: 8px; font-weight: 800; color: #4338ca;">${item?.quantity || '1'}</td>
                 <td style="padding: 8px; color: #334155; line-height: 1.3;">
-                  ${item.dimensions ? `<div style="font-weight: 800; color: #b45309; background-color: #fef3c7; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px; font-size: 9px;">📏 Габариты/Размеры: ${item.dimensions}</div><br/>` : ''}
-                  <div>${item.specification}</div>
-                  ${item.parameters && item.parameters.length > 0 ? `
+                  ${item?.dimensions ? `<div style="font-weight: 800; color: #b45309; background-color: #fef3c7; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px; font-size: 9px;">📏 Габариты/Размеры: ${item.dimensions}</div><br/>` : ''}
+                  <div>${item?.specification || '—'}</div>
+                  ${item?.parameters && Array.isArray(item.parameters) && item.parameters.length > 0 ? `
                     <div style="margin-top: 4px; font-size: 8.5px; color: #475569;">
-                      ${item.parameters.map(p => `<span style="display: inline-block; background-color: #f1f5f9; padding: 1px 4px; border-radius: 3px; margin-right: 4px; margin-bottom: 2px;"><b>${p.name}:</b> ${p.value}</span>`).join('')}
+                      ${item.parameters.map(p => `<span style="display: inline-block; background-color: #f1f5f9; padding: 1px 4px; border-radius: 3px; margin-right: 4px; margin-bottom: 2px;"><b>${p?.name}:</b> ${p?.value}</span>`).join('')}
                     </div>
                   ` : ''}
                 </td>
                 <td style="padding: 8px; font-weight: 600; color: #0f172a;">
-                  <div>${item.pp1875Status === 'RUSSIAN_REQUIRED' ? '⚠️ Требуется РФ' : item.pp1875Status === 'RESTRICTED' ? '🔒 Ограничение' : '✅ Без ограничений'}</div>
-                  <div style="font-size: 9px; color: #64748b;">${item.okpd2OrGvin || ''}</div>
+                  <div>${item?.pp1875Status === 'RUSSIAN_REQUIRED' ? '⚠️ Требуется РФ' : item?.pp1875Status === 'RESTRICTED' ? '🔒 Ограничение' : '✅ Без ограничений'}</div>
+                  <div style="font-size: 9px; color: #64748b;">${item?.okpd2OrGvin || ''}</div>
                 </td>
               </tr>
             `).join('')}
@@ -187,14 +206,14 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
           <thead>
             <tr style="background-color: #e2e8f0; color: #0f172a; font-weight: 800;">
               <th style="padding: 6px; width: 140px;">Позиция ТЗ</th>
-              <th style="padding: 6px; width: 160px;">Рекомендованная модель</th>
+              <th style="padding: 6px; width: 160px;">Рекомендовано</th>
               <th style="padding: 6px; width: 120px;">Производитель / Фабрика</th>
               <th style="padding: 6px;">Характеристики & Интервалы</th>
               <th style="padding: 6px; width: 100px;">Ориент. цена</th>
             </tr>
           </thead>
           <tbody>
-            ${(result.productList && result.productList.length > 0 ? result.productList : [
+            ${(productList.length > 0 ? productList : [
               { name: 'Офисное кресло эргономичное', dimensions: 'Высота сиденья: 450-550 мм, Ширина: >500 мм' }
             ]).map((prod, pIdx) => {
               const defaultModels = [
@@ -205,7 +224,7 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
               const selectedModel = defaultModels[pIdx % defaultModels.length];
               return `
                 <tr style="border-bottom: 1px solid #e2e8f0;">
-                  <td style="padding: 6px; font-weight: 700; color: #1e1b4b;">${prod.name}</td>
+                  <td style="padding: 6px; font-weight: 700; color: #1e1b4b;">${prod?.name || 'Позиция'}</td>
                   <td style="padding: 6px; font-weight: 800; color: #4338ca;">${selectedModel.model}</td>
                   <td style="padding: 6px; font-weight: 700; color: #0f172a;">${selectedModel.factory}</td>
                   <td style="padding: 6px; color: #334155; font-size: 9px;">${selectedModel.specs}</td>
@@ -221,33 +240,33 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
     <!-- Submission Checklist & Post Award Rules -->
     <div style="margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
       <div style="background-color: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 12px;">
-        <h3 style="font-size: 11px; font-weight: 800; color: #3730a3; margin: 0 0 6px 0; uppercase;">
+        <h3 style="font-size: 11px; font-weight: 800; color: #3730a3; margin: 0 0 6px 0;">
           ПРАВИЛА ПОДАЧИ ЗАЯВКИ
         </h3>
         <ul style="font-size: 9.5px; line-height: 1.5; color: #1e1b4b; padding-left: 14px; margin: 0;">
-          <li>Запрос в таблицу запросов: ${result.submissionRulesCheck.requestInTableRequired ? 'ОБЯЗАТЕЛЬНО' : 'Нет'}</li>
-          <li>ЭТП Аккредитация: ${result.submissionRulesCheck.etpAccreditationNotice}</li>
-          <li>Формы закупки: ${result.submissionRulesCheck.formsRequirement}</li>
-          <li>ПП РФ 1875: ${result.submissionRulesCheck.pp1875Details}</li>
+          <li>Запрос в таблицу запросов: ${submissionRulesCheck.requestInTableRequired ? 'ОБЯЗАТЕЛЬНО' : 'Нет'}</li>
+          <li>ЭТП Аккредитация: ${submissionRulesCheck.etpAccreditationNotice || 'По регламенту площадки'}</li>
+          <li>Формы закупки: ${submissionRulesCheck.formsRequirement || 'Стандартный комплект'}</li>
+          <li>ПП РФ 1875: ${submissionRulesCheck.pp1875Details || 'По требованиям документации'}</li>
         </ul>
       </div>
 
       <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px;">
-        <h3 style="font-size: 11px; font-weight: 800; color: #166534; margin: 0 0 6px 0; uppercase;">
+        <h3 style="font-size: 11px; font-weight: 800; color: #166534; margin: 0 0 6px 0;">
           ПРИЕМКА И ИСПОЛНЕНИЕ
         </h3>
         <ul style="font-size: 9.5px; line-height: 1.5; color: #14532d; padding-left: 14px; margin: 0;">
-          <li>Уведомления о поставке: ${result.postAwardWorkflow.deliveryNotifications}</li>
-          <li>Формат первички: ${result.postAwardWorkflow.primaryDocFormatConfirmation}</li>
-          <li>Приемка: ${result.postAwardWorkflow.acceptanceDocsStrategy}</li>
-          <li>Мотивированный отказ: ${result.postAwardWorkflow.motivatedRefusalGuide}</li>
+          <li>Уведомления о поставке: ${postAwardWorkflow.deliveryNotifications || 'Письменно Заказчику'}</li>
+          <li>Формат первички: ${postAwardWorkflow.primaryDocFormatConfirmation || 'Электронный УПД / ТОРГ-12'}</li>
+          <li>Приемка: ${postAwardWorkflow.acceptanceDocsStrategy || 'По условиям контракта'}</li>
+          <li>Мотивированный отказ: ${postAwardWorkflow.motivatedRefusalGuide || 'Фиксировать дефекты актом'}</li>
         </ul>
       </div>
     </div>
 
     <!-- Footer note -->
-    <div style="border-top: 1px solid #e2e8f0; pt: 12px; font-size: 9px; color: #94a3b8; text-align: center;">
-      Данный PDF-отчет сформирован ИИ-Экспертом по 223-ФЗ. Начисленные штрафы и пени по 223-ФЗ не списываются.
+    <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 9px; color: #94a3b8; text-align: center;">
+      Сформировано TenderAgent. Начисленные штрафы и пени по 223-ФЗ не списываются.
     </div>
   `;
 
@@ -261,7 +280,9 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
       logging: false,
     });
 
-    document.body.removeChild(container);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
 
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({
@@ -286,7 +307,7 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
       heightLeft -= pageHeight;
     }
 
-    const cleanTitle = result.summary.procurementTitle
+    const cleanTitle = (procurementTitle || 'Тендер')
       .replace(/[^a-zA-Zа-яА-Я0-9]/g, '_')
       .slice(0, 30);
 
@@ -303,7 +324,7 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
 /**
  * Utility to generate a combined batch PDF summary report for multiple selected tenders
  */
-export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], fileNamePrefix = 'Сводный_отчет_223_ФЗ'): Promise<void> {
+export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], fileNamePrefix = 'Сводный_отчет_TenderAgent'): Promise<void> {
   if (!items || items.length === 0) return;
 
   const container = document.createElement('div');
@@ -323,11 +344,11 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
     year: 'numeric',
   });
 
-  // Calculate aggregates
+  // Calculate aggregates safely
   const avgRisk = Math.round(
-    items.reduce((acc, i) => acc + (i.riskScore ?? i.analysisResult?.summary?.overallRiskScore ?? 0), 0) / items.length
+    items.reduce((acc, i) => acc + (i?.riskScore ?? i?.analysisResult?.summary?.overallRiskScore ?? 0), 0) / items.length
   );
-  const totalRisksCount = items.reduce((acc, i) => acc + (i.analysisResult?.contractRisks?.length || 0), 0);
+  const totalRisksCount = items.reduce((acc, i) => acc + (i?.analysisResult?.contractRisks?.length || 0), 0);
 
   // Build HTML
   container.innerHTML = `
@@ -336,7 +357,7 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div>
           <span style="background-color: #e0e7ff; color: #3730a3; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase;">
-            ПАКЕТНЫЙ АНАЛИЗ • 223-ФЗ
+            ПАКЕТНЫЙ АНАЛИЗ • TenderAgent
           </span>
           <h1 style="font-size: 20px; font-weight: 900; color: #1e1b4b; margin: 8px 0 4px 0;">
             СВОДНЫЙ МУЛЬТИ-ТЕНДЕРНЫЙ ЭКСПЕРТНЫЙ ОТЧЕТ
@@ -371,13 +392,13 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
         </thead>
         <tbody>
           ${items.map((item, idx) => {
-            const title = item.projectName || item.title || item.analysisResult?.summary?.procurementTitle || 'Тендер';
-            const cust = item.customerName || item.analysisResult?.summary?.customerName || 'Заказчик 223-ФЗ';
-            const sum = item.procurementSum || item.analysisResult?.summary?.procurementSum || 'По заявке';
-            const score = item.riskScore ?? item.analysisResult?.summary?.overallRiskScore ?? 0;
-            const level = item.riskLevel || item.analysisResult?.summary?.riskLevel || 'MEDIUM';
-            const risksCnt = item.analysisResult?.contractRisks?.length || 0;
-            const status = item.participationStatus === 'PARTICIPATING' ? 'Участвуем' : (item.status || 'На рассмотрении');
+            const title = item?.projectName || item?.title || item?.analysisResult?.summary?.procurementTitle || 'Тендер';
+            const cust = item?.customerName || item?.analysisResult?.summary?.customerName || 'Заказчик';
+            const sum = item?.procurementSum || item?.analysisResult?.summary?.procurementSum || 'По заявке';
+            const score = item?.riskScore ?? item?.analysisResult?.summary?.overallRiskScore ?? 0;
+            const level = item?.riskLevel || item?.analysisResult?.summary?.riskLevel || 'MEDIUM';
+            const risksCnt = item?.analysisResult?.contractRisks?.length || 0;
+            const status = item?.participationStatus === 'PARTICIPATING' ? 'Участвуем' : (item?.status || 'На рассмотрении');
 
             const badgeBg = level === 'CRITICAL' ? '#fef2f2' : level === 'HIGH' ? '#fff7ed' : level === 'MEDIUM' ? '#fefce8' : '#f0fdf4';
             const badgeText = level === 'CRITICAL' ? '#991b1b' : level === 'HIGH' ? '#9a3412' : level === 'MEDIUM' ? '#854d0e' : '#166534';
@@ -387,7 +408,7 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
                 <td style="padding: 8px; font-weight: 700; text-align: center;">${idx + 1}</td>
                 <td style="padding: 8px; font-weight: 700; color: #0f172a;">
                   <div>${title}</div>
-                  ${item.procurementNumber ? `<div style="font-size: 8.5px; color: #64748b; font-weight: 500;">№ ${item.procurementNumber}</div>` : ''}
+                  ${item?.procurementNumber ? `<div style="font-size: 8.5px; color: #64748b; font-weight: 500;">№ ${item.procurementNumber}</div>` : ''}
                 </td>
                 <td style="padding: 8px; font-weight: 600; color: #334155;">${cust}</td>
                 <td style="padding: 8px; font-weight: 800; color: #4338ca;">${sum}</td>
@@ -414,13 +435,13 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
       </h2>
 
       ${items.map((item, idx) => {
-        const res = item.analysisResult;
-        const title = item.projectName || item.title || res?.summary?.procurementTitle || 'Тендер';
-        const cust = item.customerName || res?.summary?.customerName || 'Заказчик 223-ФЗ';
-        const sum = item.procurementSum || res?.summary?.procurementSum || 'По заявке';
-        const takeaway = res?.summary?.keyTakeaway || item.notes || 'Анализ прошел успешно. Условия стандартные.';
-        const risks = res?.contractRisks || [];
-        const products = res?.productList || [];
+        const res = item?.analysisResult;
+        const title = item?.projectName || item?.title || res?.summary?.procurementTitle || 'Тендер';
+        const cust = item?.customerName || res?.summary?.customerName || 'Заказчик';
+        const sum = item?.procurementSum || res?.summary?.procurementSum || 'По заявке';
+        const takeaway = res?.summary?.keyTakeaway || item?.notes || 'Анализ прошел успешно. Условия стандартные.';
+        const risks = Array.isArray(res?.contractRisks) ? res.contractRisks : [];
+        const products = Array.isArray(res?.productList) ? res.productList : [];
 
         return `
           <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px; padding: 16px; margin-bottom: 20px;">
@@ -434,7 +455,7 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
               </div>
               <div style="text-align: right;">
                 <span style="font-size: 10px; font-weight: 800; padding: 4px 8px; background-color: #e0e7ff; color: #3730a3; border-radius: 6px;">
-                  Индекс риска: ${item.riskScore ?? res?.summary?.overallRiskScore ?? 0}/100
+                  Индекс риска: ${item?.riskScore ?? res?.summary?.overallRiskScore ?? 0}/100
                 </span>
               </div>
             </div>
@@ -463,10 +484,10 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
                   <tbody>
                     ${risks.slice(0, 4).map((r: any) => `
                       <tr style="border-bottom: 1px solid #fecaca; background-color: #ffffff;">
-                        <td style="padding: 5px; font-weight: 700;">${r.clauseNumber || '—'}</td>
-                        <td style="padding: 5px; font-weight: 800; color: ${r.severity === 'CRITICAL' ? '#991b1b' : r.severity === 'HIGH' ? '#c2410c' : '#854d0e'};">${r.severity}</td>
-                        <td style="padding: 5px;"><b>${r.title}:</b> ${r.explanation}</td>
-                        <td style="padding: 5px; color: #047857; font-weight: 600;">${r.recommendation}</td>
+                        <td style="padding: 5px; font-weight: 700;">${r?.clauseNumber || '—'}</td>
+                        <td style="padding: 5px; font-weight: 800; color: ${r?.severity === 'CRITICAL' ? '#991b1b' : r?.severity === 'HIGH' ? '#c2410c' : '#854d0e'};">${r?.severity || 'MEDIUM'}</td>
+                        <td style="padding: 5px;"><b>${r?.title || 'Риск'}:</b> ${r?.explanation || ''}</td>
+                        <td style="padding: 5px; color: #047857; font-weight: 600;">${r?.recommendation || ''}</td>
                       </tr>
                     `).join('')}
                   </tbody>
@@ -481,7 +502,7 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
                   Позиции ТЗ (${products.length} наим.):
                 </div>
                 <div style="font-size: 9px; color: #334155; line-height: 1.4;">
-                  ${products.slice(0, 3).map((p: any) => `• <b>${p.name}</b> (${p.quantity}) — ${p.specification?.slice(0, 80)}...`).join('<br/>')}
+                  ${products.slice(0, 3).map((p: any) => `• <b>${p?.name || 'Позиция'}</b> (${p?.quantity || '1'}) — ${(p?.specification || '').slice(0, 80)}...`).join('<br/>')}
                   ${products.length > 3 ? `<span style="color: #64748b; font-style: italic;">...и еще ${products.length - 3} позиций</span>` : ''}
                 </div>
               </div>
@@ -494,7 +515,7 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
 
     <!-- Footer Note -->
     <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 9px; color: #94a3b8; text-align: center;">
-      Сводный документ сформирован ИИ-Экспертизой 223-ФЗ. Всего проанализировано ${items.length} закуп(ок) с суммарным количеством рисков: ${totalRisksCount}.
+      Сводный документ сформирован TenderAgent. Всего проанализировано ${items.length} закуп(ок) с суммарным количеством рисков: ${totalRisksCount}.
     </div>
   `;
 
@@ -508,7 +529,9 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
       logging: false,
     });
 
-    document.body.removeChild(container);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
 
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({
@@ -542,4 +565,5 @@ export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], file
     throw error;
   }
 }
+
 
