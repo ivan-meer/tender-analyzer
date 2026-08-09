@@ -5,6 +5,7 @@ export type LLMProvider =
   | 'anthropic' 
   | 'deepseek' 
   | 'deepinfra'
+  | 'zipinfra'
   | 'ollama' 
   | 'custom';
 

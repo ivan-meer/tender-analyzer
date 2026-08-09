@@ -332,7 +332,62 @@ interface UniversalLLMConfig {
   useMistralOcrForPdf?: boolean;
 }
 
-// Universal multi-provider LLM helper (Gemini, Mistral, OpenAI, Claude, DeepSeek, Ollama)
+// Robust JSON extraction helper for LLM responses (handles reasoning tags <think>...</think>, markdown ```json fences, and trailing explanation text)
+function extractJsonFromLLMResponse(text: string): any {
+  if (!text || typeof text !== 'string') {
+    throw new Error("Пустой ответ от ИИ модели.");
+  }
+
+  let clean = text.trim();
+
+  // 1. Remove closed reasoning / thinking tags (<think>...</think> or <thought>...</thought>)
+  clean = clean.replace(/<\s*(think|thought)\s*>[\s\S]*?<\s*\/\s*(think|thought)\s*>/gi, "").trim();
+
+  // Also handle unclosed <think> or <thought> blocks if present before JSON
+  if (clean.includes('<think>') || clean.includes('<thought>')) {
+    clean = clean.replace(/^<\s*(think|thought)\s*>[\s\S]*?(?:<\s*\/\s*(think|thought)\s*>|$)/gi, "").trim();
+  }
+
+  // 2. Extract content from markdown code blocks like ```json ... ``` or ``` ... ```
+  const codeBlockMatch = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    clean = codeBlockMatch[1].trim();
+  } else {
+    clean = clean.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  }
+
+  // 3. Direct JSON parse
+  try {
+    return JSON.parse(clean);
+  } catch (e1) {
+    // 4. Fallback: locate JSON object {...} or array [...] boundaries
+    const startObj = clean.indexOf('{');
+    const endObj = clean.lastIndexOf('}');
+    if (startObj !== -1 && endObj > startObj) {
+      const candidate = clean.substring(startObj, endObj + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch (e2) {
+        // continue
+      }
+    }
+
+    const startArr = clean.indexOf('[');
+    const endArr = clean.lastIndexOf(']');
+    if (startArr !== -1 && endArr > startArr) {
+      const candidate = clean.substring(startArr, endArr + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch (e3) {
+        // continue
+      }
+    }
+
+    throw new Error(`Не удалось распарсить JSON из ответа ИИ: ${(e1 as Error)?.message || e1}`);
+  }
+}
+
+// Universal multi-provider LLM helper (Gemini, Mistral, OpenAI, Claude, DeepSeek, DeepInfra, Ollama)
 async function callUniversalLLM(options: {
   llmConfig?: UniversalLLMConfig;
   prompt: string | any[];
@@ -397,27 +452,33 @@ async function callUniversalLLM(options: {
     }
   }
 
-  // 2. OPENAI / DEEPSEEK / DEEPINFRA / OLLAMA / CUSTOM PROVIDER
-  if (['openai', 'deepseek', 'deepinfra', 'ollama', 'custom'].includes(provider)) {
+  // 2. OPENAI / DEEPSEEK / DEEPINFRA / ZIPINFRA / OLLAMA / CUSTOM PROVIDER
+  if (['openai', 'deepseek', 'deepinfra', 'zipinfra', 'ollama', 'custom'].includes(provider)) {
     const defaultBaseUrl = 
       provider === 'openai' ? 'https://api.openai.com/v1' :
       provider === 'deepseek' ? 'https://api.deepseek.com/v1' :
-      provider === 'deepinfra' ? 'https://api.deepinfra.com/v1/openai' :
+      (provider === 'deepinfra' || provider === 'zipinfra') ? 'https://api.deepinfra.com/v1/openai' :
       provider === 'ollama' ? 'http://localhost:11434/v1' :
       'https://api.openai.com/v1';
 
     const baseUrl = (cfg.baseUrl || defaultBaseUrl).replace(/\/$/, '');
-    const apiKey = cfg.apiKey || process.env.DEEPINFRA_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || 'no-key';
+    const apiKey = cfg.apiKey || process.env.DEEPINFRA_API_KEY || process.env.ZIPINFRA_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || 'no-key';
     const model = cfg.modelName || (
-      provider === 'deepinfra' ? 'meta-llama/Llama-3.3-70B-Instruct' :
+      (provider === 'deepinfra' || provider === 'zipinfra') ? 'meta-llama/Llama-3.3-70B-Instruct' :
       provider === 'deepseek' ? 'deepseek-chat' : 
       provider === 'ollama' ? 'llama3' : 
       'gpt-4o'
     );
 
     const messages: any[] = [];
-    if (options.systemInstruction) {
-      messages.push({ role: 'system', content: options.systemInstruction });
+    let sysInstruction = options.systemInstruction || '';
+    if (options.responseJsonFormat) {
+      const jsonRequirement = "IMPORTANT: You MUST respond strictly in valid JSON matching the schema. Do not output reasoning text or commentary outside the JSON.";
+      sysInstruction = sysInstruction ? `${sysInstruction}\n\n${jsonRequirement}` : jsonRequirement;
+    }
+
+    if (sysInstruction) {
+      messages.push({ role: 'system', content: sysInstruction });
     }
 
     let userContent: any = options.prompt;
@@ -435,7 +496,9 @@ async function callUniversalLLM(options: {
       temperature,
     };
 
-    if (options.responseJsonFormat) {
+    const isReasonerModel = /reasoner|r1|o1|o3/i.test(model);
+
+    if (options.responseJsonFormat && !isReasonerModel) {
       requestBody.response_format = { type: 'json_object' };
     }
 
@@ -444,11 +507,21 @@ async function callUniversalLLM(options: {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    let res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody),
     });
+
+    if (!res.ok && requestBody.response_format) {
+      // Retry without response_format if provider returns error on json_object
+      delete requestBody.response_format;
+      res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+    }
 
     if (!res.ok) {
       const errText = await res.text();
@@ -456,7 +529,13 @@ async function callUniversalLLM(options: {
     }
 
     const data = await res.json();
-    const reply = data.choices?.[0]?.message?.content || '';
+    let reply = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || data.choices?.[0]?.text || '';
+
+    // Strip reasoning <think> blocks if present
+    if (reply && typeof reply === 'string') {
+      reply = reply.replace(/<\s*(think|thought)\s*>[\s\S]*?<\s*\/\s*(think|thought)\s*>/gi, "").trim();
+    }
+
     return { text: reply, modelUsed: model };
   }
 
@@ -600,6 +679,125 @@ async function runMistralOcr(options: {
 // Health endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Helper to fetch live models directly from provider API
+async function fetchProviderModels(cfg: UniversalLLMConfig): Promise<Array<{ id: string; name: string; desc?: string }>> {
+  const provider = (cfg.provider || 'gemini').toLowerCase();
+
+  // 1. MISTRAL
+  if (provider === 'mistral') {
+    const apiKey = cfg.apiKey || process.env.MISTRAL_API_KEY;
+    if (!apiKey) throw new Error("API ключ Mistral не указан в настройках.");
+    const baseUrl = (cfg.baseUrl || 'https://api.mistral.ai/v1').replace(/\/$/, '');
+    const res = await fetch(`${baseUrl}/models`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` }
+    });
+    if (!res.ok) throw new Error(`Mistral API (${res.status}): ${await res.text()}`);
+    const data = await res.json();
+    const list = data.data || data.models || [];
+    return list.map((m: any) => ({
+      id: m.id,
+      name: m.id,
+      desc: m.description || (m.owned_by ? `Владелец: ${m.owned_by}` : undefined)
+    }));
+  }
+
+  // 2. ANTHROPIC
+  if (provider === 'anthropic') {
+    const apiKey = cfg.apiKey || process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error("API ключ Anthropic не указан в настройках.");
+    const res = await fetch('https://api.anthropic.com/v1/models', {
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      }
+    });
+    if (!res.ok) throw new Error(`Anthropic API (${res.status}): ${await res.text()}`);
+    const data = await res.json();
+    const list = data.data || [];
+    return list.map((m: any) => ({
+      id: m.id,
+      name: m.display_name || m.id,
+      desc: m.type ? `Тип: ${m.type}` : undefined
+    }));
+  }
+
+  // 3. GEMINI
+  if (provider === 'gemini') {
+    const apiKey = cfg.apiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("API ключ Gemini не указан в настройках.");
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (!res.ok) throw new Error(`Gemini API (${res.status}): ${await res.text()}`);
+    const data = await res.json();
+    const list = data.models || [];
+    return list
+      .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+      .map((m: any) => {
+        const cleanId = m.name?.replace(/^models\//, '') || m.name;
+        return {
+          id: cleanId,
+          name: m.displayName || cleanId,
+          desc: m.description || `Контекст: ${m.inputTokenLimit || 'н/д'}`
+        };
+      });
+  }
+
+  // 4. OPENAI / DEEPSEEK / DEEPINFRA / ZIPINFRA / OLLAMA / CUSTOM
+  const defaultBaseUrl = 
+    provider === 'openai' ? 'https://api.openai.com/v1' :
+    provider === 'deepseek' ? 'https://api.deepseek.com/v1' :
+    (provider === 'deepinfra' || provider === 'zipinfra') ? 'https://api.deepinfra.com/v1/openai' :
+    provider === 'ollama' ? 'http://localhost:11434/v1' :
+    'https://api.openai.com/v1';
+
+  const baseUrl = (cfg.baseUrl || defaultBaseUrl).replace(/\/$/, '');
+  const apiKey = cfg.apiKey || process.env.DEEPINFRA_API_KEY || process.env.ZIPINFRA_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || '';
+
+  const headers: Record<string, string> = {};
+  if (apiKey && apiKey !== 'no-key') {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
+  let res = await fetch(`${baseUrl}/models`, { headers });
+  
+  if (!res.ok && provider === 'ollama') {
+    const ollamaNativeUrl = (cfg.baseUrl || 'http://localhost:11434').replace(/\/v1\/?$/, '').replace(/\/$/, '');
+    res = await fetch(`${ollamaNativeUrl}/api/tags`);
+  }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Провайдер ${provider.toUpperCase()} (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  const rawList = data.data || data.models || data.models_list || [];
+  return rawList.map((m: any) => {
+    const modelId = typeof m === 'string' ? m : (m.id || m.name || m.model);
+    return {
+      id: modelId,
+      name: m.displayName || m.name || modelId,
+      desc: m.owned_by ? `Провайдер: ${m.owned_by}` : (m.context_length ? `Контекст: ${m.context_length}` : undefined)
+    };
+  });
+}
+
+// Fetch Live Models Endpoint
+app.post("/api/llm/models", async (req, res) => {
+  try {
+    const { llmConfig } = req.body;
+    const models = await fetchProviderModels(llmConfig || {});
+    res.json({
+      success: true,
+      models
+    });
+  } catch (err: any) {
+    res.status(400).json({
+      success: false,
+      error: err?.message || "Не удалось загрузить список моделей с сервера провайдера."
+    });
+  }
 });
 
 // Test LLM Connection Endpoint
@@ -1342,13 +1540,7 @@ ${safeTz}
       temperature: llmConfig?.temperature ?? 0.2
     });
 
-    let rawJson = llmResult.text.trim();
-    // Strip markdown code fences if model enclosed JSON in ```json
-    if (rawJson.startsWith("```")) {
-      rawJson = rawJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-    }
-
-    const analysisData = JSON.parse(rawJson);
+    const analysisData = extractJsonFromLLMResponse(llmResult.text);
     res.json(analysisData);
   } catch (error: any) {
     console.warn("LLM API error in /api/analyze, returning intelligent fallback analysis:", error?.message);
@@ -1969,8 +2161,7 @@ app.post("/api/search-suppliers", async (req, res) => {
     const rawText = response.text || "{}";
     let searchData: any = {};
     try {
-      const cleanJson = rawText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      searchData = JSON.parse(cleanJson);
+      searchData = extractJsonFromLLMResponse(rawText);
     } catch (parseErr) {
       console.warn("Failed to parse JSON from search-suppliers model output:", parseErr);
       searchData = {};
@@ -2156,8 +2347,7 @@ app.post("/api/search-suppliers-agent", async (req, res) => {
       const rawText = response.text || "{}";
       let searchData: any = {};
       try {
-        const cleanJson = rawText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        searchData = JSON.parse(cleanJson);
+        searchData = extractJsonFromLLMResponse(rawText);
       } catch (pErr) {
         console.warn("Agent JSON parse error:", pErr);
         searchData = {};

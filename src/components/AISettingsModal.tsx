@@ -59,6 +59,12 @@ const PROVIDER_MODELS: Record<LLMProvider, { name: string; id: string; desc: str
     { id: 'mistralai/Mistral-7B-Instruct-v0.3', name: 'Mistral 7B Instruct', desc: 'Легкая и быстрый инференс Mistral' },
     { id: 'microsoft/WizardLM-2-8x22B', name: 'WizardLM-2 8x22B', desc: 'Мощный MoE от Microsoft с высоким качеством' },
   ],
+  zipinfra: [
+    { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct', desc: 'Флагманская модель Meta на серверах DeepInfra/Zipinfra' },
+    { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek-R1 (Reasoner)', desc: 'Глубокие логические рассуждения и логика закупки' },
+    { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek-V3', desc: 'Быстрая производительная модель DeepSeek' },
+    { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B', desc: 'Специализированная модель для кода и строгого JSON' },
+  ],
   ollama: [
     { id: 'llama3', name: 'Llama 3 (Local)', desc: 'Локальная модель в вашей сети' },
     { id: 'qwen2.5', name: 'Qwen 2.5', desc: 'Локальная модель с поддержкой русского языка' },
@@ -75,6 +81,10 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   onConfigSaved
 }) => {
   const [config, setConfig] = useState<LLMConfig>(getStoredLLMConfig());
+  const [fetchedModels, setFetchedModels] = useState<Array<{ id: string; name: string; desc?: string }> | null>(null);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [fetchModelsError, setFetchModelsError] = useState<string | null>(null);
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
   const [testStatus, setTestStatus] = useState<{
     testing: boolean;
     success?: boolean;
@@ -86,6 +96,9 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setConfig(getStoredLLMConfig());
+      setFetchedModels(null);
+      setFetchModelsError(null);
+      setModelSearchQuery('');
       setTestStatus({ testing: false });
     }
   }, [isOpen]);
@@ -99,6 +112,31 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       provider: newProvider,
       modelName: defaultModel
     }));
+    setFetchedModels(null);
+    setFetchModelsError(null);
+    setModelSearchQuery('');
+  };
+
+  const handleFetchModels = async () => {
+    setIsFetchingModels(true);
+    setFetchModelsError(null);
+    try {
+      const res = await fetch('/api/llm/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ llmConfig: config })
+      });
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.models)) {
+        setFetchedModels(data.models);
+      } else {
+        setFetchModelsError(data.error || 'Не удалось получить список моделей с сервера провайдера.');
+      }
+    } catch (err: any) {
+      setFetchModelsError(err?.message || 'Ошибка сети при запросе моделей.');
+    } finally {
+      setIsFetchingModels(false);
+    }
   };
 
   const handleSave = () => {
@@ -221,53 +259,136 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Model Selection & Custom Name */}
-          <div className="space-y-2 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center justify-between">
+          {/* Model Selection & Live Provider Models */}
+          <div className="space-y-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <label className="font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                 <Cpu className="w-4 h-4 text-indigo-500" />
                 <span>Модель провайдера {getProviderDisplayName(config.provider)}:</span>
               </label>
-              <span className="text-[10px] text-slate-400 font-mono">
-                Используемая модель: {config.modelName}
-              </span>
+              
+              <button
+                type="button"
+                onClick={handleFetchModels}
+                disabled={isFetchingModels}
+                className="flex items-center justify-center gap-1.5 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 px-3 py-1.5 rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isFetchingModels ? 'animate-spin text-indigo-500' : ''}`} />
+                <span>{isFetchingModels ? 'Загрузка моделей...' : 'Запросить доступные модели с сервера'}</span>
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {(PROVIDER_MODELS[config.provider] || []).map(m => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setConfig(prev => ({ ...prev, modelName: m.id }))}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer space-y-0.5 ${
-                    config.modelName === m.id
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs font-bold'
-                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-indigo-400'
-                  }`}
-                >
-                  <div className="font-extrabold text-xs flex items-center justify-between">
-                    <span>{m.name}</span>
-                    <span className="font-mono text-[10px] opacity-75">{m.id}</span>
-                  </div>
-                  <p className={`text-[10px] leading-relaxed line-clamp-1 ${
-                    config.modelName === m.id ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400'
-                  }`}>
-                    {m.desc}
-                  </p>
-                </button>
-              ))}
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <span>Текущая выбранная модель:</span>
+              <span className="font-bold text-indigo-600 dark:text-indigo-400">{config.modelName}</span>
             </div>
+
+            {fetchModelsError && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-700 dark:text-amber-300 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <p className="font-bold">Не удалось загрузить список моделей:</p>
+                  <p className="text-[11px]">{fetchModelsError}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Display Fetched Models or Preset Models */}
+            {fetchedModels ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Загружено {fetchedModels.length} моделей с сервера {getProviderDisplayName(config.provider)}:
+                  </span>
+                  {fetchedModels.length > 4 && (
+                    <input
+                      type="text"
+                      value={modelSearchQuery}
+                      onChange={(e) => setModelSearchQuery(e.target.value)}
+                      placeholder="Поиск по названию модели..."
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] w-48 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto custom-scrollbar p-1">
+                  {fetchedModels
+                    .filter(m => !modelSearchQuery || m.id.toLowerCase().includes(modelSearchQuery.toLowerCase()) || m.name.toLowerCase().includes(modelSearchQuery.toLowerCase()))
+                    .map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, modelName: m.id }))}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer space-y-0.5 ${
+                          config.modelName === m.id
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs font-bold'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-indigo-400'
+                        }`}
+                      >
+                        <div className="font-extrabold text-xs flex items-center justify-between gap-1">
+                          <span className="truncate">{m.name}</span>
+                          <span className={`text-[9px] font-mono px-1 py-0.2 rounded shrink-0 ${
+                            config.modelName === m.id ? 'bg-indigo-700 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                          }`}>
+                            Live API
+                          </span>
+                        </div>
+                        {m.desc && (
+                          <p className={`text-[10px] leading-tight line-clamp-1 ${
+                            config.modelName === m.id ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400'
+                          }`}>
+                            {m.desc}
+                          </p>
+                        )}
+                        <p className={`text-[9px] font-mono line-clamp-1 opacity-75 ${
+                          config.modelName === m.id ? 'text-indigo-200' : 'text-slate-400'
+                        }`}>
+                          {m.id}
+                        </p>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(PROVIDER_MODELS[config.provider] || []).map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setConfig(prev => ({ ...prev, modelName: m.id }))}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer space-y-0.5 ${
+                        config.modelName === m.id
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs font-bold'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-indigo-400'
+                      }`}
+                    >
+                      <div className="font-extrabold text-xs flex items-center justify-between">
+                        <span>{m.name}</span>
+                        <span className="font-mono text-[10px] opacity-75">{m.id}</span>
+                      </div>
+                      <p className={`text-[10px] leading-relaxed line-clamp-1 ${
+                        config.modelName === m.id ? 'text-indigo-100' : 'text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {m.desc}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Custom Model Name Input Override */}
-            <div className="pt-2">
+            <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/80">
               <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">
-                Или введите свой код модели (напр. mistral-ocr-latest, gpt-4o, llama3:70b):
+                Или введите свое точное наименование модели вручную:
               </label>
               <input
                 type="text"
                 value={config.modelName}
                 onChange={(e) => setConfig(prev => ({ ...prev, modelName: e.target.value }))}
-                placeholder="Идентификатор модели"
+                placeholder="Идентификатор модели (напр. meta-llama/Llama-3.3-70B-Instruct)"
                 className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
