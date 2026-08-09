@@ -25,7 +25,10 @@ import { TenderDeadlinesCalendarModal } from './components/TenderDeadlinesCalend
 import { CustomerInnVerificationModal } from './components/CustomerInnVerificationModal';
 import { AISettingsModal } from './components/AISettingsModal';
 import { AnalysisVersionHistoryBanner } from './components/AnalysisVersionHistoryBanner';
+import { GoogleAuthGateModal } from './components/GoogleAuthGateModal';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { auth, saveAnalysisToDb } from './lib/firebase';
+import { onAuthStateChanged, signOut as firebaseSignOut, User } from 'firebase/auth';
 import { AnalysisInput, AnalysisResult, ProcedureType } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
 import { getPresetAnalysisResult } from './data/presetResults';
@@ -51,6 +54,26 @@ import {
 } from 'lucide-react';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthGateOpen, setIsAuthGateOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (!user || user.isAnonymous) {
+        setIsAuthGateOpen(true);
+      } else {
+        setIsAuthGateOpen(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await firebaseSignOut(auth);
+    setIsAuthGateOpen(true);
+  };
+
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeProcedureType, setActiveProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
@@ -292,7 +315,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
   const templatesCount = analysisResult?.generatedTemplates ? Object.keys(analysisResult.generatedTemplates).length : 0;
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white transition-colors duration-200">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans selection:bg-indigo-600 selection:text-white transition-colors duration-200 pb-20 md:pb-0">
       {/* Top Header */}
       <Header
         onOpenGuide={() => setIsGuideOpen(true)}
@@ -307,6 +330,9 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         onOpenCalendar={() => setIsCalendarOpen(true)}
         onOpenCustomerVerification={() => openCustomerVerification()}
         onOpenAISettings={() => setIsAISettingsOpen(true)}
+        currentUser={currentUser}
+        onOpenAuthModal={() => setIsAuthGateOpen(true)}
+        onSignOut={handleSignOut}
       />
 
       {/* Main Content Area */}
@@ -318,13 +344,15 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
               onOpenHistory={() => setIsHistoryOpen(true)} 
               onSelectAnalysis={(result) => setAnalysisResult(result)}
             />
-            <DocumentUploader
-              onAnalyze={handleAnalyze}
-              onLoadPresetResult={handleLoadPresetResult}
-              isAnalyzing={isAnalyzing}
-              onOpenScanModal={() => setIsScanOpen(true)}
-              onOpenHistory={() => setIsHistoryOpen(true)}
-            />
+            <div id="uploader-section">
+              <DocumentUploader
+                onAnalyze={handleAnalyze}
+                onLoadPresetResult={handleLoadPresetResult}
+                isAnalyzing={isAnalyzing}
+                onOpenScanModal={() => setIsScanOpen(true)}
+                onOpenHistory={() => setIsHistoryOpen(true)}
+              />
+            </div>
           </>
         )}
 
@@ -718,6 +746,13 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         onClose={() => setIsAISettingsOpen(false)}
       />
 
+      {/* Mandatory Google Account Auth Gate Overlay Modal */}
+      <GoogleAuthGateModal
+        isOpen={isAuthGateOpen || !currentUser || currentUser.isAnonymous}
+        currentUser={currentUser}
+        onSuccess={() => setIsAuthGateOpen(false)}
+      />
+
       {/* Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6 mt-12 mb-16 sm:mb-0 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 dark:text-slate-400 space-y-1 font-medium">
@@ -728,7 +763,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
       {/* Floating Sticky Mobile Quick Action Bar when report is open */}
       {analysisResult && !isAnalyzing && (
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 p-2.5 px-4 flex items-center justify-between gap-2 shadow-2xl animate-fade-in">
+        <div className="sm:hidden fixed bottom-[58px] left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 p-2.5 px-4 flex items-center justify-between gap-2 shadow-xl animate-fade-in">
           <button
             type="button"
             onClick={() => setAnalysisResult(null)}
@@ -758,6 +793,25 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
           </button>
         </div>
       )}
+      {/* Mobile Navigation Bar (Always available on mobile devices) */}
+      <MobileBottomNav
+        onOpenChat={() => setIsChatOpen(true)}
+        onOpenCustomerVerification={() => openCustomerVerification()}
+        onOpenCalendar={() => setIsCalendarOpen(true)}
+        onOpenHistory={() => setIsHistoryOpen(true)}
+        onScrollToUploader={() => {
+          if (analysisResult) {
+            setAnalysisResult(null);
+          }
+          setTimeout(() => {
+            const el = document.getElementById('uploader-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }}
+        onOpenAISettings={() => setIsAISettingsOpen(true)}
+        currentUser={currentUser}
+        onOpenAuthModal={() => setIsAuthGateOpen(true)}
+      />
     </div>
   );
 }

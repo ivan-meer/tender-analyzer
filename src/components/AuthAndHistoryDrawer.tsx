@@ -168,19 +168,9 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
-      try {
-        await signInAnonymously(auth);
-      } catch (e) {
-        alert('Не удалось войти через Google: ' + err.message);
+      if (err.code !== 'auth/popup-closed-by-user') {
+        alert('Не удалось войти через Google Аккаунт: ' + (err.message || 'попробуйте снова'));
       }
-    }
-  };
-
-  const handleAnonymousSignIn = async () => {
-    try {
-      await signInAnonymously(auth);
-    } catch (err: any) {
-      alert('Ошибка анонимного входа: ' + err.message);
     }
   };
 
@@ -573,21 +563,15 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
           ) : (
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                Войдите для сохранения истории:
+                Войдите через Google Аккаунт для доступа к истории:
               </span>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={handleGoogleSignIn}
-                  className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  <span>Google</span>
-                </button>
-                <button
-                  onClick={handleAnonymousSignIn}
-                  className="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg text-xs font-bold cursor-pointer"
-                >
-                  Гость
+                  <span>Войти с Google</span>
                 </button>
               </div>
             </div>
