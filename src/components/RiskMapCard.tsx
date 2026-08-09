@@ -40,6 +40,7 @@ interface RiskMapCardProps {
   summary: AnalysisResult['summary'];
   contractRisks: ContractRiskItem[];
   onSelectCategoryFilter?: (category: string | null) => void;
+  onRiskSectorClick?: (filter: { category?: string | null; severity?: string | null }) => void;
 }
 
 // Category Human Translation & Config
@@ -56,6 +57,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
   summary,
   contractRisks,
   onSelectCategoryFilter,
+  onRiskSectorClick,
 }) => {
   const [activeChartTab, setActiveChartTab] = useState<'categories' | 'severity' | 'matrix'>('categories');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -153,6 +155,15 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
     ].filter(d => d.value > 0);
   }, [contractRisks]);
 
+  const scrollToRisksTable = () => {
+    setTimeout(() => {
+      const el = document.getElementById('contract-risks-table');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
   // Handle Category Filter Selection
   const handleCategoryClick = (catKey: string) => {
     const newSel = selectedCategory === catKey ? null : catKey;
@@ -160,6 +171,18 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
     if (onSelectCategoryFilter) {
       onSelectCategoryFilter(newSel);
     }
+    if (onRiskSectorClick) {
+      onRiskSectorClick({ category: newSel, severity: null });
+    }
+    scrollToRisksTable();
+  };
+
+  // Handle Severity Filter Selection (from Pie Chart)
+  const handleSeverityClick = (severityKey: string) => {
+    if (onRiskSectorClick) {
+      onRiskSectorClick({ category: null, severity: severityKey });
+    }
+    scrollToRisksTable();
   };
 
   return (
@@ -386,9 +409,11 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
                       paddingAngle={5}
                       dataKey="value"
                       label={({ name, value }) => `${value}`}
+                      onClick={(pieData: any) => handleSeverityClick(pieData?.key || pieData?.payload?.key)}
+                      className="cursor-pointer"
                     >
                       {severityPieData.map((entry, index) => (
-                        <Cell key={`pie-cell-${index}`} fill={entry.color} />
+                        <Cell key={`pie-cell-${index}`} fill={entry.color} className="cursor-pointer hover:opacity-80 transition-opacity" />
                       ))}
                     </Pie>
                     <Tooltip 

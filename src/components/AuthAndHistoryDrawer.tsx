@@ -6,6 +6,9 @@ import {
   getUserCustomersFromDb,
   saveAnalysisToDb, 
   deleteAnalysisFromDb, 
+  deleteCustomerFromDb,
+  deleteSelectedAnalysesFromDb,
+  deleteAllUserAnalysesFromDb,
   toggleFavoriteAnalysisInDb, 
   updateAnalysisInDb,
   SavedAnalysis,
@@ -43,15 +46,23 @@ import {
   Tag as TagIcon,
   ArrowRightLeft,
   List,
-  FolderTree
+  FolderTree,
+  CheckSquare,
+  Square,
+  FileText,
+  Printer,
+  Download,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { TenderCompareModal } from './TenderCompareModal';
+import { generateBatchSummaryPdfReport } from '../utils/pdfGenerator';
 
 interface AuthAndHistoryDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   currentAnalysisResult: any | null;
   onSelectAnalysis: (analysisResult: any) => void;
+  onOpenCalendar?: () => void;
 }
 
 const PRESET_TAGS = ['Срочно', 'Малый объем', 'Строительство', 'Оборудование', 'ПП 1875', 'СИЗ', 'ИТ / Софт'];
@@ -61,6 +72,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   onClose,
   currentAnalysisResult,
   onSelectAnalysis,
+  onOpenCalendar,
 }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
@@ -72,11 +84,43 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   const [activeTab, setActiveTab] = useState<'tenders' | 'customers'>('tenders');
   const [selectedCustomerFilter, setSelectedCustomerFilter] = useState<string | null>(null);
 
-  // Grouping & Tags & Compare state
+  // Grouping & Tags & Compare & Batch Selection state
   const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat');
   const [expandedCustomers, setExpandedCustomers] = useState<Record<string, boolean>>({});
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
+  const [selectedTenderIds, setSelectedTenderIds] = useState<string[]>([]);
+  const [isGeneratingBatchPdf, setIsGeneratingBatchPdf] = useState<boolean>(false);
+
+  const handleToggleSelectTender = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedTenderIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllTenders = () => {
+    const allIds = filteredAnalyses.map((a) => a.id!).filter(Boolean);
+    setSelectedTenderIds(allIds);
+  };
+
+  const handleDeselectAllTenders = () => {
+    setSelectedTenderIds([]);
+  };
+
+  const handleGenerateBatchReport = async () => {
+    const selectedItems = analyses.filter((a) => a.id && selectedTenderIds.includes(a.id));
+    if (selectedItems.length === 0) return;
+
+    setIsGeneratingBatchPdf(true);
+    try {
+      await generateBatchSummaryPdfReport(selectedItems);
+    } catch (err) {
+      console.error('Batch PDF generation failed:', err);
+    } finally {
+      setIsGeneratingBatchPdf(false);
+    }
+  };
 
   // Edit Modal State
   const [editingItem, setEditingItem] = useState<SavedAnalysis | null>(null);
@@ -173,13 +217,101 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Вы уверены, что хотите удалить эту запись из базы данных?')) return;
+    
+    // Immediate optimistic local state update
+    setAnalyses(prev => prev.filter(item => item.id !== id));
+    setSelectedTenderIds(prev => prev.filter(i => i !== id));
+
+    // Save to localStorage deleted IDs list
     try {
-      await deleteAnalysisFromDb(id);
-      if (currentUser) fetchAnalysesAndCustomers(currentUser.uid);
+      const stored = localStorage.getItem('zakupki_deleted_tender_ids');
+      const deletedList: string[] = stored ? JSON.parse(stored) : [];
+      if (!deletedList.includes(id)) {
+        localStorage.setItem('zakupki_deleted_tender_ids', JSON.stringify([...deletedList, id]));
+      }
+    } catch (err) {
+      console.warn('LocalStorage save warning:', err);
+    }
+
+    try {
+      if (id && !id.startsWith('sample-')) {
+        await deleteAnalysisFromDb(id);
+      }
+      if (currentUser) {
+        fetchAnalysesAndCustomers(currentUser.uid);
+      }
     } catch (err) {
       console.error('Delete error:', err);
-      alert('Ошибка при удалении из Firestore');
+    }
+  };
+
+  const handleDeleteSelectedTenders = async () => {
+    if (selectedTenderIds.length === 0) return;
+
+    const idsToDelete = [...selectedTenderIds];
+    setAnalyses(prev => prev.filter(item => item.id && !idsToDelete.includes(item.id)));
+    setSelectedTenderIds([]);
+
+    // Save to localStorage deleted list
+    try {
+      const stored = localStorage.getItem('zakupki_deleted_tender_ids');
+      const deletedList: string[] = stored ? JSON.parse(stored) : [];
+      const updated = Array.from(new Set([...deletedList, ...idsToDelete]));
+      localStorage.setItem('zakupki_deleted_tender_ids', JSON.stringify(updated));
+    } catch (err) {
+      console.warn('LocalStorage save warning:', err);
+    }
+
+    try {
+      await deleteSelectedAnalysesFromDb(idsToDelete);
+      if (currentUser) {
+        fetchAnalysesAndCustomers(currentUser.uid);
+      }
+    } catch (err) {
+      console.error('Batch delete error:', err);
+    }
+  };
+
+  const handleDeleteAllHistory = async () => {
+    if (analyses.length === 0) return;
+
+    const allIds = analyses.map(a => a.id).filter(Boolean) as string[];
+    setAnalyses([]);
+    setSelectedTenderIds([]);
+
+    try {
+      const stored = localStorage.getItem('zakupki_deleted_tender_ids');
+      const deletedList: string[] = stored ? JSON.parse(stored) : [];
+      const updated = Array.from(new Set([...deletedList, ...allIds]));
+      localStorage.setItem('zakupki_deleted_tender_ids', JSON.stringify(updated));
+    } catch (err) {
+      console.warn('LocalStorage save warning:', err);
+    }
+
+    try {
+      if (currentUser) {
+        await deleteAllUserAnalysesFromDb(currentUser.uid);
+        fetchAnalysesAndCustomers(currentUser.uid);
+      }
+    } catch (err) {
+      console.error('Delete all error:', err);
+    }
+  };
+
+  const handleDeleteCustomer = async (cust: SavedCustomer, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    setCustomers(prev => prev.filter(c => c.id !== cust.id));
+
+    try {
+      if (cust.id && !cust.id.startsWith('sample-')) {
+        await deleteCustomerFromDb(cust.id);
+      }
+      if (currentUser) {
+        fetchAnalysesAndCustomers(currentUser.uid);
+      }
+    } catch (err) {
+      console.error('Delete customer error:', err);
     }
   };
 
@@ -301,6 +433,29 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
     );
   };
 
+  const getFormattedDateStrings = (item: SavedAnalysis): string[] => {
+    const dates: string[] = [];
+    if (item.auctionDate) dates.push(item.auctionDate);
+    if (item.analysisResult?.summary?.auctionDate) dates.push(item.analysisResult.summary.auctionDate);
+    
+    if (item.createdAt) {
+      let d: Date | null = null;
+      if (item.createdAt?.toDate && typeof item.createdAt.toDate === 'function') {
+        d = item.createdAt.toDate();
+      } else if (item.createdAt?.seconds) {
+        d = new Date(item.createdAt.seconds * 1000);
+      } else if (typeof item.createdAt === 'string' || typeof item.createdAt === 'number') {
+        d = new Date(item.createdAt);
+      }
+      if (d && !isNaN(d.getTime())) {
+        dates.push(d.toLocaleDateString('ru-RU'));
+        dates.push(d.toISOString().slice(0, 10));
+        dates.push(d.getFullYear().toString());
+      }
+    }
+    return dates;
+  };
+
   const filteredAnalyses = analyses.filter((item) => {
     if (selectedCustomerFilter) {
       const custName = (item.customerName || item.analysisResult?.summary?.customerName || '').toLowerCase().trim();
@@ -314,15 +469,37 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
       }
     }
     if (!historySearch.trim()) return true;
-    const q = historySearch.toLowerCase();
-    return (
-      (item.projectName && item.projectName.toLowerCase().includes(q)) ||
+    const q = historySearch.toLowerCase().trim();
+
+    // 1. Procurement title / project name / procurement number
+    const titleMatch = (
       (item.title && item.title.toLowerCase().includes(q)) ||
+      (item.projectName && item.projectName.toLowerCase().includes(q)) ||
+      (item.procurementNumber && item.procurementNumber.toLowerCase().includes(q)) ||
+      (item.analysisResult?.summary?.procurementTitle && item.analysisResult.summary.procurementTitle.toLowerCase().includes(q)) ||
+      (item.analysisResult?.summary?.procurementNumber && item.analysisResult.summary.procurementNumber.toLowerCase().includes(q))
+    );
+
+    // 2. Customer Name
+    const customerMatch = (
       (item.customerName && item.customerName.toLowerCase().includes(q)) ||
+      (item.analysisResult?.summary?.customerName && item.analysisResult.summary.customerName.toLowerCase().includes(q))
+    );
+
+    // 3. Date search (Auction date, Created date, year, month)
+    const dateStrings = getFormattedDateStrings(item);
+    const dateMatch = dateStrings.some(dStr => dStr.toLowerCase().includes(q));
+
+    // 4. Procurement sum, status, notes, tags, takeaway
+    const metaMatch = (
       (item.procurementSum && item.procurementSum.toLowerCase().includes(q)) ||
       (item.status && item.status.toLowerCase().includes(q)) ||
-      (item.tags && item.tags.some(t => t.toLowerCase().includes(q)))
+      (item.notes && item.notes.toLowerCase().includes(q)) ||
+      (item.tags && item.tags.some(t => t.toLowerCase().includes(q))) ||
+      (item.analysisResult?.summary?.keyTakeaway && item.analysisResult.summary.keyTakeaway.toLowerCase().includes(q))
     );
+
+    return titleMatch || customerMatch || dateMatch || metaMatch;
   });
 
   const groupedByCustomer = React.useMemo(() => {
@@ -417,28 +594,28 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
           )}
         </div>
 
-        {/* View Mode Switcher: Tenders vs Unique Customers */}
+        {/* View Mode Switcher: Tenders vs Unique Customers vs Calendar */}
         <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full">
             <button
               onClick={() => {
                 setActiveTab('tenders');
               }}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                 activeTab === 'tenders'
                   ? 'bg-indigo-600 text-white shadow-2xs'
                   : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Все закупки ({analyses.length})</span>
+              <span>Закупки ({analyses.length})</span>
             </button>
 
             <button
               onClick={() => {
                 setActiveTab('customers');
               }}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                 activeTab === 'customers'
                   ? 'bg-indigo-600 text-white shadow-2xs'
                   : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
@@ -447,6 +624,20 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
               <Building2 className="w-3.5 h-3.5" />
               <span>Заказчики ({customers.length})</span>
             </button>
+
+            {onOpenCalendar && (
+              <button
+                onClick={() => {
+                  onOpenCalendar();
+                  onClose();
+                }}
+                className="py-1.5 px-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1 cursor-pointer"
+                title="Открыть календарь дедлайнов на месяц вперед"
+              >
+                <CalendarIcon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Календарь</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -544,10 +735,32 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                 type="text"
                 value={historySearch}
                 onChange={(e) => setHistorySearch(e.target.value)}
-                placeholder="Поиск по закупке, заказчику, тегам или дате..."
-                className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                placeholder="Поиск по названию закупки, заказчику, дате или тегам..."
+                className="w-full pl-8 pr-8 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
               />
+              {historySearch && (
+                <button
+                  type="button"
+                  onClick={() => setHistorySearch('')}
+                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
+
+            {historySearch.trim() !== '' && (
+              <div className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center justify-between px-1">
+                <span>Найдено отчетов: {filteredAnalyses.length} из {analyses.length}</span>
+                <button
+                  type="button"
+                  onClick={() => setHistorySearch('')}
+                  className="hover:underline text-[10px] text-slate-400 cursor-pointer"
+                >
+                  Сбросить поиск
+                </button>
+              </div>
+            )}
 
             {/* Tag Filter Chips */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[11px]">
@@ -600,158 +813,245 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                 <FolderOpen className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
                 <p className="text-xs font-medium">Сохраненных закупок пока нет.</p>
               </div>
-            ) : viewMode === 'grouped' ? (
-              /* GROUPED BY CUSTOMER ACCORDION VIEW */
+            ) : (
               <div className="space-y-3">
-                {Object.entries(groupedByCustomer).map(([custName, items]) => {
-                  const isExpanded = expandedCustomers[custName] !== false; // expanded by default
+                {/* Batch Actions Bar */}
+                <div className="bg-indigo-50/90 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800/80 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={selectedTenderIds.length === filteredAnalyses.length ? handleDeselectAllTenders : handleSelectAllTenders}
+                      className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      {selectedTenderIds.length === filteredAnalyses.length && filteredAnalyses.length > 0 ? (
+                        <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      ) : (
+                        <Square className="w-4 h-4 text-slate-400" />
+                      )}
+                      <span>{selectedTenderIds.length === filteredAnalyses.length ? 'Снять выбор' : 'Выбрать все'}</span>
+                    </button>
 
-                  return (
-                    <div key={custName} className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden transition-all">
-                      {/* Customer Group Accordion Header */}
-                      <div
-                        onClick={() => setExpandedCustomers(prev => ({ ...prev, [custName]: !isExpanded }))}
-                        className="p-3 bg-white dark:bg-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-200/80 dark:border-slate-700/80"
+                    <span className="text-slate-300 dark:text-slate-700 font-mono">|</span>
+
+                    <span className="font-extrabold text-indigo-950 dark:text-indigo-200">
+                      Выбрано: {selectedTenderIds.length} из {filteredAnalyses.length}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedTenderIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteSelectedTenders}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        title="Удалить выбранные закупки из базы данных"
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="p-1.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg shrink-0">
-                            <Building2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Удалить ({selectedTenderIds.length})</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleGenerateBatchReport}
+                      disabled={selectedTenderIds.length === 0 || isGeneratingBatchPdf}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        selectedTenderIds.length > 0
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-950 active:scale-95'
+                          : 'bg-slate-200 dark:bg-slate-800 text-slate-400 border border-slate-300 dark:border-slate-700 cursor-not-allowed opacity-60'
+                      }`}
+                      title="Сформировать единый сводный PDF-отчет по выбранным закупкам"
+                    >
+                      {isGeneratingBatchPdf ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {isGeneratingBatchPdf ? 'Генерация PDF...' : `Сводный отчет (${selectedTenderIds.length})`}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {viewMode === 'grouped' ? (
+                  /* GROUPED BY CUSTOMER ACCORDION VIEW */
+                  <div className="space-y-3">
+                    {Object.entries(groupedByCustomer).map(([custName, items]) => {
+                      const isExpanded = expandedCustomers[custName] !== false; // expanded by default
+
+                      return (
+                        <div key={custName} className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl overflow-hidden transition-all">
+                          {/* Customer Group Accordion Header */}
+                          <div
+                            onClick={() => setExpandedCustomers(prev => ({ ...prev, [custName]: !isExpanded }))}
+                            className="p-3 bg-white dark:bg-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-200/80 dark:border-slate-700/80"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="p-1.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg shrink-0">
+                                <Building2 className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="font-extrabold text-xs text-slate-900 dark:text-white truncate" title={custName}>
+                                  {custName}
+                                </h4>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                  {items.length} {items.length === 1 ? 'закупка' : 'закупок'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-md text-[10px] font-bold">
+                                {items.length} тенд.
+                              </span>
+                              {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <h4 className="font-extrabold text-xs text-slate-900 dark:text-white truncate" title={custName}>
-                              {custName}
-                            </h4>
-                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                              {items.length} {items.length === 1 ? 'закупка' : 'закупок'}
+
+                          {/* Collapsible Tender Cards Body */}
+                          {isExpanded && (
+                            <div className="p-2.5 space-y-2.5 bg-slate-50/50 dark:bg-slate-900/40">
+                              {items.map(item => {
+                                const isSelected = item.id ? selectedTenderIds.includes(item.id) : false;
+                                return (
+                                  <div
+                                    key={item.id}
+                                    onClick={() => {
+                                      if (item.analysisResult) {
+                                        onSelectAnalysis(item.analysisResult);
+                                        onClose();
+                                      }
+                                    }}
+                                    className={`bg-white dark:bg-slate-800 border ${
+                                      isSelected
+                                        ? 'border-indigo-500 ring-2 ring-indigo-500/40 bg-indigo-50/20 dark:bg-indigo-950/20'
+                                        : 'border-slate-200/80 dark:border-slate-700/80 hover:border-indigo-400'
+                                    } rounded-xl p-3 space-y-2 cursor-pointer transition-all shadow-2xs relative`}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={(e) => handleToggleSelectTender(item.id!, e as any)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0 accent-indigo-600"
+                                          title="Отметить закупку для пакетного отчета"
+                                        />
+                                        {getStatusBadge(item.status, item.participationStatus)}
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                          Риск: {item.riskScore}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <button onClick={(e) => handleStartEdit(item, e)} className="p-1 text-slate-400 hover:text-indigo-600 rounded-lg">
+                                          <Edit3 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={(e) => handleDelete(item.id!, e)} className="p-1 text-slate-400 hover:text-rose-600 rounded-lg">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <h5 className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                      {item.projectName || item.title}
+                                    </h5>
+
+                                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 dark:border-slate-700/50">
+                                      <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.procurementSum || 'По заявке'}</span>
+                                      <span className="text-slate-400">{item.auctionDate || 'Уточняется'}</span>
+                                    </div>
+
+                                    {item.tags && item.tags.length > 0 && (
+                                      <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                        {item.tags.map(t => (
+                                          <span key={t} className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md text-[9px] font-bold">
+                                            #{t}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* FLAT LIST VIEW */
+                  filteredAnalyses.map((item) => {
+                    const isParticipating = item.participationStatus === 'PARTICIPATING';
+                    const isSelected = item.id ? selectedTenderIds.includes(item.id) : false;
+
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          if (item.analysisResult) {
+                            onSelectAnalysis(item.analysisResult);
+                            onClose();
+                          }
+                        }}
+                        className={`group bg-white dark:bg-slate-800/90 border ${
+                          isSelected
+                            ? 'border-indigo-500 ring-2 ring-indigo-500/40 bg-indigo-50/30 dark:bg-indigo-950/30'
+                            : isParticipating 
+                            ? 'border-indigo-500 dark:border-indigo-500 ring-1 ring-indigo-500/20' 
+                            : 'border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600'
+                        } rounded-2xl p-3.5 space-y-2.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs relative`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => handleToggleSelectTender(item.id!, e as any)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0 accent-indigo-600"
+                              title="Отметить закупку для пакетного отчета"
+                            />
+                            {getStatusBadge(item.status, item.participationStatus)}
+
+                            {/* Risk level badge */}
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                              Индекс риска: {item.riskScore}
                             </span>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-md text-[10px] font-bold">
-                            {items.length} тенд.
-                          </span>
-                          {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-                        </div>
-                      </div>
-
-                      {/* Collapsible Tender Cards Body */}
-                      {isExpanded && (
-                        <div className="p-2.5 space-y-2.5 bg-slate-50/50 dark:bg-slate-900/40">
-                          {items.map(item => (
-                            <div
-                              key={item.id}
-                              onClick={() => {
-                                if (item.analysisResult) {
-                                  onSelectAnalysis(item.analysisResult);
-                                  onClose();
-                                }
-                              }}
-                              className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 rounded-xl p-3 space-y-2 cursor-pointer hover:border-indigo-400 transition-all shadow-2xs"
+                          {/* EDIT AND DELETE BUTTONS */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={(e) => handleStartEdit(item, e)}
+                              className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                              title="Редактировать параметры закупки"
                             >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  {getStatusBadge(item.status, item.participationStatus)}
-                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                                    Риск: {item.riskScore}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <button onClick={(e) => handleStartEdit(item, e)} className="p-1 text-slate-400 hover:text-indigo-600 rounded-lg">
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button onClick={(e) => handleDelete(item.id!, e)} className="p-1 text-slate-400 hover:text-rose-600 rounded-lg">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-
-                              <h5 className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                                {item.projectName || item.title}
-                              </h5>
-
-                              <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 dark:border-slate-700/50">
-                                <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.procurementSum || 'По заявке'}</span>
-                                <span className="text-slate-400">{item.auctionDate || 'Уточняется'}</span>
-                              </div>
-
-                              {item.tags && item.tags.length > 0 && (
-                                <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                                  {item.tags.map(t => (
-                                    <span key={t} className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md text-[9px] font-bold">
-                                      #{t}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => handleToggleFavorite(item.id!, !!item.isFavorite, e)}
+                              className="p-1 text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                              title="В избранное"
+                            >
+                              <Star className={`w-3.5 h-3.5 ${item.isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
+                            </button>
+                            <button
+                              onClick={(e) => handleDelete(item.id!, e)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                              title="Удалить закупку"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              /* FLAT LIST VIEW */
-              filteredAnalyses.map((item) => {
-                const isParticipating = item.participationStatus === 'PARTICIPATING';
 
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      if (item.analysisResult) {
-                        onSelectAnalysis(item.analysisResult);
-                        onClose();
-                      }
-                    }}
-                    className={`group bg-white dark:bg-slate-800/90 border ${
-                      isParticipating 
-                        ? 'border-indigo-500 dark:border-indigo-500 ring-1 ring-indigo-500/20' 
-                        : 'border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600'
-                    } rounded-2xl p-3.5 space-y-2.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs relative`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-                        {getStatusBadge(item.status, item.participationStatus)}
-
-                        {/* Risk level badge */}
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                          Индекс риска: {item.riskScore}
-                        </span>
-                      </div>
-
-                      {/* EDIT AND DELETE BUTTONS */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={(e) => handleStartEdit(item, e)}
-                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                          title="Редактировать параметры закупки"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleToggleFavorite(item.id!, !!item.isFavorite, e)}
-                          className="p-1 text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                          title="В избранное"
-                        >
-                          <Star className={`w-3.5 h-3.5 ${item.isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
-                        </button>
-                        <button
-                          onClick={(e) => handleDelete(item.id!, e)}
-                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                          title="Удалить закупку"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                      {item.projectName || item.title}
-                    </h4>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                          {item.projectName || item.title}
+                        </h4>
 
                     {/* Metadata Grid */}
                     <div className="space-y-1 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 text-[11px]">
@@ -836,9 +1136,29 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                   </div>
                 );
               })
-            )
-          ) : (
-            /* Customers View Tab */
+            )}
+
+            {/* Bottom Clear All History Option */}
+            {analyses.length > 0 && (
+              <div className="pt-4 pb-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400 font-medium">
+                  Всего сохраненных закупок: {analyses.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDeleteAllHistory}
+                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Полностью очистить базу данных результатов"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Очистить всю историю</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      ) : (
+        /* Customers View Tab */
             customers.length === 0 ? (
               <div className="text-center py-12 space-y-2 text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-6">
                 <Building2 className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
@@ -864,16 +1184,26 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCustomerFilter(cust.name);
-                          setActiveTab('tenders');
-                        }}
-                        className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-lg border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors cursor-pointer"
-                      >
-                        {linkedTenders.length || cust.tendersCount || 1} закупок
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCustomerFilter(cust.name);
+                            setActiveTab('tenders');
+                          }}
+                          className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-lg border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors cursor-pointer"
+                        >
+                          {linkedTenders.length || cust.tendersCount || 1} закупок
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteCustomer(cust, e)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                          title="Удалить заказчика из базы"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-1.5 pt-1">

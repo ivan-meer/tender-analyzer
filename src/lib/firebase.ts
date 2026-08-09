@@ -214,10 +214,26 @@ export async function toggleFavoriteAnalysisInDb(analysisId: string, currentStat
   });
 }
 
-export async function updateAnalysisNotesInDb(analysisId: string, notes: string): Promise<void> {
-  const docRef = doc(db, 'analyses', analysisId);
-  await updateDoc(docRef, {
-    notes,
-    updatedAt: serverTimestamp(),
-  });
+export async function deleteCustomerFromDb(customerId: string): Promise<void> {
+  const docRef = doc(db, 'customers', customerId);
+  await deleteDoc(docRef);
 }
+
+export async function deleteSelectedAnalysesFromDb(analysisIds: string[]): Promise<void> {
+  const promises = analysisIds.map(id => {
+    if (id && !id.startsWith('sample-')) {
+      return deleteDoc(doc(db, 'analyses', id));
+    }
+    return Promise.resolve();
+  });
+  await Promise.all(promises);
+}
+
+export async function deleteAllUserAnalysesFromDb(userId: string): Promise<void> {
+  const collectionRef = collection(db, 'analyses');
+  const q = query(collectionRef, where('userId', '==', userId));
+  const snapshot = await getDocs(q);
+  const promises = snapshot.docs.map(docSnap => deleteDoc(docSnap.ref));
+  await Promise.all(promises);
+}
+

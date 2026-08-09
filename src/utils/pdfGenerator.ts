@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { AnalysisResult } from '../types';
+import { SavedAnalysis } from '../lib/firebase';
 
 /**
  * Utility to generate and download a clean PDF report for 223-FZ Procurement Analysis
@@ -298,3 +299,247 @@ export async function generatePdfReport(result: AnalysisResult, fileNamePrefix =
     throw error;
   }
 }
+
+/**
+ * Utility to generate a combined batch PDF summary report for multiple selected tenders
+ */
+export async function generateBatchSummaryPdfReport(items: SavedAnalysis[], fileNamePrefix = 'Сводный_отчет_223_ФЗ'): Promise<void> {
+  if (!items || items.length === 0) return;
+
+  const container = document.createElement('div');
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.width = '840px';
+  container.style.backgroundColor = '#ffffff';
+  container.style.color = '#0f172a';
+  container.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  container.style.padding = '36px';
+  container.style.boxSizing = 'border-box';
+
+  const dateStr = new Date().toLocaleDateString('ru-RU', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  // Calculate aggregates
+  const avgRisk = Math.round(
+    items.reduce((acc, i) => acc + (i.riskScore ?? i.analysisResult?.summary?.overallRiskScore ?? 0), 0) / items.length
+  );
+  const totalRisksCount = items.reduce((acc, i) => acc + (i.analysisResult?.contractRisks?.length || 0), 0);
+
+  // Build HTML
+  container.innerHTML = `
+    <!-- Header -->
+    <div style="border-bottom: 3px solid #4f46e5; padding-bottom: 16px; margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+          <span style="background-color: #e0e7ff; color: #3730a3; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase;">
+            ПАКЕТНЫЙ АНАЛИЗ • 223-ФЗ
+          </span>
+          <h1 style="font-size: 20px; font-weight: 900; color: #1e1b4b; margin: 8px 0 4px 0;">
+            СВОДНЫЙ МУЛЬТИ-ТЕНДЕРНЫЙ ЭКСПЕРТНЫЙ ОТЧЕТ
+          </h1>
+          <p style="font-size: 11px; color: #64748b; margin: 0; font-weight: 600;">
+            Анализ базы закупок тендерного отдела • Дата формирования: ${dateStr}
+          </p>
+        </div>
+        <div style="text-align: right; background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 10px 14px;">
+          <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Охвачено закупок</div>
+          <div style="font-size: 18px; font-weight: 900; color: #4338ca;">${items.length} тендеров</div>
+          <div style="font-size: 9.5px; font-weight: 700; color: #047857;">Средний риск: ${avgRisk}/100</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Executive Summary Table -->
+    <div style="margin-bottom: 28px;">
+      <h2 style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 0 0 12px 0; border-left: 4px solid #4f46e5; padding-left: 8px; text-transform: uppercase;">
+        1. СВОДНАЯ ВЕДОМОСТЬ ВЫБРАННЫХ ЗАКУПОК (${items.length})
+      </h2>
+      <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+        <thead>
+          <tr style="background-color: #f1f5f9; color: #0f172a; font-weight: 800; border-bottom: 2px solid #94a3b8;">
+            <th style="padding: 8px; width: 30px;">№</th>
+            <th style="padding: 8px;">Наименование закупки / Проект</th>
+            <th style="padding: 8px; width: 140px;">Заказчик</th>
+            <th style="padding: 8px; width: 110px;">НМЦК / Сумма</th>
+            <th style="padding: 8px; width: 100px;">Индекс риска</th>
+            <th style="padding: 8px; width: 80px;">Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((item, idx) => {
+            const title = item.projectName || item.title || item.analysisResult?.summary?.procurementTitle || 'Тендер';
+            const cust = item.customerName || item.analysisResult?.summary?.customerName || 'Заказчик 223-ФЗ';
+            const sum = item.procurementSum || item.analysisResult?.summary?.procurementSum || 'По заявке';
+            const score = item.riskScore ?? item.analysisResult?.summary?.overallRiskScore ?? 0;
+            const level = item.riskLevel || item.analysisResult?.summary?.riskLevel || 'MEDIUM';
+            const risksCnt = item.analysisResult?.contractRisks?.length || 0;
+            const status = item.participationStatus === 'PARTICIPATING' ? 'Участвуем' : (item.status || 'На рассмотрении');
+
+            const badgeBg = level === 'CRITICAL' ? '#fef2f2' : level === 'HIGH' ? '#fff7ed' : level === 'MEDIUM' ? '#fefce8' : '#f0fdf4';
+            const badgeText = level === 'CRITICAL' ? '#991b1b' : level === 'HIGH' ? '#9a3412' : level === 'MEDIUM' ? '#854d0e' : '#166534';
+
+            return `
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 8px; font-weight: 700; text-align: center;">${idx + 1}</td>
+                <td style="padding: 8px; font-weight: 700; color: #0f172a;">
+                  <div>${title}</div>
+                  ${item.procurementNumber ? `<div style="font-size: 8.5px; color: #64748b; font-weight: 500;">№ ${item.procurementNumber}</div>` : ''}
+                </td>
+                <td style="padding: 8px; font-weight: 600; color: #334155;">${cust}</td>
+                <td style="padding: 8px; font-weight: 800; color: #4338ca;">${sum}</td>
+                <td style="padding: 8px;">
+                  <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; background-color: ${badgeBg}; color: ${badgeText};">
+                    ${score}/100 (${level})
+                  </span>
+                  <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">Рисков: ${risksCnt}</div>
+                </td>
+                <td style="padding: 8px; font-weight: 700; font-size: 9px; color: #0f172a;">
+                  ${status}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Detailed Section for each selected tender -->
+    <div style="margin-bottom: 24px;">
+      <h2 style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 0 0 16px 0; border-left: 4px solid #10b981; padding-left: 8px; text-transform: uppercase;">
+        2. ПОДРОБНЫЙ РАЗБОР КАЖДОЙ ВЫБРАННОЙ ЗАКУПКИ
+      </h2>
+
+      ${items.map((item, idx) => {
+        const res = item.analysisResult;
+        const title = item.projectName || item.title || res?.summary?.procurementTitle || 'Тендер';
+        const cust = item.customerName || res?.summary?.customerName || 'Заказчик 223-ФЗ';
+        const sum = item.procurementSum || res?.summary?.procurementSum || 'По заявке';
+        const takeaway = res?.summary?.keyTakeaway || item.notes || 'Анализ прошел успешно. Условия стандартные.';
+        const risks = res?.contractRisks || [];
+        const products = res?.productList || [];
+
+        return `
+          <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px; padding: 16px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 12px;">
+              <div>
+                <span style="font-size: 10px; font-weight: 800; color: #4338ca;">ЗАКУПКА #${idx + 1}</span>
+                <h3 style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 2px 0 4px 0;">${title}</h3>
+                <div style="font-size: 10px; color: #475569;">
+                  <b>Заказчик:</b> ${cust} • <b>НМЦК:</b> <span style="color: #4338ca; font-weight: 800;">${sum}</span>
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <span style="font-size: 10px; font-weight: 800; padding: 4px 8px; background-color: #e0e7ff; color: #3730a3; border-radius: 6px;">
+                  Индекс риска: ${item.riskScore ?? res?.summary?.overallRiskScore ?? 0}/100
+                </span>
+              </div>
+            </div>
+
+            <!-- Key Takeaway -->
+            <div style="margin-bottom: 12px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+              <div style="font-size: 9.5px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">Заключение эксперта:</div>
+              <div style="font-size: 10.5px; color: #1e293b; line-height: 1.5; font-weight: 500;">${takeaway}</div>
+            </div>
+
+            <!-- Top Risks if any -->
+            ${risks.length > 0 ? `
+              <div style="margin-bottom: 10px;">
+                <div style="font-size: 9.5px; font-weight: 800; color: #991b1b; text-transform: uppercase; margin-bottom: 6px;">
+                  Ключевые риски в договоре (${risks.length}):
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 9px; text-align: left;">
+                  <thead>
+                    <tr style="background-color: #fee2e2; color: #991b1b; font-weight: 800;">
+                      <th style="padding: 5px; width: 45px;">Пункт</th>
+                      <th style="padding: 5px; width: 70px;">Уровень</th>
+                      <th style="padding: 5px;">Наименование & Разъяснение</th>
+                      <th style="padding: 5px; width: 140px;">Рекомендация</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${risks.slice(0, 4).map((r: any) => `
+                      <tr style="border-bottom: 1px solid #fecaca; background-color: #ffffff;">
+                        <td style="padding: 5px; font-weight: 700;">${r.clauseNumber || '—'}</td>
+                        <td style="padding: 5px; font-weight: 800; color: ${r.severity === 'CRITICAL' ? '#991b1b' : r.severity === 'HIGH' ? '#c2410c' : '#854d0e'};">${r.severity}</td>
+                        <td style="padding: 5px;"><b>${r.title}:</b> ${r.explanation}</td>
+                        <td style="padding: 5px; color: #047857; font-weight: 600;">${r.recommendation}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
+
+            <!-- Products Spec if any -->
+            ${products.length > 0 ? `
+              <div>
+                <div style="font-size: 9.5px; font-weight: 800; color: #1e1b4b; text-transform: uppercase; margin-bottom: 4px;">
+                  Позиции ТЗ (${products.length} наим.):
+                </div>
+                <div style="font-size: 9px; color: #334155; line-height: 1.4;">
+                  ${products.slice(0, 3).map((p: any) => `• <b>${p.name}</b> (${p.quantity}) — ${p.specification?.slice(0, 80)}...`).join('<br/>')}
+                  ${products.length > 3 ? `<span style="color: #64748b; font-style: italic;">...и еще ${products.length - 3} позиций</span>` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <!-- Footer Note -->
+    <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 9px; color: #94a3b8; text-align: center;">
+      Сводный документ сформирован ИИ-Экспертизой 223-ФЗ. Всего проанализировано ${items.length} закуп(ок) с суммарным количеством рисков: ${totalRisksCount}.
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  try {
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    document.body.removeChild(container);
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const imgWidth = 210;
+    const pageHeight = 297;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft >= 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    pdf.save(`${fileNamePrefix}_${items.length}_закупок_${Date.now()}.pdf`);
+  } catch (error) {
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
+    console.error('Failed to generate batch PDF:', error);
+    throw error;
+  }
+}
+

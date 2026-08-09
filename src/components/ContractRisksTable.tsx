@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AlertCircle, 
   FileText, 
@@ -11,12 +11,19 @@ import {
   Gavel,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Coins,
+  Sparkles,
+  X,
+  Target
 } from 'lucide-react';
 import { ContractRiskItem, RiskSeverity } from '../types';
 
 interface ContractRisksTableProps {
   risks: ContractRiskItem[];
+  externalCategoryFilter?: string | null;
+  externalSeverityFilter?: string | null;
+  onClearExternalFilter?: () => void;
 }
 
 interface LegalNormInfo {
@@ -28,12 +35,58 @@ interface LegalNormInfo {
 
 type SortField = 'severity' | 'clause' | 'title';
 type SortOrder = 'asc' | 'desc';
+type QuickRiskFilter = 'ALL' | 'CRITICAL' | 'FINANCIAL';
 
-export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({ risks }) => {
+const isFinancialRisk = (r: ContractRiskItem): boolean => {
+  if (r.category === 'PENALTIES' || r.category === 'THIRD_PARTY_PURCHASE') return true;
+  const text = (r.title + ' ' + r.explanation + ' ' + r.recommendation + ' ' + (r.clauseQuote || '')).toLowerCase();
+  return (
+    text.includes('штраф') ||
+    text.includes('пен') ||
+    text.includes('неустойк') ||
+    text.includes('оплат') ||
+    text.includes('платеж') ||
+    text.includes('расход') ||
+    text.includes('убыт') ||
+    text.includes('разниц') ||
+    text.includes('цена') ||
+    text.includes('цены') ||
+    text.includes('деньг') ||
+    text.includes('руб') ||
+    text.includes('аванс') ||
+    text.includes('залог') ||
+    text.includes('обеспечен')
+  );
+};
+
+export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({ 
+  risks,
+  externalCategoryFilter,
+  externalSeverityFilter,
+  onClearExternalFilter
+}) => {
+  const [quickFilter, setQuickFilter] = useState<QuickRiskFilter>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
   const [sortField, setSortField] = useState<SortField>('severity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+
+  // Sync with external filters if passed from RiskMapCard
+  useEffect(() => {
+    if (externalCategoryFilter) {
+      setSelectedCategory(externalCategoryFilter);
+    }
+  }, [externalCategoryFilter]);
+
+  useEffect(() => {
+    if (externalSeverityFilter) {
+      setSelectedSeverity(externalSeverityFilter);
+    }
+  }, [externalSeverityFilter]);
+
+  const countAll = risks.length;
+  const countCritical = risks.filter(r => r.severity === 'CRITICAL' || r.severity === 'HIGH').length;
+  const countFinancial = risks.filter(r => isFinancialRisk(r)).length;
 
   const severityWeight: Record<RiskSeverity, number> = {
     CRITICAL: 4,
@@ -52,6 +105,14 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({ risks })
   };
 
   const filteredRisks = risks.filter(r => {
+    // Quick filter check
+    if (quickFilter === 'CRITICAL' && !(r.severity === 'CRITICAL' || r.severity === 'HIGH')) {
+      return false;
+    }
+    if (quickFilter === 'FINANCIAL' && !isFinancialRisk(r)) {
+      return false;
+    }
+
     const matchCategory = selectedCategory === 'ALL' || r.category === selectedCategory;
     const matchSeverity = selectedSeverity === 'ALL' || r.severity === selectedSeverity;
     return matchCategory && matchSeverity;
@@ -162,8 +223,34 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({ risks })
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-5 transition-colors duration-200">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-4">
+    <div id="contract-risks-table" className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-5 transition-colors duration-200">
+      
+      {/* Active Chart Sector Banner if redirected from RiskMapCard */}
+      {(externalCategoryFilter || externalSeverityFilter || selectedCategory !== 'ALL' || selectedSeverity !== 'ALL') && (
+        <div className="bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 rounded-2xl p-3 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 font-bold text-indigo-900 dark:text-indigo-200">
+            <Target className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span>
+              Фильтр из карты рисков: {selectedCategory !== 'ALL' ? getCategoryTitle(selectedCategory) : ''} {selectedSeverity !== 'ALL' ? `[Уровень: ${selectedSeverity}]` : ''} ({filteredRisks.length} условий)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory('ALL');
+              setSelectedSeverity('ALL');
+              if (onClearExternalFilter) onClearExternalFilter();
+            }}
+            className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-200 font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+            <span>Сбросить</span>
+          </button>
+        </div>
+      )}
+
+      {/* Header and Controls */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-4">
         <div>
           <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -174,91 +261,147 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({ risks })
           </p>
         </div>
 
-        {/* Filter and Sort controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Sort Buttons */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-            <button
-              type="button"
-              onClick={() => handleSortToggle('severity')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                sortField === 'severity'
-                  ? 'bg-indigo-600 text-white shadow-2xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Сортировка по уровню риска"
-            >
-              <span>По риску</span>
-              {sortField === 'severity' ? (
-                sortOrder === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
-              ) : (
-                <ArrowUpDown className="w-3 h-3 opacity-50" />
-              )}
-            </button>
+        {/* Quick Filter Switcher (All / Critical / Financial) */}
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0">
+          <button
+            type="button"
+            onClick={() => setQuickFilter('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              quickFilter === 'ALL'
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <span>Все риски</span>
+            <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+              quickFilter === 'ALL' ? 'bg-white/20 dark:bg-slate-200 text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+            }`}>
+              {countAll}
+            </span>
+          </button>
 
-            <button
-              type="button"
-              onClick={() => handleSortToggle('clause')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                sortField === 'clause'
-                  ? 'bg-indigo-600 text-white shadow-2xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Сортировка по пункту договора"
-            >
-              <span>По пункту</span>
-              {sortField === 'clause' ? (
-                sortOrder === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
-              ) : (
-                <ArrowUpDown className="w-3 h-3 opacity-50" />
-              )}
-            </button>
+          <button
+            type="button"
+            onClick={() => setQuickFilter('CRITICAL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              quickFilter === 'CRITICAL'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-rose-600'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
+            <span>Критичекие</span>
+            <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+              quickFilter === 'CRITICAL' ? 'bg-white/20 text-white' : 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'
+            }`}>
+              {countCritical}
+            </span>
+          </button>
 
-            <button
-              type="button"
-              onClick={() => handleSortToggle('title')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                sortField === 'title'
-                  ? 'bg-indigo-600 text-white shadow-2xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Сортировка по наименованию риска"
-            >
-              <span>По теме</span>
-              {sortField === 'title' ? (
-                sortOrder === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
-              ) : (
-                <ArrowUpDown className="w-3 h-3 opacity-50" />
-              )}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setQuickFilter('FINANCIAL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              quickFilter === 'FINANCIAL'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-emerald-600'
+            }`}
+          >
+            <Coins className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+            <span>Финансовые</span>
+            <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+              quickFilter === 'FINANCIAL' ? 'bg-white/20 text-white' : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+            }`}>
+              {countFinancial}
+            </span>
+          </button>
+        </div>
+      </div>
 
-          <div className="flex items-center gap-1.5 text-xs">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">Все категории</option>
-              <option value="PENALTIES">Штрафы и неустойки</option>
-              <option value="DELIVERY_TERMS">Сроки поставки</option>
-              <option value="TERMINATION">Расторжение</option>
-              <option value="THIRD_PARTY_PURCHASE">Покупка у 3-х лиц</option>
-              <option value="DOCUMENTS">Приемка и документы</option>
-            </select>
+      {/* Filter and Sort controls row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <div className="flex items-center gap-1.5 text-xs">
+          <Filter className="w-3.5 h-3.5 text-slate-400" />
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 focus:outline-none focus:border-indigo-500"
+          >
+            <option value="ALL">Все категории</option>
+            <option value="PENALTIES">Штрафы и неустойки</option>
+            <option value="DELIVERY_TERMS">Сроки поставки</option>
+            <option value="TERMINATION">Расторжение</option>
+            <option value="THIRD_PARTY_PURCHASE">Покупка у 3-х лиц</option>
+            <option value="DOCUMENTS">Приемка и документы</option>
+          </select>
 
-            <select
-              value={selectedSeverity}
-              onChange={(e) => setSelectedSeverity(e.target.value)}
-              className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="ALL">Все уровни</option>
-              <option value="CRITICAL">Критический</option>
-              <option value="HIGH">Высокий</option>
-              <option value="MEDIUM">Средний</option>
-            </select>
-          </div>
+          <select
+            value={selectedSeverity}
+            onChange={(e) => setSelectedSeverity(e.target.value)}
+            className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 focus:outline-none focus:border-indigo-500"
+          >
+            <option value="ALL">Все уровни</option>
+            <option value="CRITICAL">Критический</option>
+            <option value="HIGH">Высокий</option>
+            <option value="MEDIUM">Средний</option>
+          </select>
+        </div>
+
+        {/* Sort Buttons */}
+        <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={() => handleSortToggle('severity')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+              sortField === 'severity'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            title="Сортировка по уровню риска"
+          >
+            <span>По риску</span>
+            {sortField === 'severity' ? (
+              sortOrder === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
+            ) : (
+              <ArrowUpDown className="w-3 h-3 opacity-50" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSortToggle('clause')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+              sortField === 'clause'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            title="Сортировка по пункту договора"
+          >
+            <span>По пункту</span>
+            {sortField === 'clause' ? (
+              sortOrder === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
+            ) : (
+              <ArrowUpDown className="w-3 h-3 opacity-50" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSortToggle('title')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+              sortField === 'title'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            title="Сортировка по наименованию риска"
+          >
+            <span>По теме</span>
+            {sortField === 'title' ? (
+              sortOrder === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
+            ) : (
+              <ArrowUpDown className="w-3 h-3 opacity-50" />
+            )}
+          </button>
         </div>
       </div>
 
@@ -270,10 +413,17 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({ risks })
         <div className="space-y-4">
           {sortedRisks.map((item) => {
             const legalNorm = getLegalNormInfo(item);
+            const isHighlighted = (
+              (externalCategoryFilter && item.category === externalCategoryFilter) ||
+              (externalSeverityFilter && item.severity === externalSeverityFilter)
+            );
+
             return (
               <div
                 key={item.id}
                 className={`border rounded-2xl p-5 space-y-3 transition-all ${
+                  isHighlighted ? 'ring-2 ring-indigo-500 shadow-md scale-[1.002]' : ''
+                } ${
                   item.severity === 'CRITICAL'
                     ? 'bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900/60'
                     : item.severity === 'HIGH'
@@ -289,6 +439,12 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({ risks })
                     <span className="text-sm font-bold text-slate-900 dark:text-white">
                       {item.title}
                     </span>
+                    {isHighlighted && (
+                      <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-extrabold rounded-md flex items-center gap-1 shadow-2xs">
+                        <Sparkles className="w-3 h-3" />
+                        <span>Выбрано на карте</span>
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">

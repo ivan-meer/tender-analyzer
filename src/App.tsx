@@ -21,6 +21,7 @@ import { SuppliersCatalogModal } from './components/SuppliersCatalogModal';
 import { AnalysisProgressScreen } from './components/AnalysisProgressScreen';
 import { PreAnalysisDashboard } from './components/PreAnalysisDashboard';
 import { PdfReportPreviewModal } from './components/PdfReportPreviewModal';
+import { TenderDeadlinesCalendarModal } from './components/TenderDeadlinesCalendarModal';
 import { auth, saveAnalysisToDb } from './lib/firebase';
 import { AnalysisInput, AnalysisResult, ProcedureType } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
@@ -53,6 +54,16 @@ export default function App() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'overview' | 'spec' | 'risks' | 'workflow' | 'templates'>('all');
+  const [externalCategoryFilter, setExternalCategoryFilter] = useState<string | null>(null);
+  const [externalSeverityFilter, setExternalSeverityFilter] = useState<string | null>(null);
+
+  const handleRiskSectorClick = (filter: { category?: string | null; severity?: string | null }) => {
+    if (activeTab !== 'all' && activeTab !== 'risks') {
+      setActiveTab('all');
+    }
+    setExternalCategoryFilter(filter.category || null);
+    setExternalSeverityFilter(filter.severity || null);
+  };
 
   // Interactive AI & Firebase Modals State
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -62,6 +73,7 @@ export default function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSuppliersCatalogOpen, setIsSuppliersCatalogOpen] = useState(false);
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('theme') === 'dark' || 
@@ -277,6 +289,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         onOpenDeepAudit={() => setIsDeepAuditOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenSuppliersCatalog={() => setIsSuppliersCatalogOpen(true)}
+        onOpenCalendar={() => setIsCalendarOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -284,7 +297,10 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         {/* Screen 1: Dashboard & Document Uploader (Only displayed when not analyzing and no report result) */}
         {!isAnalyzing && !analysisResult && (
           <>
-            <PreAnalysisDashboard onOpenHistory={() => setIsHistoryOpen(true)} />
+            <PreAnalysisDashboard 
+              onOpenHistory={() => setIsHistoryOpen(true)} 
+              onSelectAnalysis={(result) => setAnalysisResult(result)}
+            />
             <DocumentUploader
               onAnalyze={handleAnalyze}
               onLoadPresetResult={handleLoadPresetResult}
@@ -525,6 +541,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
                 <RiskMapCard 
                   summary={analysisResult.summary} 
                   contractRisks={analysisResult.contractRisks} 
+                  onRiskSectorClick={handleRiskSectorClick}
                 />
                 <RiskDynamicsChart
                   summary={analysisResult.summary}
@@ -546,7 +563,15 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
             {/* SCREEN 4: Contract Risks & Submission Checklist */}
             {(activeTab === 'all' || activeTab === 'risks') && (
               <div className="space-y-6">
-                <ContractRisksTable risks={analysisResult.contractRisks} />
+                <ContractRisksTable 
+                  risks={analysisResult.contractRisks} 
+                  externalCategoryFilter={externalCategoryFilter}
+                  externalSeverityFilter={externalSeverityFilter}
+                  onClearExternalFilter={() => {
+                    setExternalCategoryFilter(null);
+                    setExternalSeverityFilter(null);
+                  }}
+                />
                 <SubmissionChecklist check={analysisResult.submissionRulesCheck} />
               </div>
             )}
@@ -614,6 +639,21 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         currentAnalysisResult={analysisResult}
+        onSelectAnalysis={(savedResult) => {
+          setAnalysisResult(savedResult);
+          setActiveTab('all');
+          setTimeout(() => {
+            const el = document.getElementById('analysis-results-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }}
+        onOpenCalendar={() => setIsCalendarOpen(true)}
+      />
+
+      {/* Tender Deadlines & Delivery Calendar Modal */}
+      <TenderDeadlinesCalendarModal
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
         onSelectAnalysis={(savedResult) => {
           setAnalysisResult(savedResult);
           setActiveTab('all');
