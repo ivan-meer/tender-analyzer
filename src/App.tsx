@@ -31,6 +31,7 @@ import { auth, saveAnalysisToDb } from './lib/firebase';
 import { onAuthStateChanged, signOut as firebaseSignOut, User } from 'firebase/auth';
 import { AnalysisInput, AnalysisResult, ProcedureType } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
+import { exportReportToGoogleDocs } from './lib/googleDocsExport';
 import { getPresetAnalysisResult } from './data/presetResults';
 import { getStoredLLMConfig } from './utils/aiConfig';
 import { 
@@ -50,7 +51,8 @@ import {
   ChevronRight,
   ArrowLeft,
   History,
-  BookOpen
+  BookOpen,
+  ExternalLink
 } from 'lucide-react';
 
 export default function App() {
@@ -78,6 +80,8 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeProcedureType, setActiveProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingGoogleDocs, setIsExportingGoogleDocs] = useState(false);
+  const [googleDocsSuccessUrl, setGoogleDocsSuccessUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'overview' | 'spec' | 'risks' | 'workflow' | 'templates'>('all');
@@ -259,6 +263,22 @@ export default function App() {
     }
   };
 
+  const handleExportGoogleDocs = async () => {
+    if (!analysisResult) return;
+    setIsExportingGoogleDocs(true);
+    setGoogleDocsSuccessUrl(null);
+    try {
+      const { documentUrl } = await exportReportToGoogleDocs(analysisResult);
+      setGoogleDocsSuccessUrl(documentUrl);
+      window.open(documentUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      console.error('Google Docs export error:', err);
+      setError(`Ошибка сохранения в Google Документы: ${err.message || err}`);
+    } finally {
+      setIsExportingGoogleDocs(false);
+    }
+  };
+
   const handleExportTxt = () => {
     if (!analysisResult) return;
 
@@ -404,7 +424,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <button
                   type="button"
                   onClick={() => setIsHistoryOpen(true)}
@@ -413,6 +433,21 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
                 >
                   <History className="w-4 h-4 text-slate-500" />
                   <span className="hidden sm:inline">История БД</span>
+                </button>
+
+                <button
+                  id="export-gdocs-report-btn"
+                  onClick={handleExportGoogleDocs}
+                  disabled={isExportingGoogleDocs}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+                  title="Сохранить отчет непосредственно в Ваш Google Документ"
+                >
+                  {isExportingGoogleDocs ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4" />
+                  )}
+                  <span>Google Doc</span>
                 </button>
 
                 <button
@@ -441,6 +476,30 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
                 </button>
               </div>
             </div>
+
+            {/* Google Docs Export Success Banner */}
+            {googleDocsSuccessUrl && (
+              <div className="bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 rounded-2xl p-3.5 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-900 dark:text-emerald-200 animate-fade-in shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-emerald-600 text-white rounded-xl shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm block">Отчет сохранен в ваш Google Документ!</span>
+                    <span className="text-[11px] text-emerald-700 dark:text-emerald-300">Файл доступен на вашем Google Диске для редактирования и распечатки.</span>
+                  </div>
+                </div>
+                <a
+                  href={googleDocsSuccessUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+                >
+                  <span>Открыть Google Doc</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            )}
 
             {/* Quick Metrics & Structured Screen Switcher Bar */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3 shadow-xs space-y-3">
@@ -729,7 +788,9 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         analysisResult={analysisResult}
         onDownloadPdf={handleExportPdf}
         onExportTxt={handleExportTxt}
+        onExportGoogleDocs={handleExportGoogleDocs}
         isExportingPdf={isExportingPdf}
+        isExportingGoogleDocs={isExportingGoogleDocs}
       />
 
       {/* Customer Reliability INN Verification Modal */}

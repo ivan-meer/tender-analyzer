@@ -8,8 +8,9 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+const configAny = firebaseConfig as any;
+export const db = configAny.firestoreDatabaseId
+  ? getFirestore(app, configAny.firestoreDatabaseId)
   : getFirestore(app);
 
 export interface SavedCustomer {

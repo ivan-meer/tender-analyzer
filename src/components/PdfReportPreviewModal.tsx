@@ -19,7 +19,9 @@ import {
   Eye,
   ShieldCheck,
   PackageCheck,
-  AlertCircle
+  AlertCircle,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import { AnalysisResult } from '../types';
 
@@ -29,7 +31,9 @@ interface PdfReportPreviewModalProps {
   analysisResult: AnalysisResult | null;
   onDownloadPdf: () => Promise<void>;
   onExportTxt: () => void;
+  onExportGoogleDocs?: () => Promise<void>;
   isExportingPdf: boolean;
+  isExportingGoogleDocs?: boolean;
 }
 
 export const PdfReportPreviewModal: React.FC<PdfReportPreviewModalProps> = ({
@@ -38,7 +42,9 @@ export const PdfReportPreviewModal: React.FC<PdfReportPreviewModalProps> = ({
   analysisResult,
   onDownloadPdf,
   onExportTxt,
+  onExportGoogleDocs,
   isExportingPdf,
+  isExportingGoogleDocs,
 }) => {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'preview' | 'summary' | 'risks' | 'spec'>('preview');
@@ -94,6 +100,22 @@ export const PdfReportPreviewModal: React.FC<PdfReportPreviewModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+            {onExportGoogleDocs && (
+              <button
+                onClick={onExportGoogleDocs}
+                disabled={isExportingGoogleDocs}
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50"
+                title="Сохранить отчет напрямую в Google Документ"
+              >
+                {isExportingGoogleDocs ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileText className="w-4 h-4" />
+                )}
+                <span>Google Doc</span>
+              </button>
+            )}
+
             <button
               onClick={handleCopyText}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
