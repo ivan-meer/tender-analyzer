@@ -32,6 +32,7 @@ import { onAuthStateChanged, signOut as firebaseSignOut, User } from 'firebase/a
 import { AnalysisInput, AnalysisResult, ProcedureType } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
 import { exportReportToGoogleDocs } from './lib/googleDocsExport';
+import { exportReportToGoogleSheets } from './lib/googleSheetsExport';
 import { getPresetAnalysisResult } from './data/presetResults';
 import { getStoredLLMConfig } from './utils/aiConfig';
 import { 
@@ -52,7 +53,8 @@ import {
   ArrowLeft,
   History,
   BookOpen,
-  ExternalLink
+  ExternalLink,
+  Table
 } from 'lucide-react';
 
 export default function App() {
@@ -82,6 +84,8 @@ export default function App() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingGoogleDocs, setIsExportingGoogleDocs] = useState(false);
   const [googleDocsSuccessUrl, setGoogleDocsSuccessUrl] = useState<string | null>(null);
+  const [isExportingGoogleSheets, setIsExportingGoogleSheets] = useState(false);
+  const [googleSheetsSuccessUrl, setGoogleSheetsSuccessUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'overview' | 'spec' | 'risks' | 'workflow' | 'templates'>('all');
@@ -279,6 +283,22 @@ export default function App() {
     }
   };
 
+  const handleExportGoogleSheets = async () => {
+    if (!analysisResult) return;
+    setIsExportingGoogleSheets(true);
+    setGoogleSheetsSuccessUrl(null);
+    try {
+      const { spreadsheetUrl } = await exportReportToGoogleSheets(analysisResult);
+      setGoogleSheetsSuccessUrl(spreadsheetUrl);
+      window.open(spreadsheetUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      console.error('Google Sheets export error:', err);
+      setError(`Ошибка сохранения в Google Таблицы: ${err.message || err}`);
+    } finally {
+      setIsExportingGoogleSheets(false);
+    }
+  };
+
   const handleExportTxt = () => {
     if (!analysisResult) return;
 
@@ -451,6 +471,21 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
                 </button>
 
                 <button
+                  id="export-gsheets-report-btn"
+                  onClick={handleExportGoogleSheets}
+                  disabled={isExportingGoogleSheets}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+                  title="Сохранить ТЗ и Риски в Google Таблицу"
+                >
+                  {isExportingGoogleSheets ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Table className="w-4 h-4" />
+                  )}
+                  <span>Google Sheet</span>
+                </button>
+
+                <button
                   id="export-pdf-report-btn"
                   onClick={() => setIsPdfPreviewOpen(true)}
                   disabled={isExportingPdf}
@@ -479,23 +514,47 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
             {/* Google Docs Export Success Banner */}
             {googleDocsSuccessUrl && (
-              <div className="bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 rounded-2xl p-3.5 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-900 dark:text-emerald-200 animate-fade-in shadow-xs">
+              <div className="bg-blue-50 dark:bg-blue-950/70 border border-blue-300 dark:border-blue-800 rounded-2xl p-3.5 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-900 dark:text-blue-200 animate-fade-in shadow-xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 bg-emerald-600 text-white rounded-xl shrink-0">
+                  <div className="p-1.5 bg-blue-600 text-white rounded-xl shrink-0">
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <div>
                     <span className="font-extrabold text-sm block">Отчет сохранен в ваш Google Документ!</span>
-                    <span className="text-[11px] text-emerald-700 dark:text-emerald-300">Файл доступен на вашем Google Диске для редактирования и распечатки.</span>
+                    <span className="text-[11px] text-blue-700 dark:text-blue-300">Файл доступен на вашем Google Диске для редактирования и распечатки.</span>
                   </div>
                 </div>
                 <a
                   href={googleDocsSuccessUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
                 >
                   <span>Открыть Google Doc</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            )}
+
+            {/* Google Sheets Export Success Banner */}
+            {googleSheetsSuccessUrl && (
+              <div className="bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 rounded-2xl p-3.5 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-900 dark:text-emerald-200 animate-fade-in shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-emerald-600 text-white rounded-xl shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm block">Таблица ТЗ и Рисков сохранена в Google Таблицах!</span>
+                    <span className="text-[11px] text-emerald-700 dark:text-emerald-300">Создана многостраничная таблица с разбором спецификации, рисками договора и логистикой.</span>
+                  </div>
+                </div>
+                <a
+                  href={googleSheetsSuccessUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+                >
+                  <span>Открыть Google Sheet</span>
                   <ExternalLink className="w-4 h-4" />
                 </a>
               </div>
@@ -789,8 +848,10 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         onDownloadPdf={handleExportPdf}
         onExportTxt={handleExportTxt}
         onExportGoogleDocs={handleExportGoogleDocs}
+        onExportGoogleSheets={handleExportGoogleSheets}
         isExportingPdf={isExportingPdf}
         isExportingGoogleDocs={isExportingGoogleDocs}
+        isExportingGoogleSheets={isExportingGoogleSheets}
       />
 
       {/* Customer Reliability INN Verification Modal */}

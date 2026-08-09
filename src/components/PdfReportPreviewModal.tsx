@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   PackageCheck,
   AlertCircle,
+  Table,
   RefreshCw,
   ExternalLink
 } from 'lucide-react';
@@ -32,8 +33,10 @@ interface PdfReportPreviewModalProps {
   onDownloadPdf: () => Promise<void>;
   onExportTxt: () => void;
   onExportGoogleDocs?: () => Promise<void>;
+  onExportGoogleSheets?: () => Promise<void>;
   isExportingPdf: boolean;
   isExportingGoogleDocs?: boolean;
+  isExportingGoogleSheets?: boolean;
 }
 
 export const PdfReportPreviewModal: React.FC<PdfReportPreviewModalProps> = ({
@@ -43,8 +46,10 @@ export const PdfReportPreviewModal: React.FC<PdfReportPreviewModalProps> = ({
   onDownloadPdf,
   onExportTxt,
   onExportGoogleDocs,
+  onExportGoogleSheets,
   isExportingPdf,
   isExportingGoogleDocs,
+  isExportingGoogleSheets,
 }) => {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'preview' | 'summary' | 'risks' | 'spec'>('preview');
@@ -104,7 +109,7 @@ export const PdfReportPreviewModal: React.FC<PdfReportPreviewModalProps> = ({
               <button
                 onClick={onExportGoogleDocs}
                 disabled={isExportingGoogleDocs}
-                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50"
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50"
                 title="Сохранить отчет напрямую в Google Документ"
               >
                 {isExportingGoogleDocs ? (
@@ -113,6 +118,22 @@ export const PdfReportPreviewModal: React.FC<PdfReportPreviewModalProps> = ({
                   <FileText className="w-4 h-4" />
                 )}
                 <span>Google Doc</span>
+              </button>
+            )}
+
+            {onExportGoogleSheets && (
+              <button
+                onClick={onExportGoogleSheets}
+                disabled={isExportingGoogleSheets}
+                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50"
+                title="Сохранить ТЗ и Риски в Google Таблицу"
+              >
+                {isExportingGoogleSheets ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Table className="w-4 h-4" />
+                )}
+                <span>Google Sheet</span>
               </button>
             )}
 

@@ -86,146 +86,148 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* DESKTOP NAVIGATION BAR (md and larger) */}
-          <div className="hidden md:flex p-1 bg-slate-100/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 items-center gap-1 shadow-2xs shrink-0">
-            {/* AI Chat Button */}
-            <button
-              type="button"
-              onClick={onOpenChat}
-              className="flex items-center gap-1.5 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
-              title="Открыть ИИ-Чат Консультант 223-ФЗ"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-white" />
-              <span>ИИ-Чат</span>
-            </button>
-
-            {/* Customer INN Check Button */}
-            {onOpenCustomerVerification && (
+          <div className="hidden md:flex items-center gap-2 shrink-0">
+            {/* Core Action Group */}
+            <div className="flex p-1 bg-slate-100/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 items-center gap-1 shadow-2xs">
+              {/* AI Chat Button */}
               <button
                 type="button"
-                onClick={onOpenCustomerVerification}
-                className="flex items-center gap-1.5 text-xs font-extrabold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
-                title="Проверка заказчика по ИНН (ФНС, РНП, Арбитраж)"
+                onClick={onOpenChat}
+                className="flex items-center gap-1.5 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                title="Открыть ИИ-Чат Консультант 223-ФЗ"
               >
-                <Building2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                <span>ИНН</span>
+                <MessageSquare className="w-3.5 h-3.5 text-white" />
+                <span>ИИ-Чат</span>
               </button>
-            )}
 
-            {/* Deadlines Calendar Button */}
-            {onOpenCalendar && (
-              <button
-                type="button"
-                onClick={onOpenCalendar}
-                className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
-                title="Календарь дедлайнов и сроков"
-              >
-                <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>Календарь</span>
-              </button>
-            )}
-
-            {/* AI Models Button */}
-            {onOpenAISettings && (
-              <button
-                type="button"
-                onClick={onOpenAISettings}
-                className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
-                title="Настройка ИИ моделей"
-              >
-                <Cpu className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>Модели</span>
-              </button>
-            )}
-
-            {/* Saved History Button */}
-            <button
-              type="button"
-              onClick={onOpenHistory}
-              className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
-              title="База данных сохраненных закупок"
-            >
-              <History className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-              <span>База</span>
-            </button>
-
-            <div className="w-px h-4 bg-slate-300/80 dark:bg-slate-700 my-auto shrink-0" />
-
-            {/* Google Auth Badge */}
-            {isGoogleUser ? (
-              <div className="flex items-center gap-1 shrink-0">
+              {/* Customer INN Check Button */}
+              {onOpenCustomerVerification && (
                 <button
                   type="button"
-                  onClick={onOpenHistory}
-                  className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 px-2 py-1 rounded-xl hover:bg-emerald-100 transition-all cursor-pointer"
-                  title={`Google Аккаунт: ${currentUser.email}`}
+                  onClick={onOpenCustomerVerification}
+                  className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
+                  title="Проверка заказчика по ИНН (ФНС, РНП, Арбитраж)"
                 >
-                  {currentUser.photoURL ? (
-                    <img
-                      src={currentUser.photoURL}
-                      alt="Google Avatar"
-                      className="w-4 h-4 rounded-full"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
-                      {(currentUser.email || 'G')[0].toUpperCase()}
-                    </div>
-                  )}
-                  <span className="text-[11px] font-extrabold max-w-[90px] truncate">
-                    {currentUser.displayName || currentUser.email?.split('@')[0]}
-                  </span>
+                  <Building2 className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Проверка ИНН</span>
                 </button>
-                {onSignOut && (
-                  <button
-                    type="button"
-                    onClick={onSignOut}
-                    className="p-1.5 text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-all cursor-pointer shrink-0"
-                    title="Выйти из Google аккаунта"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ) : (
+              )}
+
+              {/* Saved History Button */}
               <button
                 type="button"
-                onClick={onOpenAuthModal}
-                className="flex items-center gap-1 text-xs font-extrabold bg-indigo-600 text-white hover:bg-indigo-700 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs shrink-0"
-                title="Войти с помощью Google Аккаунта"
+                onClick={onOpenHistory}
+                className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
+                title="База данных сохраненных закупок"
               >
-                <LogIn className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Вход Google</span>
+                <History className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                <span>База</span>
               </button>
-            )}
 
-            <div className="w-px h-4 bg-slate-300/80 dark:bg-slate-700 my-auto shrink-0" />
-
-            {/* Dark Mode Switcher */}
-            <button
-              type="button"
-              id="toggle-dark-mode-btn"
-              onClick={onToggleDarkMode}
-              className="p-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-all cursor-pointer shrink-0"
-              title={isDarkMode ? 'Переключить на светлую тему' : 'Переключить на тёмную тему'}
-            >
-              {isDarkMode ? (
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
-              ) : (
-                <Moon className="w-3.5 h-3.5 text-indigo-600" />
+              {/* Deadlines Calendar Button */}
+              {onOpenCalendar && (
+                <button
+                  type="button"
+                  onClick={onOpenCalendar}
+                  className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
+                  title="Календарь дедлайнов и сроков"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Сроки</span>
+                </button>
               )}
-            </button>
+            </div>
 
-            {/* Guide Button */}
-            <button
-              id="open-guide-btn"
-              type="button"
-              onClick={onOpenGuide}
-              className="flex items-center gap-1 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all shrink-0 cursor-pointer"
-              title="Регламент работы (44-ФЗ & 223-ФЗ)"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span className="text-xs">Регламент</span>
-            </button>
+            {/* System Tools & Profile Group */}
+            <div className="flex p-1 bg-slate-100/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 items-center gap-1 shadow-2xs">
+              {/* AI Models Settings */}
+              {onOpenAISettings && (
+                <button
+                  type="button"
+                  onClick={onOpenAISettings}
+                  className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all cursor-pointer shrink-0"
+                  title="Настройка ИИ моделей"
+                >
+                  <Cpu className="w-4 h-4 text-indigo-500" />
+                </button>
+              )}
+
+              {/* Guide Button */}
+              <button
+                id="open-guide-btn"
+                type="button"
+                onClick={onOpenGuide}
+                className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all cursor-pointer shrink-0"
+                title="Регламент работы (44-ФЗ & 223-ФЗ)"
+              >
+                <BookOpen className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              </button>
+
+              {/* Dark Mode Switcher */}
+              <button
+                type="button"
+                id="toggle-dark-mode-btn"
+                onClick={onToggleDarkMode}
+                className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all cursor-pointer shrink-0"
+                title={isDarkMode ? 'Переключить на светлую тему' : 'Переключить на тёмную тему'}
+              >
+                {isDarkMode ? (
+                  <Sun className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <Moon className="w-4 h-4 text-indigo-600" />
+                )}
+              </button>
+
+              <div className="w-px h-4 bg-slate-300/80 dark:bg-slate-700 my-auto shrink-0 mx-0.5" />
+
+              {/* Google Auth Badge */}
+              {isGoogleUser ? (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={onOpenHistory}
+                    className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 px-2 py-1 rounded-xl hover:bg-emerald-100 transition-all cursor-pointer"
+                    title={`Google Аккаунт: ${currentUser.email}`}
+                  >
+                    {currentUser.photoURL ? (
+                      <img
+                        src={currentUser.photoURL}
+                        alt="Google Avatar"
+                        className="w-4 h-4 rounded-full"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+                        {(currentUser.email || 'G')[0].toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-[11px] font-extrabold max-w-[80px] truncate">
+                      {currentUser.displayName || currentUser.email?.split('@')[0]}
+                    </span>
+                  </button>
+                  {onSignOut && (
+                    <button
+                      type="button"
+                      onClick={onSignOut}
+                      className="p-1.5 text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-all cursor-pointer shrink-0"
+                      title="Выйти из Google аккаунта"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onOpenAuthModal}
+                  className="flex items-center gap-1 text-xs font-extrabold bg-indigo-600 text-white hover:bg-indigo-700 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs shrink-0"
+                  title="Войти с помощью Google Аккаунта"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span className="text-[11px]">Вход</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* MOBILE TOP CONTROLS (Google Status + Mobile Menu Toggle) */}
