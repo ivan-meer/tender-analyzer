@@ -23,11 +23,13 @@ import { PreAnalysisDashboard } from './components/PreAnalysisDashboard';
 import { PdfReportPreviewModal } from './components/PdfReportPreviewModal';
 import { TenderDeadlinesCalendarModal } from './components/TenderDeadlinesCalendarModal';
 import { CustomerInnVerificationModal } from './components/CustomerInnVerificationModal';
+import { AISettingsModal } from './components/AISettingsModal';
 import { AnalysisVersionHistoryBanner } from './components/AnalysisVersionHistoryBanner';
 import { auth, saveAnalysisToDb } from './lib/firebase';
 import { AnalysisInput, AnalysisResult, ProcedureType } from './types';
 import { generatePdfReport } from './utils/pdfGenerator';
 import { getPresetAnalysisResult } from './data/presetResults';
+import { getStoredLLMConfig } from './utils/aiConfig';
 import { 
   Download, 
   AlertCircle, 
@@ -77,6 +79,7 @@ export default function App() {
   const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isCustomerVerificationOpen, setIsCustomerVerificationOpen] = useState(false);
+  const [isAISettingsOpen, setIsAISettingsOpen] = useState(false);
   const [verificationInn, setVerificationInn] = useState('');
   const [verificationCustomerName, setVerificationCustomerName] = useState('');
 
@@ -157,7 +160,8 @@ export default function App() {
 
       const enrichedInput = {
         ...input,
-        additionalNotes: `${input.additionalNotes || ''}\n${statutoryNotes}\n${combinedGuidelines ? `\n[Официальный Регламент Проверки]:\n${combinedGuidelines}` : ''}`.trim()
+        additionalNotes: `${input.additionalNotes || ''}\n${statutoryNotes}\n${combinedGuidelines ? `\n[Официальный Регламент Проверки]:\n${combinedGuidelines}` : ''}`.trim(),
+        llmConfig: getStoredLLMConfig(),
       };
 
       const response = await fetch('/api/analyze', {
@@ -302,6 +306,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         onOpenSuppliersCatalog={() => setIsSuppliersCatalogOpen(true)}
         onOpenCalendar={() => setIsCalendarOpen(true)}
         onOpenCustomerVerification={() => openCustomerVerification()}
+        onOpenAISettings={() => setIsAISettingsOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -705,6 +710,12 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
         onClose={() => setIsCustomerVerificationOpen(false)}
         initialInn={verificationInn}
         initialCustomerName={verificationCustomerName}
+      />
+
+      {/* Universal Multi-Provider AI Settings Modal */}
+      <AISettingsModal
+        isOpen={isAISettingsOpen}
+        onClose={() => setIsAISettingsOpen(false)}
       />
 
       {/* Footer */}

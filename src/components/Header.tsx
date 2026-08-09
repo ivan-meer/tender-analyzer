@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, BookOpen, Sun, Moon, Sparkles, MessageSquare, Search, BrainCircuit, History, Globe, Building2, Calendar } from 'lucide-react';
+import { ShieldAlert, BookOpen, Sun, Moon, Sparkles, MessageSquare, Search, BrainCircuit, History, Globe, Building2, Calendar, Cpu } from 'lucide-react';
 
 interface HeaderProps {
   onOpenGuide: () => void;
@@ -13,6 +13,7 @@ interface HeaderProps {
   onOpenSuppliersCatalog?: () => void;
   onOpenCalendar?: () => void;
   onOpenCustomerVerification?: () => void;
+  onOpenAISettings?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -27,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSuppliersCatalog,
   onOpenCalendar,
   onOpenCustomerVerification,
+  onOpenAISettings,
 }) => {
   return (
     <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 sticky top-0 z-30 shadow-xs transition-colors duration-200">
@@ -86,6 +88,19 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               <span className="hidden sm:inline">Календарь</span>
+            </button>
+          )}
+
+          {/* AI Settings & Models Button */}
+          {onOpenAISettings && (
+            <button
+              type="button"
+              onClick={onOpenAISettings}
+              className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
+              title="Настройка ИИ моделей (Gemini, Mistral, OpenAI, Claude, DeepSeek, Ollama)"
+            >
+              <Cpu className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span className="hidden sm:inline">Модели ИИ</span>
             </button>
           )}
 

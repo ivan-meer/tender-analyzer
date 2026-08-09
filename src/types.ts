@@ -4,6 +4,7 @@ export type LLMProvider =
   | 'openai' 
   | 'anthropic' 
   | 'deepseek' 
+  | 'deepinfra'
   | 'ollama' 
   | 'custom';
 

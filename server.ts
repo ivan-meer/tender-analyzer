@@ -321,9 +321,332 @@ async function generateContentWithRetry(
   throw lastError || new Error("All Gemini model generation attempts failed.");
 }
 
+// Interface for Universal LLM Configuration
+interface UniversalLLMConfig {
+  provider?: string;
+  modelName?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  mistralApiKey?: string;
+  temperature?: number;
+  useMistralOcrForPdf?: boolean;
+}
+
+// Universal multi-provider LLM helper (Gemini, Mistral, OpenAI, Claude, DeepSeek, Ollama)
+async function callUniversalLLM(options: {
+  llmConfig?: UniversalLLMConfig;
+  prompt: string | any[];
+  systemInstruction?: string;
+  imageParts?: Array<{ inlineData: { mimeType: string; data: string } }>;
+  responseJsonFormat?: boolean;
+  temperature?: number;
+}): Promise<{ text: string; modelUsed: string }> {
+  const cfg = options.llmConfig || {};
+  const provider = (cfg.provider || 'gemini').toLowerCase();
+  const temperature = options.temperature ?? cfg.temperature ?? 0.2;
+
+  // 1. MISTRAL AI PROVIDER
+  if (provider === 'mistral') {
+    const apiKey = cfg.apiKey || process.env.MISTRAL_API_KEY;
+    if (!apiKey) {
+      console.warn("[Universal LLM] Mistral API Key missing, falling back to Gemini.");
+    } else {
+      const model = cfg.modelName || 'mistral-large-latest';
+      const baseUrl = (cfg.baseUrl || 'https://api.mistral.ai/v1').replace(/\/$/, '');
+      const messages: any[] = [];
+      if (options.systemInstruction) {
+        messages.push({ role: 'system', content: options.systemInstruction });
+      }
+      
+      let userContent: any = options.prompt;
+      if (typeof options.prompt === 'string') {
+        userContent = options.prompt;
+      } else if (Array.isArray(options.prompt)) {
+        userContent = options.prompt.map(p => typeof p === 'string' ? p : (p.text || '')).join('\n');
+      }
+
+      messages.push({ role: 'user', content: userContent });
+
+      const requestBody: any = {
+        model,
+        messages,
+        temperature,
+      };
+
+      if (options.responseJsonFormat) {
+        requestBody.response_format = { type: 'json_object' };
+      }
+
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Mistral API Error (${res.status}): ${errText}`);
+      }
+
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || '';
+      return { text: reply, modelUsed: model };
+    }
+  }
+
+  // 2. OPENAI / DEEPSEEK / DEEPINFRA / OLLAMA / CUSTOM PROVIDER
+  if (['openai', 'deepseek', 'deepinfra', 'ollama', 'custom'].includes(provider)) {
+    const defaultBaseUrl = 
+      provider === 'openai' ? 'https://api.openai.com/v1' :
+      provider === 'deepseek' ? 'https://api.deepseek.com/v1' :
+      provider === 'deepinfra' ? 'https://api.deepinfra.com/v1/openai' :
+      provider === 'ollama' ? 'http://localhost:11434/v1' :
+      'https://api.openai.com/v1';
+
+    const baseUrl = (cfg.baseUrl || defaultBaseUrl).replace(/\/$/, '');
+    const apiKey = cfg.apiKey || process.env.DEEPINFRA_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || 'no-key';
+    const model = cfg.modelName || (
+      provider === 'deepinfra' ? 'meta-llama/Llama-3.3-70B-Instruct' :
+      provider === 'deepseek' ? 'deepseek-chat' : 
+      provider === 'ollama' ? 'llama3' : 
+      'gpt-4o'
+    );
+
+    const messages: any[] = [];
+    if (options.systemInstruction) {
+      messages.push({ role: 'system', content: options.systemInstruction });
+    }
+
+    let userContent: any = options.prompt;
+    if (typeof options.prompt === 'string') {
+      userContent = options.prompt;
+    } else if (Array.isArray(options.prompt)) {
+      userContent = options.prompt.map(p => typeof p === 'string' ? p : (p.text || '')).join('\n');
+    }
+
+    messages.push({ role: 'user', content: userContent });
+
+    const requestBody: any = {
+      model,
+      messages,
+      temperature,
+    };
+
+    if (options.responseJsonFormat) {
+      requestBody.response_format = { type: 'json_object' };
+    }
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (apiKey && apiKey !== 'no-key') {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    const reply = data.choices?.[0]?.message?.content || '';
+    return { text: reply, modelUsed: model };
+  }
+
+  // 3. ANTHROPIC CLAUDE PROVIDER
+  if (provider === 'anthropic') {
+    const apiKey = cfg.apiKey || process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      console.warn("[Universal LLM] Anthropic API Key missing, falling back to Gemini.");
+    } else {
+      const model = cfg.modelName || 'claude-3-5-sonnet-20241022';
+      let userContent = typeof options.prompt === 'string' ? options.prompt : JSON.stringify(options.prompt);
+
+      const requestBody: any = {
+        model,
+        max_tokens: 4096,
+        temperature,
+        system: options.systemInstruction || undefined,
+        messages: [{ role: 'user', content: userContent }],
+      };
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Anthropic API Error (${res.status}): ${errText}`);
+      }
+
+      const data = await res.json();
+      const reply = data.content?.[0]?.text || '';
+      return { text: reply, modelUsed: model };
+    }
+  }
+
+  // 4. DEFAULT: GOOGLE GEMINI
+  const geminiKey = cfg.apiKey || process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
+    throw new Error("GEMINI_API_KEY отсутствует в секретах сервера.");
+  }
+
+  const ai = new GoogleGenAI({
+    apiKey: geminiKey,
+    httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+  });
+
+  const model = cfg.modelName || "gemini-2.5-flash";
+  let contents: any = options.prompt;
+
+  if (options.imageParts && options.imageParts.length > 0) {
+    contents = [
+      ...options.imageParts,
+      ...(typeof options.prompt === 'string' ? [{ text: options.prompt }] : options.prompt)
+    ];
+  }
+
+  const config: any = {
+    temperature,
+  };
+
+  if (options.systemInstruction) {
+    config.systemInstruction = options.systemInstruction;
+  }
+
+  if (options.responseJsonFormat) {
+    config.responseMimeType = "application/json";
+  }
+
+  const response = await generateContentWithRetry(ai, {
+    model,
+    fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
+    contents,
+    config,
+  });
+
+  return { text: response.text || "", modelUsed: model };
+}
+
+// Mistral OCR Document Parser Helper
+async function runMistralOcr(options: {
+  documentBase64?: string;
+  documentUrl?: string;
+  mimeType?: string;
+  apiKey?: string;
+}): Promise<{ markdownText: string; pagesCount: number; pages?: any[]; modelUsed: string }> {
+  const apiKey = options.apiKey || process.env.MISTRAL_API_KEY;
+  if (!apiKey) {
+    throw new Error("Ключ Mistral API отсутствует. Задайте его в настройках ИИ или переменной MISTRAL_API_KEY.");
+  }
+
+  let docPayload: any;
+  if (options.documentUrl) {
+    docPayload = { type: "document_url", document_url: options.documentUrl };
+  } else if (options.documentBase64) {
+    const rawData = options.documentBase64.replace(/^data:[^;]+;base64,/, "");
+    const mime = options.mimeType || "application/pdf";
+    docPayload = {
+      type: mime.includes("pdf") ? "document_url" : "image_url",
+      [mime.includes("pdf") ? "document_url" : "image_url"]: `data:${mime};base64,${rawData}`
+    };
+  } else {
+    throw new Error("Не передано содержимое документа или изображение для Mistral OCR.");
+  }
+
+  const res = await fetch("https://api.mistral.ai/v1/ocr", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: "mistral-ocr-latest",
+      document: docPayload,
+      include_image_base64: false
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Mistral OCR API Error (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  const pages = data.pages || [];
+  const markdownText = pages.map((p: any, idx: number) => `### Страница ${idx + 1}\n\n${p.markdown || ''}`).join("\n\n---\n\n");
+
+  return {
+    markdownText: markdownText || data.text || "Текст не удалось извлечь.",
+    pagesCount: pages.length || 1,
+    pages: pages.map((p: any) => ({ index: p.index, markdown: p.markdown, images: p.images })),
+    modelUsed: "mistral-ocr-latest"
+  };
+}
+
 // Health endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Test LLM Connection Endpoint
+app.post("/api/llm/test", async (req, res) => {
+  try {
+    const { llmConfig } = req.body;
+    const testPrompt = "Подтверди, что ты готов анализировать документацию закупок 223-ФЗ и 44-ФЗ. Ответь ровно в одном коротком предложении.";
+    const result = await callUniversalLLM({
+      llmConfig,
+      prompt: testPrompt,
+      systemInstruction: "Ты — эксперт по анализу тендерной документации РФ."
+    });
+
+    res.json({
+      success: true,
+      reply: result.text,
+      modelUsed: result.modelUsed
+    });
+  } catch (err: any) {
+    res.status(400).json({
+      success: false,
+      error: err?.message || "Ошибка подключения к выбранному провайдеру ИИ."
+    });
+  }
+});
+
+// Mistral OCR Upload & Scan Endpoint
+app.post("/api/ocr/mistral", async (req, res) => {
+  try {
+    const { documentBase64, documentUrl, mimeType, mistralApiKey } = req.body;
+    const ocrResult = await runMistralOcr({
+      documentBase64,
+      documentUrl,
+      mimeType,
+      apiKey: mistralApiKey
+    });
+
+    res.json({
+      success: true,
+      ...ocrResult
+    });
+  } catch (err: any) {
+    res.status(400).json({
+      success: false,
+      error: err?.message || "Ошибка при выполнении Mistral OCR сканирования."
+    });
+  }
 });
 
 // NEON POSTGRESQL API ENDPOINTS
@@ -859,14 +1182,12 @@ async function searchNeonCatalogForProduct(productName: string, dimensions?: str
 // Main Procurement Analyzer API
 app.post("/api/analyze", async (req, res) => {
   try {
-    const { procedureType, contractText, documentationText, tzText, additionalNotes } = req.body;
+    const { procedureType, contractText, documentationText, tzText, additionalNotes, llmConfig } = req.body;
 
     if (!contractText && !documentationText && !tzText) {
       res.status(400).json({ error: "Не передано ни одного документа для анализа." });
       return;
     }
-
-    const ai = getGeminiClient();
 
     const systemInstruction = `Ты — эксперт тендерного отдела и юрист по закупкам в РФ (специализация: 44-ФЗ, 223-ФЗ и коммерческие торги).
 Твоя задача — тщательно проанализировать загруженные документы закупки (Проект договора, Документацию закупки, Техническое задание) согласно внутреннему регламенту компании и требованиям законодательства РФ.
@@ -937,181 +1258,100 @@ ${safeDoc}
 
 --- ТЕКСТ ТЕХНИЧЕСКОГО ЗАДАНИЯ И ТАБЛИЦ ---
 ${safeTz}
+
+ОБЯЗАТЕЛЬНО ВЕРНИ ТАКОЙ JSON ОБЪЕКТ В СТРОГОМ СООТВЕТСТВИИ С СТРУКТУРОЙ:
+{
+  "summary": {
+    "procurementTitle": "наименование закупки",
+    "projectName": "название проекта",
+    "customerName": "заказчик",
+    "procurementSum": "сумма или НМЦК",
+    "auctionDate": "дата и время подачи/аукциона",
+    "overallRiskScore": 45,
+    "riskLevel": "MEDIUM",
+    "keyTakeaway": "краткое резюме",
+    "is223FZ": true
+  },
+  "deliveryInfo": {
+    "deliveryPeriod": "срок поставки",
+    "deliveryScheduleNotice": "порядок графиков",
+    "deliveryAddresses": ["адрес 1"],
+    "unloadingAndAccessConditions": "условия разгрузки",
+    "consigneeDetails": "получатель",
+    "riskWarning": "риски по поставке"
+  },
+  "contractRisks": [
+    {
+      "id": "risk-1",
+      "category": "PENALTIES",
+      "clauseNumber": "п. 7.2",
+      "clauseQuote": "цитата из договора",
+      "severity": "CRITICAL",
+      "title": "заголовок риска",
+      "explanation": "разъяснение опасности",
+      "recommendation": "как минимизировать риск"
+    }
+  ],
+  "submissionRulesCheck": {
+    "procedureType": "223_FZ_QUOTATION",
+    "requestInTableRequired": true,
+    "etpAccreditationNotice": "информация по ЭТП",
+    "requiredFilesStructure": ["файл 1", "файл 2"],
+    "formsRequirement": "требования к формам",
+    "pp1875Applies": false,
+    "pp1875Details": "детали ПП 1875",
+    "accountingInfoNeeded": true,
+    "accountingItems": ["сведения о бухучете"]
+  },
+  "postAwardWorkflow": {
+    "deliveryNotifications": "уведомление заказчика",
+    "primaryDocFormatConfirmation": "форматы УПД/накладных",
+    "accompanyingDocs": ["паспорт качества", "сертификат"],
+    "acceptanceDocsStrategy": "стратегия приемки",
+    "motivatedRefusalGuide": "порядок при мотивированном отказе"
+  },
+  "productList": [
+    {
+      "id": "prod-1",
+      "name": "товар 1",
+      "quantity": "100 шт",
+      "dimensions": "габариты",
+      "specification": "спецификация",
+      "parameters": [{"name": "параметр", "value": "значение"}],
+      "okpd2OrGvin": "код ОКПД2",
+      "pp1875Status": "NOT_APPLICABLE",
+      "registryNumberNote": "запись в реестре"
+    }
+  ],
+  "generatedTemplates": {
+    "acceptanceDocsRequest": "шаблон запроса приемки",
+    "motivatedRefusalDemand": "шаблон мотивированного ответа",
+    "etpFundsRequest": "шаблон запроса средств ЭТП",
+    "accountingDataRequest": "шаблон запроса бухгалтерии",
+    "yougileTaskSummary": "задача для Yougile/Bitrix24",
+    "claimResponseTemplate": "ответ на претензию"
+  }
+}
 `;
 
-    const response = await generateContentWithRetry(ai, {
-      model: "gemini-2.5-flash",
-      fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
-      contents: promptText,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            summary: {
-              type: Type.OBJECT,
-              properties: {
-                procurementTitle: { type: Type.STRING },
-                projectName: { type: Type.STRING },
-                customerName: { type: Type.STRING },
-                procurementSum: { type: Type.STRING },
-                auctionDate: { type: Type.STRING },
-                overallRiskScore: { type: Type.INTEGER },
-                riskLevel: { type: Type.STRING }, // CRITICAL | HIGH | MEDIUM | LOW
-                keyTakeaway: { type: Type.STRING },
-                is223FZ: { type: Type.BOOLEAN },
-              },
-              required: ["procurementTitle", "overallRiskScore", "riskLevel", "keyTakeaway", "is223FZ"],
-            },
-            deliveryInfo: {
-              type: Type.OBJECT,
-              properties: {
-                deliveryPeriod: { type: Type.STRING },
-                deliveryScheduleNotice: { type: Type.STRING },
-                deliveryAddresses: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                unloadingAndAccessConditions: { type: Type.STRING },
-                consigneeDetails: { type: Type.STRING },
-                riskWarning: { type: Type.STRING },
-              },
-              required: ["deliveryPeriod", "deliveryAddresses"],
-            },
-            contractRisks: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  category: { type: Type.STRING }, // PENALTIES | DELIVERY_TERMS | TERMINATION | THIRD_PARTY_PURCHASE | DOCUMENTS | OTHER
-                  clauseNumber: { type: Type.STRING },
-                  clauseQuote: { type: Type.STRING },
-                  severity: { type: Type.STRING }, // CRITICAL | HIGH | MEDIUM | INFO
-                  title: { type: Type.STRING },
-                  explanation: { type: Type.STRING },
-                  recommendation: { type: Type.STRING },
-                },
-                required: ["id", "category", "severity", "title", "explanation", "recommendation"],
-              },
-            },
-            submissionRulesCheck: {
-              type: Type.OBJECT,
-              properties: {
-                procedureType: { type: Type.STRING },
-                requestInTableRequired: { type: Type.BOOLEAN },
-                etpAccreditationNotice: { type: Type.STRING },
-                requiredFilesStructure: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                formsRequirement: { type: Type.STRING },
-                pp1875Applies: { type: Type.BOOLEAN },
-                pp1875Details: { type: Type.STRING },
-                accountingInfoNeeded: { type: Type.BOOLEAN },
-                accountingItems: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-              },
-              required: [
-                "procedureType",
-                "requestInTableRequired",
-                "etpAccreditationNotice",
-                "requiredFilesStructure",
-                "formsRequirement",
-                "pp1875Applies",
-                "pp1875Details",
-                "accountingInfoNeeded",
-                "accountingItems",
-              ],
-            },
-            postAwardWorkflow: {
-              type: Type.OBJECT,
-              properties: {
-                deliveryNotifications: { type: Type.STRING },
-                primaryDocFormatConfirmation: { type: Type.STRING },
-                accompanyingDocs: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                acceptanceDocsStrategy: { type: Type.STRING },
-                motivatedRefusalGuide: { type: Type.STRING },
-              },
-              required: [
-                "deliveryNotifications",
-                "primaryDocFormatConfirmation",
-                "accompanyingDocs",
-                "acceptanceDocsStrategy",
-                "motivatedRefusalGuide",
-              ],
-            },
-            productList: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  name: { type: Type.STRING },
-                  quantity: { type: Type.STRING },
-                  dimensions: { type: Type.STRING },
-                  specification: { type: Type.STRING },
-                  parameters: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        name: { type: Type.STRING },
-                        value: { type: Type.STRING },
-                      },
-                      required: ["name", "value"],
-                    },
-                  },
-                  okpd2OrGvin: { type: Type.STRING },
-                  pp1875Status: { type: Type.STRING }, // RUSSIAN_REQUIRED | RESTRICTED | NOT_APPLICABLE | UNKNOWN
-                  registryNumberNote: { type: Type.STRING },
-                },
-                required: ["id", "name", "quantity", "specification", "pp1875Status"],
-              },
-            },
-            generatedTemplates: {
-              type: Type.OBJECT,
-              properties: {
-                acceptanceDocsRequest: { type: Type.STRING },
-                motivatedRefusalDemand: { type: Type.STRING },
-                etpFundsRequest: { type: Type.STRING },
-                accountingDataRequest: { type: Type.STRING },
-                yougileTaskSummary: { type: Type.STRING },
-                claimResponseTemplate: { type: Type.STRING },
-              },
-              required: [
-                "acceptanceDocsRequest",
-                "motivatedRefusalDemand",
-                "etpFundsRequest",
-                "accountingDataRequest",
-                "yougileTaskSummary",
-                "claimResponseTemplate",
-              ],
-            },
-          },
-          required: [
-            "summary",
-            "contractRisks",
-            "submissionRulesCheck",
-            "postAwardWorkflow",
-            "generatedTemplates",
-          ],
-        },
-      },
+    const llmResult = await callUniversalLLM({
+      llmConfig,
+      prompt: promptText,
+      systemInstruction,
+      responseJsonFormat: true,
+      temperature: llmConfig?.temperature ?? 0.2
     });
 
-    const resultText = response.text || "{}";
-    const analysisData = JSON.parse(resultText);
+    let rawJson = llmResult.text.trim();
+    // Strip markdown code fences if model enclosed JSON in ```json
+    if (rawJson.startsWith("```")) {
+      rawJson = rawJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    }
 
+    const analysisData = JSON.parse(rawJson);
     res.json(analysisData);
   } catch (error: any) {
-    console.warn("Gemini API error in /api/analyze, returning intelligent fallback analysis:", error?.message);
+    console.warn("LLM API error in /api/analyze, returning intelligent fallback analysis:", error?.message);
     const { contractText, tzText, procedureType } = req.body || {};
     const fallbackData = generateFallbackAnalysisResult(contractText, tzText, procedureType);
     res.json(fallbackData);

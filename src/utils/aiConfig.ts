@@ -37,6 +37,7 @@ export function getProviderDisplayName(provider: string): string {
     case 'openai': return 'OpenAI';
     case 'anthropic': return 'Anthropic Claude';
     case 'deepseek': return 'DeepSeek AI';
+    case 'deepinfra': return 'DeepInfra (Llama 3.3 / DeepSeek / Qwen)';
     case 'ollama': return 'Ollama / Local LLM';
     case 'custom': return 'Пользовательский API';
     default: return provider;

@@ -51,6 +51,14 @@ const PROVIDER_MODELS: Record<LLMProvider, { name: string; id: string; desc: str
     { id: 'deepseek-chat', name: 'DeepSeek-V3 (Chat)', desc: 'Производительная китайская модель с открытым весом' },
     { id: 'deepseek-reasoner', name: 'DeepSeek-R1 (Reasoner)', desc: 'Модель глубоких логических рассуждений R1' },
   ],
+  deepinfra: [
+    { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct', desc: 'Флагманская модель Meta на серверах DeepInfra' },
+    { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek-R1 (Reasoner)', desc: 'Глубокие логические рассуждения и логика закупки' },
+    { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek-V3', desc: 'Быстрая производительная модель DeepSeek' },
+    { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B', desc: 'Специализированная модель для кода и строгого JSON' },
+    { id: 'mistralai/Mistral-7B-Instruct-v0.3', name: 'Mistral 7B Instruct', desc: 'Легкая и быстрый инференс Mistral' },
+    { id: 'microsoft/WizardLM-2-8x22B', name: 'WizardLM-2 8x22B', desc: 'Мощный MoE от Microsoft с высоким качеством' },
+  ],
   ollama: [
     { id: 'llama3', name: 'Llama 3 (Local)', desc: 'Локальная модель в вашей сети' },
     { id: 'qwen2.5', name: 'Qwen 2.5', desc: 'Локальная модель с поддержкой русского языка' },
@@ -182,6 +190,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 { id: 'openai', name: 'OpenAI', icon: '🟢', badge: 'GPT-4o' },
                 { id: 'anthropic', name: 'Anthropic', icon: '🟣', badge: 'Claude 3.5' },
                 { id: 'deepseek', name: 'DeepSeek', icon: '🐋', badge: 'R1 / V3' },
+                { id: 'deepinfra', name: 'DeepInfra', icon: '⚡', badge: 'Fast / Llama' },
                 { id: 'ollama', name: 'Ollama / Local', icon: '🦙', badge: 'Локальный' },
                 { id: 'custom', name: 'Пользовательский', icon: '🔌', badge: 'OpenAI API' },
               ].map(p => {
@@ -282,6 +291,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   config.provider === 'mistral' ? 'sk-... или nvapi-...' :
                   config.provider === 'openai' ? 'sk-...' :
                   config.provider === 'anthropic' ? 'sk-ant-...' :
+                  config.provider === 'deepinfra' ? 'sk-... (DeepInfra API Key)' :
                   'Вставьте ваш API ключ'
                 }
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -307,6 +317,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   config.provider === 'mistral' ? 'https://api.mistral.ai/v1' :
                   config.provider === 'openai' ? 'https://api.openai.com/v1' :
                   config.provider === 'deepseek' ? 'https://api.deepseek.com/v1' :
+                  config.provider === 'deepinfra' ? 'https://api.deepinfra.com/v1/openai' :
                   config.provider === 'ollama' ? 'http://localhost:11434/v1' :
                   'https://your-api-endpoint.com/v1'
                 }
