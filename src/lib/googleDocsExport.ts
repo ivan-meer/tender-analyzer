@@ -1,5 +1,5 @@
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from './firebase';
+import { auth } from './firebase';
 import { AnalysisResult } from '../types';
 
 export interface ExportToDocsResult {
@@ -26,114 +26,148 @@ export async function getGoogleAccessTokenForDocs(): Promise<string> {
 }
 
 /**
- * Formats AnalysisResult into a clear structured text document for Google Docs
+ * Formats AnalysisResult into a clear structured executive legal report for Google Docs
  */
 function buildReportDocumentText(result: AnalysisResult): string {
   const { summary, deliveryInfo, contractRisks, submissionRulesCheck, postAwardWorkflow, productList, generatedTemplates } = result;
 
   const lines: string[] = [];
 
-  // Title
-  lines.push(`ОТЧЕТ ПО ЭКСПЕРТИЗЕ ЗАКУПКИ И ДОГОВОРА (223-ФЗ / 44-ФЗ)`);
+  // Title & Header
+  lines.push(`ЭКСПЕРТНОЕ ЗАКЛЮЧЕНИЕ И ЮРИДИЧЕСКИЙ АУДИТ ЗАКУПКИ`);
+  lines.push(`Порядок применения: ${summary.is223FZ ? 'Федеральный закон № 223-ФЗ' : 'Федеральный закон № 44-ФЗ'}`);
+  lines.push(`Дата и время аудита: ${new Date().toLocaleString('ru-RU')}`);
   lines.push(`========================================================================\n`);
 
-  lines.push(`Проект / Предмет: ${summary.projectName || summary.procurementTitle}`);
-  lines.push(`Заказчик: ${summary.customerName || 'Не указан'} ${summary.customerInn ? `(ИНН ${summary.customerInn})` : ''}`);
-  lines.push(`НМЦК / Сумма закупки: ${summary.procurementSum || 'Не указана'}`);
-  lines.push(`Дата окончания / Аукцион: ${summary.auctionDate || 'Не указана'}`);
-  lines.push(`Уровень риска: ${summary.riskLevel} (Оценка: ${summary.overallRiskScore}/100)`);
-  lines.push(`Краткий вывод: ${summary.keyTakeaway}\n`);
+  // Section 1: Executive Summary
+  lines.push(`1. ПАСПОРТ ЗАКУПКИ И ОБЩИЙ РИСК-ПРОФИЛЬ`);
+  lines.push(`------------------------------------------------------------------------`);
+  lines.push(`• Предмет закупки: ${summary.procurementTitle || 'Не указан'}`);
+  lines.push(`• Проект / Номер: ${summary.projectName || 'Б/Н'}`);
+  lines.push(`• Заказчик: ${summary.customerName || 'Не указан'} ${summary.customerInn ? `(ИНН: ${summary.customerInn})` : ''}`);
+  lines.push(`• НМЦК / Сумма: ${summary.procurementSum || 'Не указана'}`);
+  lines.push(`• Дата аукциона / подачи: ${summary.auctionDate || 'Не указана'}`);
+  lines.push(`• ИНДЕКС РИСКА: ${summary.overallRiskScore} / 100 [Уровень: ${summary.riskLevel}]`);
+  lines.push(`• Ключевой вывод эксперта: ${summary.keyTakeaway}\n`);
 
-  // Delivery & Logistics
+  // Section 2: Delivery & Logistics
+  lines.push(`2. ЛОГИСТИКА, СРОКИ И УСЛОВИЯ ПОСТАВКИ`);
+  lines.push(`------------------------------------------------------------------------`);
   if (deliveryInfo) {
-    lines.push(`--- 1. ЛОГИСТИКА И СРОКИ ПОСТАВКИ ---`);
-    lines.push(`Срок и регламент поставки: ${deliveryInfo.deliveryPeriod || 'Стандартные условия'}`);
+    lines.push(`• Срок и период поставки: ${deliveryInfo.deliveryPeriod || 'Согласно договору'}`);
     if (deliveryInfo.deliveryScheduleNotice) {
-      lines.push(`Порядок/график: ${deliveryInfo.deliveryScheduleNotice}`);
+      lines.push(`• Порядок вызова/график: ${deliveryInfo.deliveryScheduleNotice}`);
     }
     if (deliveryInfo.deliveryAddresses && deliveryInfo.deliveryAddresses.length > 0) {
-      lines.push(`Адреса поставки:`);
+      lines.push(`• Адреса поставки и складов:`);
       deliveryInfo.deliveryAddresses.forEach((addr, idx) => {
-        lines.push(`  ${idx + 1}. ${addr}`);
+        lines.push(`   ${idx + 1}. ${addr}`);
       });
     }
     if (deliveryInfo.unloadingAndAccessConditions) {
-      lines.push(`Разгрузка и пропускной режим: ${deliveryInfo.unloadingAndAccessConditions}`);
+      lines.push(`• Разгрузка, подъем и пропускной режим: ${deliveryInfo.unloadingAndAccessConditions}`);
+    }
+    if (deliveryInfo.consigneeDetails) {
+      lines.push(`• Грузополучатель: ${deliveryInfo.consigneeDetails}`);
     }
     if (deliveryInfo.riskWarning) {
-      lines.push(`ВНИМАНИЕ (Риски поставки): ${deliveryInfo.riskWarning}`);
+      lines.push(`• ⚠️ ВНИМАНИЕ (Риски логистики): ${deliveryInfo.riskWarning}`);
     }
+  } else {
+    lines.push(`Специальные условия логистики не выделены.`);
+  }
+  lines.push(``);
+
+  // Section 3: Contract Risks Register
+  lines.push(`3. РЕЕСТР ВЫЯВЛЕННЫХ РИСКОВ И КАБАЛЬНЫХ УСЛОВИЙ ДОГОВОРА (${contractRisks.length} поз.)`);
+  lines.push(`------------------------------------------------------------------------`);
+  if (contractRisks.length === 0) {
+    lines.push(`Критических рисков и кабальных неустоек в проекте договора не обнаружено.`);
+  } else {
+    contractRisks.forEach((risk, idx) => {
+      lines.push(`[${idx + 1}] УРОВЕНЬ: ${risk.severity} | ${risk.title}`);
+      lines.push(`    Пункт договора: ${risk.clauseNumber || 'Б/Н'}`);
+      lines.push(`    Цитата из документа: «${risk.clauseQuote}»`);
+      lines.push(`    Юридический анализ: ${risk.explanation}`);
+      lines.push(`    Рекомендация поставщику: ${risk.recommendation}`);
+      lines.push(``);
+    });
+  }
+
+  // Section 4: Specifications & Technical Task
+  lines.push(`4. СПЕЦИФИКАЦИЯ ТОВАРОВ И ТРЕБОВАНИЯ ТЗ (${productList?.length || 0} наимен.)`);
+  lines.push(`------------------------------------------------------------------------`);
+  if (productList && productList.length > 0) {
+    productList.forEach((prod, idx) => {
+      lines.push(`[Позиция ${idx + 1}] ${prod.name}`);
+      lines.push(`    Количество: ${prod.quantity}`);
+      if (prod.okpd2OrGvin || prod.okpd2) {
+        lines.push(`    ОКПД2 / КТРУ: ${prod.okpd2OrGvin || prod.okpd2}`);
+      }
+      if (prod.pp1875Status) {
+        lines.push(`    Национальный режим (ПП 1875): ${prod.pp1875Status}`);
+      }
+      lines.push(`    Требования спецификации: ${prod.specification}`);
+      if (prod.parameters && prod.parameters.length > 0) {
+        lines.push(`    Ключевые параметры: ${prod.parameters.map(p => `${p.name}: ${p.value}`).join('; ')}`);
+      }
+      lines.push(``);
+    });
+  } else {
+    lines.push(`Спецификация поставляется по условиям договора.`);
     lines.push(``);
   }
 
-  // Contract Risks
-  lines.push(`--- 2. РИСКИ И ДЕФЕКТЫ ПРОЕКТА ДОГОВОРА (${contractRisks.length} поз.) ---`);
-  if (contractRisks.length === 0) {
-    lines.push(`Критических рисков в проекте договора не выявлено.`);
-  } else {
-    contractRisks.forEach((risk, idx) => {
-      lines.push(`${idx + 1}. [${risk.severity}] ${risk.title}`);
-      lines.push(`   Пункт договора: ${risk.clauseNumber || 'Б/Н'}`);
-      lines.push(`   Цитата: "${risk.clauseQuote}"`);
-      lines.push(`   Разъяснение: ${risk.explanation}`);
-      lines.push(`   Рекомендация: ${risk.recommendation}`);
-      lines.push(``);
-    });
+  // Section 5: Submission Rules & Check
+  lines.push(`5. ПРАВИЛА ПОДАЧИ ЗАЯВКИ И НАЦИОНАЛЬНЫЙ РЕЖИМ`);
+  lines.push(`------------------------------------------------------------------------`);
+  if (submissionRulesCheck) {
+    lines.push(`• Тип процедуры: ${submissionRulesCheck.procedureType}`);
+    lines.push(`• Заявка по установленной табличной форме: ${submissionRulesCheck.requestInTableRequired ? 'ОБЯЗАТЕЛЬНО' : 'В свободной форме'}`);
+    lines.push(`• Аккредитация на ЭТП: ${submissionRulesCheck.etpAccreditationNotice}`);
+    lines.push(`• Применение ПП РФ № 1875 / Нацрежим: ${submissionRulesCheck.pp1875Applies ? 'ПРИМЕНЯЕТСЯ (' + submissionRulesCheck.pp1875Details + ')' : 'Не применяется'}`);
+    lines.push(`• Необходимый состав документов: ${submissionRulesCheck.requiredFilesStructure.join(', ')}`);
+    if (submissionRulesCheck.accountingInfoNeeded) {
+      lines.push(`• Требования к бухгалтерским данным: ${submissionRulesCheck.accountingItems?.join(', ')}`);
+    }
   }
-
-  // Submission Rules Check
-  lines.push(`--- 3. ПРАВИЛА ПОДАЧИ ЗАЯВКИ И НАЦИОНАЛЬНЫЙ РЕЖИМ ---`);
-  lines.push(`Тип процедуры: ${submissionRulesCheck.procedureType}`);
-  lines.push(`Заявка по форме таблицы: ${submissionRulesCheck.requestInTableRequired ? 'ДА (Обязательно)' : 'Нет'}`);
-  lines.push(`Аккредитация ЕТП: ${submissionRulesCheck.etpAccreditationNotice}`);
-  lines.push(`Национальный режим (ПП 1875): ${submissionRulesCheck.pp1875Applies ? 'ПРИМЕНЯЕТСЯ' : 'Не применяется'}`);
-  if (submissionRulesCheck.pp1875Details) {
-    lines.push(`   Детали ПП 1875: ${submissionRulesCheck.pp1875Details}`);
-  }
-  lines.push(`Состав документов: ${submissionRulesCheck.requiredFilesStructure.join(', ')}`);
   lines.push(``);
 
-  // Products List
-  if (productList && productList.length > 0) {
-    lines.push(`--- 4. СПЕЦИФИКАЦИЯ И ТЕХНИЧЕСКОЕ ЗАДАНИЕ (${productList.length} наимен.) ---`);
-    productList.forEach((prod, idx) => {
-      lines.push(`${idx + 1}. ${prod.name}`);
-      lines.push(`   Количество: ${prod.quantity}`);
-      if (prod.okpd2OrGvin || prod.okpd2) {
-        lines.push(`   ОКПД2/КТРУ: ${prod.okpd2OrGvin || prod.okpd2}`);
-      }
-      lines.push(`   Требования ТЗ: ${prod.specification}`);
-      if (prod.parameters && prod.parameters.length > 0) {
-        lines.push(`   Параметры: ${prod.parameters.map(p => `${p.name}: ${p.value}`).join('; ')}`);
-      }
-      lines.push(``);
-    });
+  // Section 6: Workflow & Acceptance
+  lines.push(`6. РЕГЛАМЕНТ ПРИЕМКИ И ЗАКРЫВАЮЩИХ ДОКУМЕНТОВ`);
+  lines.push(`------------------------------------------------------------------------`);
+  if (postAwardWorkflow) {
+    lines.push(`• Стратегия работы с актами приемки: ${postAwardWorkflow.acceptanceDocsStrategy}`);
+    lines.push(`• Обязательные сопроводительные документы: ${postAwardWorkflow.accompanyingDocs.join(', ')}`);
+    lines.push(`• Порядок при мотивированном отказе Заказчика: ${postAwardWorkflow.motivatedRefusalGuide}`);
   }
+  lines.push(``);
 
-  // Generated Templates
+  // Section 7: Pre-drafted Templates
   if (generatedTemplates) {
-    lines.push(`--- 5. ГОТОВЫЕ ШАБЛОНЫ И ПИСЬМА ---`);
+    lines.push(`7. ГОТОВЫЕ ШАБЛОНЫ ЮРИДИЧЕСКИХ ПИСЕМ И ЗАПРОСОВ`);
+    lines.push(`------------------------------------------------------------------------`);
+    
     if (generatedTemplates.acceptanceDocsRequest) {
-      lines.push(`\n[Запрос на согласование первичных документов]`);
+      lines.push(`\n[7.1 Запрос на согласование и подписание закрывающих документов]\n`);
       lines.push(generatedTemplates.acceptanceDocsRequest);
     }
     if (generatedTemplates.motivatedRefusalDemand) {
-      lines.push(`\n[Мотивированный отказ / Разногласия]`);
+      lines.push(`\n[7.2 Мотивированное возражение / Ответ на отказ в приемке]\n`);
       lines.push(generatedTemplates.motivatedRefusalDemand);
     }
     if (generatedTemplates.etpFundsRequest) {
-      lines.push(`\n[Письмо по разблокировке денежных средств ЕТП]`);
+      lines.push(`\n[7.3 Письмо оператору ЭТП о разблокировке денежных средств]\n`);
       lines.push(generatedTemplates.etpFundsRequest);
     }
     if (generatedTemplates.claimResponseTemplate) {
-      lines.push(`\n[Ответ на претензию Заказчика]`);
+      lines.push(`\n[7.4 Ответ на претензию Заказчика о начислении неустойки]\n`);
       lines.push(generatedTemplates.claimResponseTemplate);
     }
   }
 
-  lines.push(`\n------------------------------------------------------------------------`);
-  lines.push(`Отчет сгенерирован автоматически в интеллектуальной системе TenderAgent (223-ФЗ / 44-ФЗ)`);
-  lines.push(`Дата создания: ${new Date().toLocaleString('ru-RU')}`);
+  lines.push(`\n========================================================================`);
+  lines.push(`Экспертное заключение сформировано системой TenderAgent AI на базе норм ГК РФ, 223-ФЗ и 44-ФЗ.`);
 
   return lines.join('\n');
 }
@@ -147,7 +181,7 @@ export async function exportReportToGoogleDocs(
 ): Promise<ExportToDocsResult> {
   const token = accessToken || (await getGoogleAccessTokenForDocs());
 
-  const title = `Анализ закупки: ${result.summary.projectName || result.summary.procurementTitle || 'Тендер 223-ФЗ'}`;
+  const docTitle = `Аудит закупки: ${result.summary.projectName || result.summary.procurementTitle || 'Тендер 223-ФЗ'}`;
 
   // Step 1: Create empty Google Document
   const createResp = await fetch('https://docs.googleapis.com/v1/documents', {
@@ -157,7 +191,7 @@ export async function exportReportToGoogleDocs(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      title,
+      title: docTitle,
     }),
   });
 

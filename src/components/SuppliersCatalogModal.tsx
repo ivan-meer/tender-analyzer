@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   Building2, 
@@ -32,7 +32,10 @@ import {
   Camera,
   Image as ImageIcon,
   Save,
-  Upload
+  Upload,
+  LayoutGrid,
+  List,
+  RotateCcw
 } from 'lucide-react';
 import { VERIFIED_SUPPLIERS } from '../data/verifiedSuppliers';
 import { ProductItem } from '../types';
@@ -48,6 +51,71 @@ interface SuppliersCatalogModalProps {
   onSelectSupplierForProduct?: (productName: string, supplierName: string) => void;
 }
 
+// Curated bank of realistic photo presets for Russian procurement categories
+const REALISTIC_PHOTO_PRESETS = [
+  {
+    name: 'Стол рабочий (ЛДСП/Металл)',
+    category: 'Furniture',
+    url: 'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    name: 'Кресло операторское (Сетка)',
+    category: 'Furniture',
+    url: 'https://images.unsplash.com/photo-1580481072645-022f9a6d8310?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    name: 'Шкаф архивный / Стеллаж',
+    category: 'Furniture',
+    url: 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    name: 'Компьютер ПК / Монитор',
+    category: 'Tech',
+    url: 'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    name: 'Силовой кабель / Электро',
+    category: 'Electrical',
+    url: 'https://images.unsplash.com/photo-1558346490-a72e53ae2d4f?auto=format&fit=crop&w=600&q=80'
+  },
+  {
+    name: 'Медицинская лаборатория',
+    category: 'Medical',
+    url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=600&q=80'
+  }
+];
+
+// Robust product image component with error handling fallback
+const ProductImageFallback: React.FC<{
+  src?: string;
+  alt: string;
+  category?: string;
+  className?: string;
+}> = ({ src, alt, category, className = "w-full h-36 object-cover" }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (!src || hasError) {
+    return (
+      <div className={`bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center p-3 text-slate-400 text-center ${className}`}>
+        <Package className="w-8 h-8 text-cyan-500/80 mb-1 animate-pulse" />
+        <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-300 truncate max-w-[140px]">
+          {alt || category || 'Чертеж ТЗ / ГОСТ'}
+        </span>
+        <span className="text-[9px] text-slate-400 font-mono mt-0.5">Фото по запросу</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setHasError(true)}
+      className={className}
+    />
+  );
+};
+
 export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
   isOpen,
   onClose,
@@ -56,12 +124,90 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [selectedSupplier, setSelectedSupplier] = useState<string>('ALL');
   const [onlyDomestic, setOnlyDomestic] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [activeTab, setActiveTab] = useState<'neon' | 'suppliers' | 'catalog' | 'matching'>('neon');
 
   // Price Range Filters
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
+
+  // Neon DB state
+  const [neonStatus, setNeonStatus] = useState<NeonStatus | null>(null);
+  const [neonCatalog, setNeonCatalog] = useState<NeonCatalogItem[]>([]);
+  const [neonSuppliers, setNeonSuppliers] = useState<NeonSupplier[]>([]);
+  const [neonLoading, setNeonLoading] = useState(false);
+
+  // Dynamic list of unique suppliers for filtering
+  const availableSuppliers = useMemo(() => {
+    const set = new Set<string>();
+    neonCatalog.forEach(item => {
+      const name = item.supplierName || item.manufacturer;
+      if (name) set.add(name);
+    });
+    neonSuppliers.forEach(s => {
+      if (s.companyName) set.add(s.companyName);
+    });
+    VERIFIED_SUPPLIERS.forEach(s => {
+      if (s.brandName) set.add(s.brandName);
+    });
+    return Array.from(set).sort();
+  }, [neonCatalog, neonSuppliers]);
+
+  // Reset all filters to show full catalog
+  const resetAllFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('ALL');
+    setSelectedSupplier('ALL');
+    setOnlyDomestic(false);
+    setMinPrice('');
+    setMaxPrice('');
+    if (activeTab === 'neon') {
+      fetchNeonCatalog('');
+    }
+  };
+
+  // Client-side filtered catalog items for Neon DB
+  const displayedNeonCatalog = useMemo(() => {
+    return neonCatalog.filter(item => {
+      // Category
+      if (selectedCategory !== 'ALL' && item.category !== selectedCategory) {
+        return false;
+      }
+      // Supplier
+      if (selectedSupplier !== 'ALL') {
+        const sup = (item.supplierName || item.manufacturer || '').toLowerCase();
+        if (!sup.includes(selectedSupplier.toLowerCase())) {
+          return false;
+        }
+      }
+      // GISP
+      if (onlyDomestic && item.inGispRegistry === false) {
+        return false;
+      }
+      // Price
+      if (minPrice && !isNaN(parseFloat(minPrice)) && item.estimatedPrice < parseFloat(minPrice)) {
+        return false;
+      }
+      if (maxPrice && !isNaN(parseFloat(maxPrice)) && item.estimatedPrice > parseFloat(maxPrice)) {
+        return false;
+      }
+      // Search
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const match =
+          item.modelName.toLowerCase().includes(term) ||
+          (item.supplierName || '').toLowerCase().includes(term) ||
+          (item.manufacturer || '').toLowerCase().includes(term) ||
+          (item.dimensions || '').toLowerCase().includes(term) ||
+          (item.description || '').toLowerCase().includes(term) ||
+          (item.gispRegistryStatus || '').toLowerCase().includes(term);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [neonCatalog, selectedCategory, selectedSupplier, onlyDomestic, minPrice, maxPrice, searchTerm]);
 
   // Selected item for Tech Specs Modal Inspector
   const [inspectedItem, setInspectedItem] = useState<NeonCatalogItem | null>(null);
@@ -69,12 +215,6 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
   const [showSchemaModal, setShowSchemaModal] = useState(false);
   const [showSearchAgentModal, setShowSearchAgentModal] = useState(false);
   const [selectedAgentProduct, setSelectedAgentProduct] = useState<ProductItem | null>(null);
-
-  // Neon DB state
-  const [neonStatus, setNeonStatus] = useState<NeonStatus | null>(null);
-  const [neonCatalog, setNeonCatalog] = useState<NeonCatalogItem[]>([]);
-  const [neonSuppliers, setNeonSuppliers] = useState<NeonSupplier[]>([]);
-  const [neonLoading, setNeonLoading] = useState(false);
 
   // Forms Visibility
   const [showAddForm, setShowAddForm] = useState(false);
@@ -350,15 +490,60 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
 
   // Filter suppliers for catalog tab
   const filteredSuppliers = VERIFIED_SUPPLIERS.filter(sup => {
-    const matchesSearch = 
-      sup.brandName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sup.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sup.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (sup.region && sup.region.toLowerCase().includes(searchTerm.toLowerCase()));
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = 
+        sup.brandName.toLowerCase().includes(term) ||
+        sup.description.toLowerCase().includes(term) ||
+        sup.category.toLowerCase().includes(term) ||
+        (sup.region && sup.region.toLowerCase().includes(term));
+      if (!matchesSearch) return false;
+    }
 
-    const matchesDomestic = !onlyDomestic || sup.isDomesticProducer;
+    if (selectedSupplier !== 'ALL' && !sup.brandName.toLowerCase().includes(selectedSupplier.toLowerCase())) {
+      return false;
+    }
 
-    return matchesSearch && matchesDomestic;
+    if (selectedCategory !== 'ALL') {
+      const catMap: Record<string, string> = {
+        'Furniture': 'мебель',
+        'Tech': 'техник',
+        'Electrical': 'электр',
+        'Construction': 'строй',
+        'Office': 'канц',
+        'Medical': 'медиц'
+      };
+      const matchSub = catMap[selectedCategory] || selectedCategory.toLowerCase();
+      if (!sup.category.toLowerCase().includes(matchSub)) {
+        return false;
+      }
+    }
+
+    if (onlyDomestic && !sup.isDomesticProducer) {
+      return false;
+    }
+
+    return true;
+  });
+
+  // Filtered Neon DB suppliers list
+  const displayedNeonSuppliers = neonSuppliers.filter(sup => {
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      const match =
+        sup.companyName.toLowerCase().includes(term) ||
+        (sup.specialization || '').toLowerCase().includes(term) ||
+        (sup.region || '').toLowerCase().includes(term) ||
+        (sup.contactsOrWebsite || '').toLowerCase().includes(term);
+      if (!match) return false;
+    }
+    if (selectedSupplier !== 'ALL' && !sup.companyName.toLowerCase().includes(selectedSupplier.toLowerCase())) {
+      return false;
+    }
+    if (onlyDomestic && !sup.inGispRegistry) {
+      return false;
+    }
+    return true;
   });
 
   const exportSuppliersToCsv = () => {
@@ -499,36 +684,108 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
           </div>
         </div>
 
-        {/* Filter Bar & Action buttons */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-3">
-          <form onSubmit={handleSearchSubmit} className="relative flex-1 flex gap-2">
+        {/* Comprehensive Filter Panel */}
+        <div className="p-4 bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 space-y-3">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
+            {/* Search Input */}
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  if (activeTab === 'neon') fetchNeonCatalog(e.target.value);
-                }}
-                placeholder="Поиск в Neon БД по названию, размерам (1400х750), цене, ГОСТ или бренду..."
-                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-cyan-500"
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Поиск по названию модели, габаритам (1400х750), ОКПД2, ГОСТ, фабрике или бренду..."
+                className="w-full pl-10 pr-8 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-cyan-500 shadow-2xs"
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-          </form>
 
-          {activeTab === 'neon' && (
+            {/* Category Dropdown Filter */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Filter className="w-3.5 h-3.5 text-cyan-500 shrink-0 hidden sm:inline" />
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none shadow-2xs shrink-0 cursor-pointer"
+              >
+                <option value="ALL">📦 Все категории продукции</option>
+                <option value="Furniture">Мебель, столы и кресла</option>
+                <option value="Tech">Оргтехника, ПК и Мониторы</option>
+                <option value="Electrical">Электротехника и кабель</option>
+                <option value="Construction">Стройматериалы</option>
+                <option value="Office">Канцелярия</option>
+                <option value="Medical">Медицинская мебель</option>
+              </select>
+            </div>
+
+            {/* Supplier / Manufacturer Dropdown Filter */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Building2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 hidden sm:inline" />
+              <select
+                value={selectedSupplier}
+                onChange={(e) => setSelectedSupplier(e.target.value)}
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none shadow-2xs shrink-0 cursor-pointer max-w-[210px] truncate"
+              >
+                <option value="ALL">🏭 Все поставщики ({availableSuppliers.length})</option>
+                {availableSuppliers.map((supName, idx) => (
+                  <option key={idx} value={supName}>
+                    {supName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* View Mode Switcher (Grid / Table) */}
+            <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1 rounded-xl gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  viewMode === 'grid'
+                    ? 'bg-cyan-600 text-white shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+                title="Отображение карточками с фото"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Сетка</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  viewMode === 'table'
+                    ? 'bg-cyan-600 text-white shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+                title="Отображение компактной реестровой таблицей"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Таблица</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Secondary filter bar: Price Range + GISP toggle + Reset Button */}
+          <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800">
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Price Filters */}
+              {/* Price range */}
               <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-xl text-xs">
                 <DollarSign className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span className="text-[10px] text-slate-400 font-bold">Прайс (₽):</span>
+                <span className="text-[10px] text-slate-400 font-bold">Прайс ₽:</span>
                 <input
                   type="number"
                   placeholder="от"
                   value={minPrice}
                   onChange={(e) => setMinPrice(e.target.value)}
-                  onBlur={() => fetchNeonCatalog()}
                   className="w-14 bg-transparent text-slate-800 dark:text-slate-100 focus:outline-none text-xs"
                 />
                 <span className="text-slate-400">—</span>
@@ -537,28 +794,43 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                   placeholder="до"
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(e.target.value)}
-                  onBlur={() => fetchNeonCatalog()}
                   className="w-16 bg-transparent text-slate-800 dark:text-slate-100 focus:outline-none text-xs"
                 />
               </div>
 
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none"
-              >
-                <option value="ALL">Все категории</option>
-                <option value="Furniture">Мебель и столы</option>
-                <option value="Tech">Оргтехника и ПК</option>
-                <option value="Electrical">Электротехника</option>
-                <option value="Construction">Стройматериалы</option>
-                <option value="Office">Канцелярия</option>
-                <option value="Medical">Медицина</option>
-              </select>
-
+              {/* GISP / Domestic check pill */}
               <button
+                type="button"
+                onClick={() => setOnlyDomestic(!onlyDomestic)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  onlyDomestic
+                    ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Только ГИСП Минпромторг (ПП 1875)</span>
+              </button>
+
+              {/* Reset Filters / View Full Catalog Button */}
+              {(searchTerm || selectedCategory !== 'ALL' || selectedSupplier !== 'ALL' || onlyDomestic || minPrice || maxPrice) && (
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  className="px-3 py-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                  title="Показать весь каталог без каких-либо ограничений"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Показать весь каталог (Сброс)</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
                 onClick={() => setShowSchemaModal(true)}
-                className="px-3 py-2 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 rounded-xl text-xs font-bold border border-cyan-800 transition-colors cursor-pointer flex items-center gap-1.5"
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
                 title="Инспектор структуры данных таблиц Neon PostgreSQL"
               >
                 <Database className="w-3.5 h-3.5 text-cyan-400" />
@@ -566,8 +838,9 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
               </button>
 
               <button
+                type="button"
                 onClick={exportNeonCatalogCsv}
-                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
                 title="Экспорт выгрузки Neon DB в CSV/Excel"
               >
                 <Download className="w-3.5 h-3.5 text-cyan-400" />
@@ -575,14 +848,15 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
               </button>
 
               <button
+                type="button"
                 onClick={() => setShowAddForm(!showAddForm)}
-                className="px-3.5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-2xs transition-colors flex items-center gap-1 cursor-pointer shrink-0"
               >
-                <Plus className="w-4 h-4" />
-                <span>+ Добавить позицию</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Добавить товар</span>
               </button>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Add Item Form Modal Drawer */}
@@ -596,7 +870,7 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="text-slate-400 hover:text-white text-xs font-bold"
+                className="text-slate-400 hover:text-white text-xs font-bold cursor-pointer"
               >
                 Отмена
               </button>
@@ -688,7 +962,7 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                     type="text"
                     value={newImageUrl}
                     onChange={(e) => setNewImageUrl(e.target.value)}
-                    placeholder="https://... или загрузите файл с компьютера"
+                    placeholder="https://... или выберите пресет ниже"
                     className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
                   />
                   <label className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0">
@@ -702,6 +976,22 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                     />
                   </label>
                 </div>
+
+                {/* Preset Photo Selector Buttons */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] text-slate-400 font-bold block w-full">Реалистичные пресеты фото:</span>
+                  {REALISTIC_PHOTO_PRESETS.map((preset, idx) => (
+                    <button
+                      type="button"
+                      key={idx}
+                      onClick={() => setNewImageUrl(preset.url)}
+                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-[10px] font-bold border border-slate-700 transition-colors cursor-pointer"
+                    >
+                      📷 {preset.name}
+                    </button>
+                  ))}
+                </div>
+
                 {newImageUrl && (
                   <div className="flex items-center gap-2 pt-1">
                     <img src={newImageUrl} alt="Превью" className="w-12 h-12 object-cover rounded-lg border border-slate-700" />
@@ -735,17 +1025,28 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                   </div>
                   <div>
                     <h4 className="text-xs font-extrabold text-cyan-200 uppercase tracking-wider">
-                      Облачная таблица `neon_catalog_items` (PostgreSQL)
+                      Облачная база `neon_catalog_items` (PostgreSQL)
                     </h4>
                     <p className="text-[11px] text-slate-300">
-                      Хранение габаритов, описаний, прайс-листов и реестровых статусов с мгновенным подбором для 223-ФЗ
+                      Полный реестр моделей, параметров, прайс-листов и реестровых статусов Минпромторга
                     </p>
                   </div>
                 </div>
 
-                <span className="text-xs font-mono font-bold text-cyan-300 bg-cyan-950 px-3 py-1 rounded-xl border border-cyan-800">
-                  Всего моделей: {neonCatalog.length}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-cyan-300 bg-cyan-950 px-3 py-1 rounded-xl border border-cyan-800">
+                    Показано {displayedNeonCatalog.length} из {neonCatalog.length} моделей
+                  </span>
+                  {(searchTerm || selectedCategory !== 'ALL' || selectedSupplier !== 'ALL' || onlyDomestic || minPrice || maxPrice) && (
+                    <button
+                      type="button"
+                      onClick={resetAllFilters}
+                      className="text-xs text-amber-400 hover:underline font-bold cursor-pointer"
+                    >
+                      (Сбросить фильтры)
+                    </button>
+                  )}
+                </div>
               </div>
 
               {neonLoading ? (
@@ -753,34 +1054,122 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                   <RefreshCw className="w-6 h-6 animate-spin text-cyan-500 mx-auto" />
                   <p className="text-xs text-slate-400">Загрузка данных из Neon PostgreSQL...</p>
                 </div>
-              ) : neonCatalog.length === 0 ? (
+              ) : displayedNeonCatalog.length === 0 ? (
                 <div className="py-12 text-center bg-slate-800/40 rounded-2xl border border-slate-700/50 p-6 space-y-3">
                   <AlertCircle className="w-8 h-8 text-amber-400 mx-auto" />
-                  <h4 className="text-sm font-bold text-white">В Neon PostgreSQL не найдено позиций по запросу</h4>
+                  <h4 className="text-sm font-bold text-white">В каталоге Neon не найдено товаров по данным фильтрам</h4>
                   <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Вы можете добавить новую позицию или нажать кнопку сброса поиска.
+                    Вы можете изменить критерии фильтрации или нажать кнопку ниже, чтобы увидеть весь каталог.
                   </p>
                   <button
-                    onClick={() => { setSearchTerm(''); setSelectedCategory('ALL'); fetchNeonCatalog(''); }}
+                    onClick={resetAllFilters}
                     className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
                   >
-                    Показать весь каталог Neon DB
+                    Показать весь каталог ({neonCatalog.length} товаров)
                   </button>
                 </div>
+              ) : viewMode === 'table' ? (
+                /* TABLE VIEW MODE */
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 dark:border-slate-700">
+                      <tr>
+                        <th className="p-3">Фото</th>
+                        <th className="p-3">Модель / Наименование</th>
+                        <th className="p-3">Поставщик / Производитель</th>
+                        <th className="p-3">Категория</th>
+                        <th className="p-3">Габариты</th>
+                        <th className="p-3">Прайс (₽)</th>
+                        <th className="p-3">ГИСП Минпромторг</th>
+                        <th className="p-3 text-right">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
+                      {displayedNeonCatalog.map((item) => (
+                        <tr key={item.id} className="hover:bg-cyan-500/5 transition-colors">
+                          <td className="p-2.5 w-16">
+                            <ProductImageFallback
+                              src={item.imageUrl}
+                              alt={item.modelName}
+                              category={item.category}
+                              className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
+                            />
+                          </td>
+                          <td className="p-3 font-extrabold text-slate-900 dark:text-white max-w-[200px]">
+                            <div className="truncate">{item.modelName}</div>
+                            <div className="text-[10px] text-slate-400 font-normal line-clamp-1">{item.description}</div>
+                          </td>
+                          <td className="p-3 font-semibold text-cyan-600 dark:text-cyan-400 max-w-[150px] truncate">
+                            {item.supplierName || item.manufacturer}
+                          </td>
+                          <td className="p-3 font-medium text-slate-500 dark:text-slate-400">
+                            <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-md text-[10px] font-bold">
+                              {item.category === 'Furniture' ? 'Мебель' : item.category === 'Tech' ? 'Оргтехника' : item.category === 'Electrical' ? 'Электро' : item.category}
+                            </span>
+                          </td>
+                          <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">
+                            {item.dimensions || 'По ТЗ'}
+                          </td>
+                          <td className="p-3 font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                            {item.priceFormatted || `${item.estimatedPrice?.toLocaleString('ru-RU')} ₽`}
+                          </td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 rounded-md border border-emerald-300 dark:border-emerald-800 whitespace-nowrap">
+                              ✓ ПП 1875
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => setInspectedItem(item)}
+                                className="p-1.5 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 rounded-lg transition-colors cursor-pointer"
+                                title="Детальный инспектор ТХ"
+                              >
+                                <Info className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => copyTechSpecsToClipboard(item)}
+                                className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-cyan-400 rounded-lg transition-colors cursor-pointer"
+                                title="Копировать ТХ"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setEditingItem(item)}
+                                className="p-1.5 text-slate-400 hover:text-cyan-400 rounded-lg transition-colors cursor-pointer"
+                                title="Редактировать"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteItem(item.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg transition-colors cursor-pointer"
+                                title="Удалить"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {neonCatalog.map((item) => (
+                /* GRID CARDS VIEW MODE */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {displayedNeonCatalog.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 space-y-3 transition-all hover:border-cyan-400 dark:hover:border-cyan-600 hover:shadow-md flex flex-col justify-between"
+                      className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 space-y-3 transition-all hover:border-cyan-400 dark:hover:border-cyan-600 hover:shadow-md flex flex-col justify-between group"
                     >
                       <div className="space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className="text-[10px] font-extrabold text-cyan-500 dark:text-cyan-400 uppercase tracking-wider block">
-                              Поставщик: {item.supplierName || item.manufacturer}
+                            <span className="text-[10px] font-extrabold text-cyan-500 dark:text-cyan-400 uppercase tracking-wider block truncate max-w-[180px]">
+                              {item.supplierName || item.manufacturer}
                             </span>
-                            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white line-clamp-1">
                               {item.modelName}
                             </h3>
                           </div>
@@ -806,22 +1195,22 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                           </div>
                         </div>
 
-                        {/* Product Image preview if present */}
-                        {item.imageUrl && (
-                          <div className="relative w-full h-36 rounded-xl overflow-hidden bg-slate-900 border border-slate-700/60 my-1 group">
-                            <img src={item.imageUrl} alt={item.modelName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                            <span className="absolute bottom-1.5 right-1.5 px-2 py-0.5 bg-slate-950/80 backdrop-blur-xs text-white text-[9px] font-bold rounded-md flex items-center gap-1">
-                              <Camera className="w-2.5 h-2.5 text-cyan-400" /> Фото товара
-                            </span>
-                          </div>
-                        )}
+                        {/* Product Image preview using robust fallback */}
+                        <div className="relative w-full h-36 rounded-xl overflow-hidden bg-slate-900 border border-slate-700/60 my-1">
+                          <ProductImageFallback
+                            src={item.imageUrl}
+                            alt={item.modelName}
+                            category={item.category}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
 
                         {/* Dimensions & Prices highlights */}
                         <div className="grid grid-cols-2 gap-2 pt-1">
                           <div className="bg-slate-50 dark:bg-slate-900/90 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
                             <span className="text-[10px] text-slate-400 font-bold block flex items-center gap-1">
                               <Ruler className="w-3 h-3 text-cyan-500" />
-                              Габариты / Размеры:
+                              Размеры:
                             </span>
                             <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-100 truncate block mt-0.5">
                               {item.dimensions || 'По ТЗ'}
@@ -831,7 +1220,7 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                           <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
                             <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold block flex items-center gap-1">
                               <DollarSign className="w-3 h-3 text-emerald-500" />
-                              Прайс / Стоимость:
+                              Прайс:
                             </span>
                             <span className="text-xs font-mono font-extrabold text-emerald-700 dark:text-emerald-300 truncate block mt-0.5">
                               {item.priceFormatted || `${item.estimatedPrice?.toLocaleString('ru-RU')} ₽`}
@@ -839,29 +1228,29 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
                           </div>
                         </div>
 
-                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed pt-1">
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed pt-1 line-clamp-2">
                           {item.description}
                         </p>
 
                         <div className="text-[10px] font-medium text-slate-400 bg-slate-100 dark:bg-slate-900 p-2 rounded-lg flex items-center justify-between gap-2">
                           <span className="truncate">Реестр: {item.gispRegistryStatus}</span>
-                          <span className="font-bold text-cyan-500 shrink-0">Neon DB ID #{item.id}</span>
+                          <span className="font-bold text-cyan-500 shrink-0">ID #{item.id}</span>
                         </div>
 
-                        {/* Action buttons for tech specs and copying */}
+                        {/* Action buttons */}
                         <div className="flex items-center gap-2 pt-1">
                           <button
                             onClick={() => setInspectedItem(item)}
                             className="flex-1 px-3 py-1.5 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                           >
                             <Info className="w-3.5 h-3.5" />
-                            <span>Детальные ТХ и Прайс</span>
+                            <span>Детальные ТХ</span>
                           </button>
 
                           <button
                             onClick={() => copyTechSpecsToClipboard(item)}
                             className="p-1.5 bg-slate-100 dark:bg-slate-900 text-slate-400 hover:text-cyan-400 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
-                            title="Скопировать технические характеристики в буфер"
+                            title="Скопировать технические характеристики"
                           >
                             <Copy className="w-3.5 h-3.5" />
                           </button>
@@ -1009,7 +1398,7 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
 
               {/* Suppliers list cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {neonSuppliers.map((sup) => (
+                {displayedNeonSuppliers.map((sup) => (
                   <div
                     key={sup.id}
                     className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 space-y-3 transition-all hover:border-emerald-500 hover:shadow-md flex flex-col justify-between"

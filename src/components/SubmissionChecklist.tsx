@@ -1,6 +1,7 @@
 import React from 'react';
-import { CheckSquare, AlertCircle, FileSpreadsheet, Building2, CreditCard, ShieldCheck } from 'lucide-react';
+import { CheckSquare, FileSpreadsheet, Building2, CreditCard, ShieldCheck } from 'lucide-react';
 import { SubmissionRulesCheck } from '../types';
+import { motion } from 'motion/react';
 
 interface SubmissionChecklistProps {
   check: SubmissionRulesCheck;
@@ -8,10 +9,15 @@ interface SubmissionChecklistProps {
 
 export const SubmissionChecklist: React.FC<SubmissionChecklistProps> = ({ check }) => {
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-6 transition-colors duration-200">
+    <motion.div 
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-6 transition-colors duration-200"
+    >
       <div className="border-b border-slate-200 dark:border-slate-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0">
         <div className="min-w-0">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 truncate">
+          <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2 truncate tracking-tight">
             <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
               <CheckSquare className="w-5 h-5" />
             </div>
@@ -21,7 +27,7 @@ export const SubmissionChecklist: React.FC<SubmissionChecklistProps> = ({ check 
             Контрольный чек-лист подготовки документов менеджеру и тендерному специалисту
           </p>
         </div>
-        <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-300 shrink-0 self-start sm:self-center">
+        <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-300 shrink-0 self-start sm:self-center shadow-2xs">
           {check.procedureType === '223_FZ_AUCTION'
             ? 'Электронный Аукцион'
             : check.procedureType === '223_FZ_QUOTATION'
@@ -115,7 +121,7 @@ export const SubmissionChecklist: React.FC<SubmissionChecklistProps> = ({ check 
         </div>
 
         {/* Step 4: Accounting & Financial Info */}
-        <div className={`border rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xs ${check.accountingInfoNeeded ? 'bg-red-50/60 dark:bg-red-950/40 border-red-200 dark:border-red-900/60' : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80'}`}>
+        <div className={`border rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xs ${check.accountingInfoNeeded ? 'bg-rose-50/60 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60' : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/80'}`}>
           <div className="flex items-center gap-2 font-bold text-xs text-slate-800 dark:text-slate-200 border-b border-slate-200/80 dark:border-slate-700/60 pb-2.5">
             <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black shadow-2xs">4</div>
             <span>Запрос данных в Бухгалтерию</span>
@@ -124,8 +130,8 @@ export const SubmissionChecklist: React.FC<SubmissionChecklistProps> = ({ check 
           <div className="space-y-2 text-xs">
             {check.accountingInfoNeeded ? (
               <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-red-700 dark:text-red-400 font-bold">
-                  <Building2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-400 font-bold">
+                  <Building2 className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                   <span>Требуются данные бухгалтерии! Заранее предупредить тендерного!</span>
                 </div>
                 <ul className="list-disc pl-4 space-y-1 text-slate-700 dark:text-slate-300 font-medium">
@@ -150,7 +156,6 @@ export const SubmissionChecklist: React.FC<SubmissionChecklistProps> = ({ check 
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
-

@@ -30,10 +30,10 @@ interface PdfReportPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   analysisResult: AnalysisResult | null;
-  onDownloadPdf: () => Promise<void>;
+  onDownloadPdf: () => Promise<void> | void;
   onExportTxt: () => void;
-  onExportGoogleDocs?: () => Promise<void>;
-  onExportGoogleSheets?: () => Promise<void>;
+  onExportGoogleDocs?: () => Promise<void> | void;
+  onExportGoogleSheets?: () => Promise<void> | void;
   isExportingPdf: boolean;
   isExportingGoogleDocs?: boolean;
   isExportingGoogleSheets?: boolean;

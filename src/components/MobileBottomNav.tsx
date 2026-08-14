@@ -1,14 +1,27 @@
-import React from 'react';
-import { MessageSquare, Building2, Calendar, History, FileText, Sparkles, Cpu, BookOpen, User as UserIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { 
+  FileText, 
+  Package, 
+  History, 
+  MessageSquare, 
+  MoreHorizontal, 
+  Building2, 
+  Calendar, 
+  BookOpen, 
+  Cpu, 
+  X 
+} from 'lucide-react';
 import { User } from 'firebase/auth';
 
 interface MobileBottomNavProps {
   onOpenChat: () => void;
   onOpenCustomerVerification?: () => void;
+  onOpenSuppliersCatalog?: () => void;
   onOpenCalendar?: () => void;
   onOpenHistory: () => void;
   onScrollToUploader: () => void;
   onOpenAISettings?: () => void;
+  onOpenGuide?: () => void;
   currentUser?: User | null;
   onOpenAuthModal?: () => void;
 }
@@ -16,90 +29,163 @@ interface MobileBottomNavProps {
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onOpenChat,
   onOpenCustomerVerification,
+  onOpenSuppliersCatalog,
   onOpenCalendar,
   onOpenHistory,
   onScrollToUploader,
   onOpenAISettings,
-  currentUser,
-  onOpenAuthModal,
+  onOpenGuide,
 }) => {
-  const isGoogleUser = currentUser && !currentUser.isAnonymous;
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 shadow-lg px-2 py-1.5 transition-colors duration-200">
-      <div className="grid grid-cols-5 items-center justify-between max-w-md mx-auto text-center">
-        
-        {/* 1. AI Chat Consultant */}
-        <button
-          type="button"
-          onClick={onOpenChat}
-          className="flex flex-col items-center justify-center py-1.5 px-1 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-all cursor-pointer active:scale-95 group"
-        >
-          <div className="p-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200/80 dark:border-indigo-800 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-2xs">
+    <>
+      <nav className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-1 py-1.5 transition-colors">
+        <div className="grid grid-cols-5 items-center max-w-md mx-auto text-center">
+          
+          {/* 1. Analysis (Upload/Home) */}
+          <button
+            type="button"
+            onClick={onScrollToUploader}
+            className="flex flex-col items-center justify-center py-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+          >
+            <FileText className="w-4 h-4" />
+            <span className="text-[10px] font-medium mt-1 truncate">
+              Анализ
+            </span>
+          </button>
+
+          {/* 2. Products / Suppliers Catalog */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenSuppliersCatalog) onOpenSuppliersCatalog();
+            }}
+            className="flex flex-col items-center justify-center py-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+          >
+            <Package className="w-4 h-4" />
+            <span className="text-[10px] font-medium mt-1 truncate">
+              Каталог
+            </span>
+          </button>
+
+          {/* 3. Database / Saved history */}
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            className="flex flex-col items-center justify-center py-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+          >
+            <History className="w-4 h-4" />
+            <span className="text-[10px] font-medium mt-1 truncate">
+              База
+            </span>
+          </button>
+
+          {/* 4. AI Consultant Chat */}
+          <button
+            type="button"
+            onClick={onOpenChat}
+            className="flex flex-col items-center justify-center py-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+          >
             <MessageSquare className="w-4 h-4" />
-          </div>
-          <span className="text-[10px] font-extrabold mt-1 text-slate-800 dark:text-slate-200 truncate w-full">
-            ИИ-Чат
-          </span>
-        </button>
+            <span className="text-[10px] font-medium mt-1 truncate">
+              ИИ-Чат
+            </span>
+          </button>
 
-        {/* 2. Customer INN Check */}
-        <button
-          type="button"
-          onClick={() => onOpenCustomerVerification && onOpenCustomerVerification()}
-          className="flex flex-col items-center justify-center py-1.5 px-1 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-all cursor-pointer active:scale-95 group"
-        >
-          <div className="p-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/80 border border-amber-200/80 dark:border-amber-800 group-hover:bg-amber-500 group-hover:text-white transition-all shadow-2xs">
-            <Building2 className="w-4 h-4" />
-          </div>
-          <span className="text-[10px] font-extrabold mt-1 text-slate-800 dark:text-slate-200 truncate w-full">
-            ИНН
-          </span>
-        </button>
+          {/* 5. More Menu */}
+          <button
+            type="button"
+            onClick={() => setIsMoreOpen(true)}
+            className="flex flex-col items-center justify-center py-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+          >
+            <MoreHorizontal className="w-4 h-4" />
+            <span className="text-[10px] font-medium mt-1 truncate">
+              Ещё
+            </span>
+          </button>
 
-        {/* 3. Central Primary Action: Upload & Analyze */}
-        <button
-          type="button"
-          onClick={onScrollToUploader}
-          className="flex flex-col items-center justify-center -mt-4 py-1 px-1 transition-all cursor-pointer active:scale-95 group"
-        >
-          <div className="p-3 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-500/30 border-2 border-white dark:border-slate-900 group-hover:scale-105 transition-all">
-            <FileText className="w-5 h-5" />
-          </div>
-          <span className="text-[10px] font-black mt-0.5 text-indigo-700 dark:text-indigo-400 uppercase tracking-tighter truncate w-full">
-            Анализ
-          </span>
-        </button>
+        </div>
+      </nav>
 
-        {/* 4. Deadlines Calendar */}
-        <button
-          type="button"
-          onClick={() => onOpenCalendar && onOpenCalendar()}
-          className="flex flex-col items-center justify-center py-1.5 px-1 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all cursor-pointer active:scale-95 group"
-        >
-          <div className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 group-hover:border-indigo-300 transition-all shadow-2xs">
-            <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <span className="text-[10px] font-extrabold mt-1 text-slate-800 dark:text-slate-200 truncate w-full">
-            Календарь
-          </span>
-        </button>
+      {/* Clean Compact "More" Bottom Sheet */}
+      {isMoreOpen && (
+        <div className="fixed inset-0 z-50 md:hidden bg-slate-950/60 backdrop-blur-xs flex flex-col justify-end animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-2xl p-4 space-y-3 shadow-xl animate-slide-up pb-8">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-xs font-semibold text-slate-900 dark:text-white">
+                Инструменты и сервисы
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsMoreOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-        {/* 5. Database & History */}
-        <button
-          type="button"
-          onClick={onOpenHistory}
-          className="flex flex-col items-center justify-center py-1.5 px-1 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all cursor-pointer active:scale-95 group"
-        >
-          <div className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 group-hover:border-indigo-300 transition-all shadow-2xs">
-            <History className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-          </div>
-          <span className="text-[10px] font-extrabold mt-1 text-slate-800 dark:text-slate-200 truncate w-full">
-            База
-          </span>
-        </button>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {onOpenCustomerVerification && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenCustomerVerification();
+                    setIsMoreOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 font-medium text-left"
+                >
+                  <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>Проверка ИНН</span>
+                </button>
+              )}
 
-      </div>
-    </nav>
+              {onOpenCalendar && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenCalendar();
+                    setIsMoreOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 font-medium text-left"
+                >
+                  <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>Календарь</span>
+                </button>
+              )}
+
+              {onOpenGuide && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenGuide();
+                    setIsMoreOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 font-medium text-left"
+                >
+                  <BookOpen className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>Регламент</span>
+                </button>
+              )}
+
+              {onOpenAISettings && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenAISettings();
+                    setIsMoreOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 font-medium text-left"
+                >
+                  <Cpu className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span>Настройки ИИ</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
+

@@ -1,7 +1,8 @@
 import React from 'react';
-import { ShieldAlert, AlertTriangle, CheckCircle, Info, Ban, Sparkles } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, CheckCircle, Info, Ban, Sparkles, Building2 } from 'lucide-react';
 import { AnalysisResult } from '../types';
 import { CountdownTimer } from './CountdownTimer';
+import { motion } from 'motion/react';
 
 interface RiskSummaryCardProps {
   summary: AnalysisResult['summary'];
@@ -12,7 +13,7 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary, onOpe
   const getBadgeStyle = (level: string) => {
     switch (level) {
       case 'CRITICAL':
-        return 'bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
+        return 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800';
       case 'HIGH':
         return 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800';
       case 'MEDIUM':
@@ -23,13 +24,18 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary, onOpe
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 75) return 'text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30';
-    if (score >= 45) return 'text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30';
-    return 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30';
+    if (score >= 75) return 'text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900 bg-rose-50/80 dark:bg-rose-950/30';
+    if (score >= 45) return 'text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900 bg-amber-50/80 dark:bg-amber-950/30';
+    return 'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/30';
   };
 
   return (
-    <div className="space-y-4">
+    <motion.div 
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+      className="space-y-4"
+    >
       {/* Visual Live Countdown Timer to Auction / Submission Deadline */}
       <CountdownTimer 
         targetDateStr={summary.auctionDate} 
@@ -39,9 +45,16 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary, onOpe
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Main Title & Risk Score Card */}
-        <div className="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs flex flex-col justify-between space-y-4 transition-colors duration-200">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
-            <div className="space-y-1.5 min-w-0">
+        <motion.div 
+          whileHover={{ y: -2 }}
+          transition={{ duration: 0.2 }}
+          className="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-xs flex flex-col justify-between space-y-4 transition-colors duration-200 relative overflow-hidden"
+        >
+          {/* Subtle decorative background glow */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 dark:bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -mr-16 -mt-16" />
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0 relative z-10">
+            <div className="space-y-2 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`text-[11px] font-bold px-3 py-1 rounded-full border uppercase tracking-wider ${getBadgeStyle(summary.riskLevel)}`}>
                   Уровень риска: {summary.riskLevel}
@@ -55,50 +68,58 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary, onOpe
                   <button
                     type="button"
                     onClick={() => onOpenCustomerVerification(summary.customerInn, summary.customerName)}
-                    className="text-[11px] font-extrabold bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs truncate max-w-full"
+                    className="text-[11px] font-extrabold bg-amber-500/15 hover:bg-amber-500/25 active:scale-95 text-amber-900 dark:text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs truncate max-w-full"
                   >
-                    <span className="shrink-0">🏢 Проверить ИНН заказчика</span>
+                    <Building2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span className="shrink-0">Проверить ИНН заказчика</span>
                     {summary.customerName && <span className="font-semibold opacity-80 truncate">({summary.customerName})</span>}
                   </button>
                 )}
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight break-words">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight break-words">
                 {summary.procurementTitle || 'Результат комплексного анализа закупки'}
               </h2>
             </div>
 
-            {/* Risk Score Display */}
-            <div className={`flex items-center gap-3 p-4 rounded-2xl border ${getScoreColor(summary.overallRiskScore)} shrink-0 shadow-2xs`}>
+            {/* Risk Score Display with interactive hover badge */}
+            <motion.div 
+              whileHover={{ scale: 1.03 }}
+              className={`flex items-center gap-3 p-4 rounded-2xl border ${getScoreColor(summary.overallRiskScore)} shrink-0 shadow-2xs transition-all`}
+            >
               <div className="text-right">
                 <div className="text-[10px] uppercase font-extrabold tracking-wider opacity-80">Индекс риска</div>
-                <div className="text-2xl font-black font-mono leading-none mt-0.5">{summary.overallRiskScore} / 100</div>
+                <div className="text-2xl sm:text-3xl font-black font-mono leading-none mt-0.5">{summary.overallRiskScore} / 100</div>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-white/80 dark:bg-slate-900/80 flex items-center justify-center shadow-xs">
+              <div className="w-11 h-11 rounded-xl bg-white/90 dark:bg-slate-900/90 flex items-center justify-center shadow-xs">
                 {summary.overallRiskScore >= 75 ? (
-                  <ShieldAlert className="w-6 h-6 text-red-600 dark:text-red-400" />
+                  <ShieldAlert className="w-6 h-6 text-rose-600 dark:text-rose-400" />
                 ) : summary.overallRiskScore >= 45 ? (
                   <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
                 ) : (
                   <CheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                 )}
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* Key Takeaway / Analytical Summary */}
-          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 rounded-2xl p-4 space-y-1.5">
+          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-4 space-y-1.5 relative z-10">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-              <Info className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <Info className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
               <span>Краткий вывод и резюме аналитика:</span>
             </div>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
               {summary.keyTakeaway}
             </p>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Bento Grid: Dark Agent Advice Card (Matching Design Theme) */}
-        <div className="lg:col-span-4 bg-slate-900 dark:bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-xl text-white flex flex-col justify-between relative overflow-hidden space-y-4">
+        {/* Bento Grid: Dark Agent Advice Card */}
+        <motion.div 
+          whileHover={{ y: -2 }}
+          transition={{ duration: 0.2 }}
+          className="lg:col-span-4 bg-slate-900 dark:bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-xl text-white flex flex-col justify-between relative overflow-hidden space-y-4"
+        >
           <div className="relative z-10 space-y-3">
             <div className="flex items-center gap-2 text-indigo-400">
               <Sparkles className="w-5 h-5 text-indigo-400" />
@@ -107,7 +128,7 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary, onOpe
               </h3>
             </div>
 
-            <div className="bg-slate-800/80 border border-slate-700/60 p-3.5 rounded-2xl">
+            <div className="bg-slate-800/90 border border-slate-700/70 p-3.5 rounded-2xl shadow-inner">
               <div className="flex items-start gap-2.5 text-xs text-amber-300 leading-relaxed font-medium">
                 <Ban className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <div>
@@ -125,9 +146,8 @@ export const RiskSummaryCard: React.FC<RiskSummaryCardProps> = ({ summary, onOpe
           <div className="absolute -bottom-4 -right-4 opacity-10 pointer-events-none">
             <ShieldAlert className="w-36 h-36 text-white" />
           </div>
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };
-

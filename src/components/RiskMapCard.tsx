@@ -25,16 +25,13 @@ import {
   ShieldAlert, 
   AlertTriangle, 
   CheckCircle2, 
-  Info, 
   BarChart3, 
   PieChart as PieChartIcon, 
   Activity, 
   Layers, 
-  Sparkles, 
-  Filter, 
-  TrendingUp, 
-  Target
+  Sparkles
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface RiskMapCardProps {
   summary: AnalysisResult['summary'];
@@ -43,7 +40,6 @@ interface RiskMapCardProps {
   onRiskSectorClick?: (filter: { category?: string | null; severity?: string | null }) => void;
 }
 
-// Category Human Translation & Config
 const CATEGORY_MAP: Record<string, { label: string; shortLabel: string; icon: string }> = {
   PENALTIES: { label: 'Штрафы и неустойки (3%)', shortLabel: 'Штрафы', icon: '⚖️' },
   DELIVERY_TERMS: { label: 'Сроки и график поставки', shortLabel: 'Поставка', icon: '🚚' },
@@ -62,7 +58,6 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
   const [activeChartTab, setActiveChartTab] = useState<'categories' | 'severity' | 'matrix'>('categories');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  // Determine overall risk zone color & text
   const riskScore = summary.overallRiskScore;
   const riskZone = useMemo(() => {
     if (riskScore >= 70 || summary.riskLevel === 'CRITICAL' || summary.riskLevel === 'HIGH') {
@@ -70,7 +65,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
         key: 'RED',
         title: 'КРАСНАЯ ЗОНА (Высокая критичность)',
         description: 'Высокая концентрация кабальных штрафов (3%), закупок у 3-х лиц или риска расторжения.',
-        bgColor: 'bg-rose-50 border-rose-200 text-rose-900',
+        bgColor: 'bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/60 text-rose-900 dark:text-rose-200',
         badgeBg: 'bg-rose-600 text-white',
         strokeColor: '#ef4444',
         accentHex: '#dc2626',
@@ -80,7 +75,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
         key: 'YELLOW',
         title: 'ЖЕЛТАЯ ЗОНА (Умеренный уровень риска)',
         description: 'Присутствуют стандартные пени за просрочку и жесткий регламент приемки.',
-        bgColor: 'bg-amber-50 border-amber-200 text-amber-900',
+        bgColor: 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/60 text-amber-900 dark:text-amber-200',
         badgeBg: 'bg-amber-500 text-slate-950',
         strokeColor: '#f59e0b',
         accentHex: '#d97706',
@@ -90,7 +85,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
         key: 'GREEN',
         title: 'ЗЕЛЕНАЯ ЗОНА (Низкий / Безопасный уровень)',
         description: 'Условия договора сбалансированы и соответствуют стандартной деловой практике.',
-        bgColor: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+        bgColor: 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/60 text-emerald-900 dark:text-emerald-200',
         badgeBg: 'bg-emerald-600 text-white',
         strokeColor: '#10b981',
         accentHex: '#059669',
@@ -98,7 +93,6 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
     }
   }, [riskScore, summary.riskLevel]);
 
-  // Aggregate stats by risk category
   const categoryChartData = useMemo(() => {
     const counts: Record<string, { count: number; criticalCount: number; highCount: number; mediumCount: number; infoCount: number }> = {
       PENALTIES: { count: 0, criticalCount: 0, highCount: 0, mediumCount: 0, infoCount: 0 },
@@ -132,11 +126,9 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
         medium: data.mediumCount,
         info: data.infoCount,
         weight: data.criticalCount * 3 + data.highCount * 2 + data.mediumCount * 1,
-      }))
-      .filter(item => item.count > 0 || true); // keep all for complete map
+      }));
   }, [contractRisks]);
 
-  // Severity Distribution Data
   const severityPieData = useMemo(() => {
     const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, INFO: 0 };
     contractRisks.forEach(r => {
@@ -164,7 +156,6 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
     }, 100);
   };
 
-  // Handle Category Filter Selection
   const handleCategoryClick = (catKey: string) => {
     const newSel = selectedCategory === catKey ? null : catKey;
     setSelectedCategory(newSel);
@@ -177,7 +168,6 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
     scrollToRisksTable();
   };
 
-  // Handle Severity Filter Selection (from Pie Chart)
   const handleSeverityClick = (severityKey: string) => {
     if (onRiskSectorClick) {
       onRiskSectorClick({ category: null, severity: severityKey });
@@ -186,7 +176,12 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden space-y-0 transition-colors duration-200 animate-fade-in">
+    <motion.div 
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-xs overflow-hidden space-y-0 transition-colors duration-200"
+    >
       
       {/* Card Header */}
       <div className="bg-slate-900 dark:bg-slate-950 text-white p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800">
@@ -201,14 +196,14 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
               </span>
               <span className="text-xs text-slate-400 font-medium">• Карта и Распределение Рисков</span>
             </div>
-            <h2 className="text-lg sm:text-xl font-extrabold text-white leading-tight">
+            <h2 className="text-lg sm:text-xl font-black text-white leading-tight tracking-tight">
               Интерактивная Карта Рисков и Индекс Безопасности
             </h2>
           </div>
         </div>
 
         {/* Tab Switcher for Chart Views */}
-        <div className="flex items-center gap-1 bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700 shrink-0">
+        <div className="flex items-center gap-1 bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700 shrink-0 shadow-inner">
           <button
             type="button"
             onClick={() => setActiveChartTab('categories')}
@@ -257,7 +252,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
           
           {/* Risk Score Gauge Display */}
-          <div className="md:col-span-5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-3xl p-5 flex flex-col justify-between space-y-4">
+          <div className="md:col-span-5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-3xl p-5 flex flex-col justify-between space-y-4 shadow-2xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Индекс риска договора
@@ -278,7 +273,7 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
 
               {/* Tricolor Scale Meter */}
               <div className="space-y-1">
-                <div className="h-3.5 w-full bg-slate-200 rounded-full overflow-hidden flex p-0.5 relative">
+                <div className="h-3.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex p-0.5 relative">
                   {/* Green segment */}
                   <div className="w-[35%] bg-emerald-500 h-full rounded-l-full" title="Зеленая зона (0-34)" />
                   {/* Yellow segment */}
@@ -288,15 +283,15 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
 
                   {/* Indicator Marker */}
                   <div 
-                    className="absolute top-0 bottom-0 w-2.5 bg-slate-950 border-2 border-white rounded-full shadow-md transition-all duration-500"
+                    className="absolute top-0 bottom-0 w-2.5 bg-slate-950 dark:bg-white border-2 border-white dark:border-slate-950 rounded-full shadow-md transition-all duration-500"
                     style={{ left: `calc(${Math.min(96, Math.max(2, riskScore))}% - 5px)` }}
                   />
                 </div>
 
                 <div className="flex justify-between text-[10px] font-extrabold text-slate-400 px-1 pt-0.5">
-                  <span className="text-emerald-700">0 Безопасно</span>
-                  <span className="text-amber-700">35 Внимание</span>
-                  <span className="text-rose-700">70+ Критично</span>
+                  <span className="text-emerald-700 dark:text-emerald-400">0 Безопасно</span>
+                  <span className="text-amber-700 dark:text-amber-400">35 Внимание</span>
+                  <span className="text-rose-700 dark:text-rose-400">70+ Критично</span>
                 </div>
               </div>
             </div>
@@ -304,19 +299,19 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
             {/* Risk Zone Description Badge */}
             <div className={`p-3.5 rounded-2xl border text-xs font-medium space-y-1 ${riskZone.bgColor}`}>
               <div className="font-extrabold flex items-center gap-1.5">
-                {riskZone.key === 'RED' && <ShieldAlert className="w-4 h-4 text-rose-600" />}
-                {riskZone.key === 'YELLOW' && <AlertTriangle className="w-4 h-4 text-amber-600" />}
-                {riskZone.key === 'GREEN' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                {riskZone.key === 'RED' && <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400" />}
+                {riskZone.key === 'YELLOW' && <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
+                {riskZone.key === 'GREEN' && <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
                 <span>{riskZone.title}</span>
               </div>
-              <p className="text-[11px] leading-relaxed opacity-90">
+              <p className="text-[11px] leading-relaxed opacity-90 font-medium">
                 {riskZone.description}
               </p>
             </div>
           </div>
 
           {/* Recharts Chart Canvas Container */}
-          <div className="md:col-span-7 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-3xl p-5 flex flex-col justify-between min-h-[280px]">
+          <div className="md:col-span-7 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-3xl p-5 flex flex-col justify-between min-h-[280px] shadow-2xs">
             
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
@@ -329,130 +324,150 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCategoryClick(selectedCategory)}
-                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <span>Сбросить фильтр</span>
                 </button>
               )}
             </div>
 
-            {/* RECHARTS VIEW 1: BAR CHART BY CATEGORY */}
-            {activeChartTab === 'categories' && (
-              <div className="w-full h-60">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={categoryChartData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
-                    <XAxis 
-                      dataKey="name" 
-                      tick={{ fontSize: 11, fontWeight: 700, fill: '#94a3b8' }} 
-                      interval={0}
-                      angle={-15}
-                      textAnchor="end"
-                    />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} />
-                    <Tooltip 
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-slate-900 text-white p-3 rounded-2xl shadow-xl border border-slate-700 text-xs space-y-1">
-                              <p className="font-extrabold text-indigo-300">{data.fullName}</p>
-                              <p>Всего условий с риском: <span className="font-bold text-amber-300">{data.count}</span></p>
-                              <div className="text-[10px] text-slate-300 space-y-0.5 pt-1 border-t border-slate-800">
-                                {data.critical > 0 && <p className="text-rose-400">🔴 Критических: {data.critical}</p>}
-                                {data.high > 0 && <p className="text-orange-400">🟧 Высоких: {data.high}</p>}
-                                {data.medium > 0 && <p className="text-amber-400">🟨 Умеренных: {data.medium}</p>}
+            <AnimatePresence mode="wait">
+              {activeChartTab === 'categories' && (
+                <motion.div 
+                  key="categories"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                  className="w-full h-60"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={categoryChartData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 11, fontWeight: 700, fill: '#94a3b8' }} 
+                        interval={0}
+                        angle={-15}
+                        textAnchor="end"
+                      />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+                      <Tooltip 
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-slate-900 text-white p-3 rounded-2xl shadow-xl border border-slate-700 text-xs space-y-1">
+                                <p className="font-extrabold text-indigo-300">{data.fullName}</p>
+                                <p>Всего условий с риском: <span className="font-bold text-amber-300">{data.count}</span></p>
+                                <div className="text-[10px] text-slate-300 space-y-0.5 pt-1 border-t border-slate-800">
+                                  {data.critical > 0 && <p className="text-rose-400">🔴 Критических: {data.critical}</p>}
+                                  {data.high > 0 && <p className="text-orange-400">🟧 Высоких: {data.high}</p>}
+                                  {data.medium > 0 && <p className="text-amber-400">🟨 Умеренных: {data.medium}</p>}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Bar 
-                      dataKey="count" 
-                      radius={[8, 8, 0, 0]}
-                      onClick={(barData: any) => handleCategoryClick(barData?.categoryKey || barData?.payload?.categoryKey)}
-                      className="cursor-pointer"
-                    >
-                      {categoryChartData.map((entry, index) => {
-                        const isSelected = selectedCategory === entry.categoryKey;
-                        let barColor = '#6366f1'; // Indigo default
-                        if (entry.critical > 0) barColor = '#ef4444'; // Red if has critical
-                        else if (entry.high > 0) barColor = '#f97316'; // Orange
-                        else if (entry.medium > 0) barColor = '#f59e0b'; // Amber
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Bar 
+                        dataKey="count" 
+                        radius={[8, 8, 0, 0]}
+                        onClick={(barData: any) => handleCategoryClick(barData?.categoryKey || barData?.payload?.categoryKey)}
+                        className="cursor-pointer"
+                      >
+                        {categoryChartData.map((entry, index) => {
+                          const isSelected = selectedCategory === entry.categoryKey;
+                          let barColor = '#6366f1';
+                          if (entry.critical > 0) barColor = '#ef4444';
+                          else if (entry.high > 0) barColor = '#f97316';
+                          else if (entry.medium > 0) barColor = '#f59e0b';
 
-                        return (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={isSelected ? '#312e81' : barColor} 
-                            opacity={selectedCategory && !isSelected ? 0.35 : 1}
-                          />
-                        );
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* RECHARTS VIEW 2: PIE CHART BY SEVERITY */}
-            {activeChartTab === 'severity' && (
-              <div className="w-full h-60 flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={severityPieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                      label={({ name, value }) => `${value}`}
-                      onClick={(pieData: any) => handleSeverityClick(pieData?.key || pieData?.payload?.key)}
-                      className="cursor-pointer"
-                    >
-                      {severityPieData.map((entry, index) => (
-                        <Cell key={`pie-cell-${index}`} fill={entry.color} className="cursor-pointer hover:opacity-80 transition-opacity" />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
                           return (
-                            <div className="bg-slate-900 text-white p-2.5 rounded-xl shadow-lg border border-slate-700 text-xs">
-                              <p className="font-extrabold">{data.name}</p>
-                              <p className="text-slate-300">Количество пунктов: <span className="font-bold text-white">{data.value}</span></p>
-                            </div>
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={isSelected ? '#312e81' : barColor} 
+                              opacity={selectedCategory && !isSelected ? 0.35 : 1}
+                            />
                           );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Legend 
-                      wrapperStyle={{ fontSize: '11px', fontWeight: 700 }}
-                      formatter={(value) => <span className="text-slate-700 dark:text-slate-300 font-bold">{value}</span>}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </motion.div>
+              )}
 
-            {/* RECHARTS VIEW 3: RADAR PROFILE MATRIX */}
-            {activeChartTab === 'matrix' && (
-              <div className="w-full h-60">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={categoryChartData}>
-                    <PolarGrid stroke="#475569" />
-                    <PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
-                    <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={{ fontSize: 9 }} />
-                    <Radar name="Индекс риска" dataKey="weight" stroke="#6366f1" fill="#818cf8" fillOpacity={0.5} />
-                    <Tooltip />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
+              {activeChartTab === 'severity' && (
+                <motion.div 
+                  key="severity"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                  className="w-full h-60 flex items-center justify-center"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={severityPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                        label={({ name, value }) => `${value}`}
+                        onClick={(pieData: any) => handleSeverityClick(pieData?.key || pieData?.payload?.key)}
+                        className="cursor-pointer"
+                      >
+                        {severityPieData.map((entry, index) => (
+                          <Cell key={`pie-cell-${index}`} fill={entry.color} className="cursor-pointer hover:opacity-80 transition-opacity" />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-slate-900 text-white p-2.5 rounded-xl shadow-lg border border-slate-700 text-xs">
+                                <p className="font-extrabold">{data.name}</p>
+                                <p className="text-slate-300">Количество пунктов: <span className="font-bold text-white">{data.value}</span></p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Legend 
+                        wrapperStyle={{ fontSize: '11px', fontWeight: 700 }}
+                        formatter={(value) => <span className="text-slate-700 dark:text-slate-300 font-bold">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </motion.div>
+              )}
+
+              {activeChartTab === 'matrix' && (
+                <motion.div 
+                  key="matrix"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                  className="w-full h-60"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart cx="50%" cy="50%" outerRadius="70%" data={categoryChartData}>
+                      <PolarGrid stroke="#475569" />
+                      <PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
+                      <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={{ fontSize: 9 }} />
+                      <Radar name="Индекс риска" dataKey="weight" stroke="#6366f1" fill="#818cf8" fillOpacity={0.5} />
+                      <Tooltip />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium text-center mt-2">
               💡 Нажмите на любой столбец диаграммы для быстрой фильтрации кабальных условий в реестре ниже.
@@ -511,6 +526,6 @@ export const RiskMapCard: React.FC<RiskMapCardProps> = ({
 
       </div>
 
-    </div>
+    </motion.div>
   );
 };

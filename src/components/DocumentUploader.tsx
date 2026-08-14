@@ -21,11 +21,24 @@ import {
   X,
   Archive,
   FileArchive,
-  Zap
+  Zap,
+  Globe,
+  Download,
+  FileDiff,
+  Building2,
+  ExternalLink,
+  Scale,
+  Calculator
 } from 'lucide-react';
 import { AnalysisInput, ProcedureType } from '../types';
 import { SAMPLE_PROCUREMENTS } from '../data/sampleProcurements';
-import { parseDocumentFile, parseFileOrArchive, ParsedDocument, formatFileSize } from '../utils/documentParser';
+import { 
+  parseDocumentFile, 
+  parseFileOrArchive, 
+  ParsedDocument, 
+  formatFileSize,
+  smartClassifyDocument 
+} from '../utils/documentParser';
 import { detectLawTypeFromContent, LawDetectionResult } from '../utils/lawDetector';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { TokenPriceEstimator } from './TokenPriceEstimator';
@@ -37,6 +50,9 @@ interface DocumentUploaderProps {
   isAnalyzing: boolean;
   onOpenScanModal?: () => void;
   onOpenHistory?: () => void;
+  onOpenContractDiff?: (initialOriginalText?: string) => void;
+  onOpenFasComplaint?: () => void;
+  onOpenBankGuarantee?: () => void;
 }
 
 const ALLOWED_EXTENSIONS = ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'pdf', 'docx', 'doc', 'rtf', 'xlsx', 'xls', 'csv', 'txt', 'json', 'md'];
@@ -47,6 +63,9 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   isAnalyzing,
   onOpenScanModal,
   onOpenHistory,
+  onOpenContractDiff,
+  onOpenFasComplaint,
+  onOpenBankGuarantee,
 }) => {
   const [lawType, setLawType] = useState<'223_FZ' | '44_FZ' | 'COMMERCIAL'>(() => {
     const saved = localStorage.getItem('selected_law_type');
@@ -81,6 +100,12 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const [modalDocument, setModalDocument] = useState<ParsedDocument | null>(null);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
 
+  // EIS (zakupki.gov.ru) Import State
+  const [isEisModalOpen, setIsEisModalOpen] = useState(false);
+  const [eisQuery, setEisQuery] = useState('');
+  const [isEisFetching, setIsEisFetching] = useState(false);
+  const [eisError, setEisError] = useState<string | null>(null);
+
   // Automatic Law Type Detection (44-FZ / 223-FZ / Commercial)
   const [autoDetectedInfo, setAutoDetectedInfo] = useState<LawDetectionResult | null>(null);
   const [userOverridden, setUserOverridden] = useState(false);
@@ -101,6 +126,91 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   }, [parsedFiles, pastedText, userOverridden]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle Fetching from EIS (zakupki.gov.ru)
+  const handleFetchEis = async (procurementNumber?: string) => {
+    const queryToUse = procurementNumber || eisQuery;
+    if (!queryToUse.trim()) {
+      setEisError('Пожалуйста, введите номер закупки (11 или 19 цифр) или ссылку на ЕИС.');
+      return;
+    }
+
+    setEisError(null);
+    setIsEisFetching(true);
+
+    try {
+      const response = await fetch('/api/procurement/fetch-eis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ procurementNumberOrUrl: queryToUse })
+      });
+
+      if (!response.ok) {
+        throw new Error('Не удалось получить данные из ЕИС');
+      }
+
+      const resData = await response.json();
+      const tenderData = resData.data;
+
+      if (!tenderData) {
+        throw new Error('Данные закупки не найдены');
+      }
+
+      // Configure law type
+      if (tenderData.lawType === '44-ФЗ') {
+        setLawType('44_FZ');
+        setProcedureType('44_FZ_AUCTION');
+      } else {
+        setLawType('223_FZ');
+        setProcedureType('223_FZ_QUOTATION');
+      }
+
+      // Create virtual files from EIS package
+      const now = Date.now();
+      const eisVirtualFiles: ParsedDocument[] = [
+        {
+          id: `eis_contract_${now}`,
+          fileName: `Проект_Контракта_ЕИС_${tenderData.regNumber}.docx`,
+          fileType: 'word',
+          fileSize: (tenderData.contractText || '').length * 2,
+          category: 'contract',
+          content: tenderData.contractText || '',
+          charCount: (tenderData.contractText || '').length,
+          status: 'ready'
+        },
+        {
+          id: `eis_tz_${now}`,
+          fileName: `Техническое_Задание_ЕИС_${tenderData.regNumber}.xlsx`,
+          fileType: 'excel',
+          fileSize: (tenderData.tzText || '').length * 2,
+          category: 'tz',
+          content: tenderData.tzText || '',
+          charCount: (tenderData.tzText || '').length,
+          status: 'ready'
+        },
+        {
+          id: `eis_notice_${now}`,
+          fileName: `Извещение_Закупки_ЕИС_${tenderData.regNumber}.pdf`,
+          fileType: 'pdf',
+          fileSize: (tenderData.documentationText || '').length * 2,
+          category: 'docs',
+          content: tenderData.documentationText || '',
+          charCount: (tenderData.documentationText || '').length,
+          status: 'ready'
+        }
+      ];
+
+      setParsedFiles(eisVirtualFiles);
+      setAdditionalNotes(`Закупка из ЕИС № ${tenderData.regNumber}\nЗаказчик: ${tenderData.customerName} (ИНН ${tenderData.customerInn})\nНМЦК: ${tenderData.procurementSum}\nСрок поставки: ${tenderData.deliveryPeriod}`);
+      setIsEisModalOpen(false);
+      setEisQuery('');
+    } catch (err: any) {
+      console.error('EIS Fetch Error:', err);
+      setEisError(err.message || 'Ошибка подключения к ЕИС');
+    } finally {
+      setIsEisFetching(false);
+    }
+  };
 
   // Handle Preset Loading
   const handleLoadPreset = (presetId: string) => {
@@ -215,6 +325,15 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     if (previewingFileId === fileId) {
       setPreviewingFileId(null);
     }
+  };
+
+  const handleAutoClassifyAll = () => {
+    setParsedFiles(prev =>
+      prev.map(f => ({
+        ...f,
+        category: smartClassifyDocument(f.fileName, f.content),
+      }))
+    );
   };
 
   const handleClearAll = () => {
@@ -345,27 +464,77 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               <button
                 type="button"
                 onClick={() => onLoadPresetResult('sample-furniture-223fz')}
-                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl transition-all shadow-2xs active:scale-95 cursor-pointer flex items-center gap-1.5"
-                title="Открыть готовый эталонный результат со всеми картами рисков и функциями"
+                className="text-xs bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Показать эталонный отчёт"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <Sparkles className="w-3.5 h-3.5" />
                 <span>Демо-отчет</span>
+              </button>
+            )}
+
+            {/* EIS (zakupki.gov.ru) IMPORT BUTTON */}
+            <button
+              type="button"
+              onClick={() => setIsEisModalOpen(true)}
+              className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 px-3 py-1.5 rounded-lg cursor-pointer"
+              title="Загрузить закупку по номеру или ссылке из ЕИС (zakupki.gov.ru)"
+            >
+              <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>ЕИС (zakupki.gov.ru)</span>
+            </button>
+
+            {onOpenContractDiff && (
+              <button
+                type="button"
+                onClick={() => {
+                  const contractDoc = parsedFiles.find(f => f.category === 'contract');
+                  onOpenContractDiff(contractDoc?.content || pastedText);
+                }}
+                className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 px-3 py-1.5 rounded-lg cursor-pointer"
+                title="Сравнить две редакции договора и выявить скрытые изменения Заказчика"
+              >
+                <FileDiff className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Diff правок</span>
+              </button>
+            )}
+
+            {onOpenFasComplaint && (
+              <button
+                type="button"
+                onClick={onOpenFasComplaint}
+                className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-950/40 px-3 py-1.5 rounded-lg cursor-pointer"
+                title="Подготовить жалобу в ФАС РФ или запрос на разъяснение положений ТЗ"
+              >
+                <Scale className="w-3.5 h-3.5" />
+                <span>ФАС РФ</span>
+              </button>
+            )}
+
+            {onOpenBankGuarantee && (
+              <button
+                type="button"
+                onClick={onOpenBankGuarantee}
+                className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 px-3 py-1.5 rounded-lg cursor-pointer"
+                title="Калькулятор сумм обеспечения заявки/контракта и банковских гарантий"
+              >
+                <Calculator className="w-3.5 h-3.5" />
+                <span>Гарантии</span>
               </button>
             )}
 
             <button
               type="button"
               onClick={() => setIsNotesModalOpen(true)}
-              className={`text-xs font-bold flex items-center gap-1.5 transition-all px-3 py-1.5 rounded-xl border cursor-pointer ${
+              className={`text-xs font-semibold flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg border cursor-pointer ${
                 pastedText.trim() || additionalNotes.trim()
-                  ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
               }`}
               title="Добавить особые указания или вставить текст вручную"
             >
-              <MessageSquare className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
               <span>
-                {pastedText.trim() || additionalNotes.trim() ? '💬 Инструкция (Есть)' : '💬 Инструкция'}
+                {pastedText.trim() || additionalNotes.trim() ? 'Инструкция (есть)' : 'Инструкция'}
               </span>
             </button>
 
@@ -373,10 +542,10 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenScanModal}
-                className="text-xs text-indigo-700 dark:text-indigo-300 hover:text-indigo-800 font-bold flex items-center gap-1.5 transition-colors bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 cursor-pointer"
-                title="Распознать скан или фото документа (Gemini Vision)"
+                className="text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer"
+                title="Распознать скан документа"
               >
-                <Camera className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <Camera className="w-3.5 h-3.5 text-slate-500" />
                 <span>Скан (OCR)</span>
               </button>
             )}
@@ -385,7 +554,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               <button
                 type="button"
                 onClick={handleClearAll}
-                className="text-xs text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 font-bold flex items-center gap-1 transition-colors bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
+                className="text-xs text-slate-500 hover:text-red-500 dark:text-slate-400 font-semibold flex items-center gap-1 transition-colors px-2.5 py-1.5 rounded-lg cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Очистить
@@ -405,17 +574,14 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
         {/* AUTO-DETECTION NOTICE BANNER */}
         {autoDetectedInfo && (
-          <div className="bg-gradient-to-r from-emerald-500/10 via-indigo-500/10 to-emerald-500/10 border border-emerald-500/30 dark:border-emerald-500/40 text-slate-800 dark:text-slate-100 text-xs p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-xs animate-fade-in">
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
-                <Zap className="w-4 h-4 animate-bounce" />
-              </div>
+          <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 text-xs p-3 rounded-xl flex items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-500 shrink-0" />
               <div>
-                <span className="font-extrabold text-emerald-700 dark:text-emerald-400">
-                  ⚡ Автоопределение законодательства:
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  Определено:
                 </span>{' '}
-                <strong className="font-bold">{autoDetectedInfo.lawName}</strong> ({autoDetectedInfo.procedureName}).{' '}
-                <span className="text-slate-500 dark:text-slate-400 hidden sm:inline">{autoDetectedInfo.reason}</span>
+                <span>{autoDetectedInfo.lawName} ({autoDetectedInfo.procedureName})</span>
               </div>
             </div>
 
@@ -427,14 +593,14 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                   setLawType(autoDetectedInfo.lawType);
                   setProcedureType(autoDetectedInfo.procedureType);
                 }}
-                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shrink-0 cursor-pointer shadow-2xs"
+                className="px-2 py-1 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md text-[11px] font-semibold transition-colors cursor-pointer"
               >
-                Вернуть автовыбор ({autoDetectedInfo.lawType === '44_FZ' ? '44-ФЗ' : autoDetectedInfo.lawType === '223_FZ' ? '223-ФЗ' : 'Коммерческая'})
+                Вернуть ({autoDetectedInfo.lawType === '44_FZ' ? '44-ФЗ' : autoDetectedInfo.lawType === '223_FZ' ? '223-ФЗ' : 'Коммерческая'})
               </button>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 px-2 py-1 rounded-lg shrink-0">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded shrink-0">
                 <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                Применено автоматически
+                Применено
               </span>
             )}
           </div>
@@ -442,21 +608,15 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
         {/* ERROR MESSAGE FOR UNSUPPORTED FILE FORMATS */}
         {uploadError && (
-          <div className="bg-rose-50 dark:bg-rose-950/70 border border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-100 text-xs sm:text-sm p-3.5 sm:p-4 rounded-2xl flex items-start justify-between gap-3 shadow-xs animate-shake">
-            <div className="flex items-start gap-2.5">
-              <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-              <div>
-                <strong className="font-extrabold block text-rose-950 dark:text-rose-100 mb-0.5">
-                  Ошибка загрузки файла
-                </strong>
-                <span className="text-rose-800 dark:text-rose-200 leading-snug">{uploadError}</span>
-              </div>
+          <div className="bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-900 dark:text-rose-200 text-xs p-3 rounded-xl flex items-start justify-between gap-3 animate-shake">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <span className="font-medium">{uploadError}</span>
             </div>
             <button
               type="button"
               onClick={() => setUploadError(null)}
-              className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-200 p-1 transition-colors cursor-pointer rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50"
-              title="Закрыть предупреждение"
+              className="text-rose-400 hover:text-rose-600 p-0.5 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -470,37 +630,30 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`document-uploader-section relative border-2 border-dashed rounded-2xl p-5 sm:p-7 text-center transition-all duration-200 cursor-pointer overflow-hidden ${
+            className={`document-uploader-section border-2 border-dashed rounded-xl p-6 sm:p-8 text-center transition-colors cursor-pointer ${
               isDragging
-                ? 'border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80 ring-2 ring-indigo-500/20'
-                : 'border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20'
+                ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40'
+                : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 bg-slate-50/40 dark:bg-slate-900/40'
             }`}
           >
-            <div className="max-w-md mx-auto space-y-2.5 pointer-events-none">
-              <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-2xs border border-indigo-200/60 dark:border-indigo-800/60">
-                <Upload className="w-5 h-5" />
+            <div className="max-w-md mx-auto space-y-2 pointer-events-none">
+              <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center mx-auto border border-slate-200 dark:border-slate-700">
+                <Upload className="w-4 h-4" />
               </div>
               
-              <div>
-                <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 block tracking-tight">
-                  Перетащите сюда файлы закупки или кликните для выбора
-                </span>
-              </div>
+              <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200">
+                Перетащите файлы закупки или выберите на диске
+              </p>
 
               {/* Minimal Format Badges */}
-              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-0.5">
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-md border border-amber-200/80 dark:border-amber-800/80">
-                  <Archive className="w-3 h-3 text-amber-600 dark:text-amber-400" /> ZIP / RAR
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 px-2 py-0.5 rounded-md border border-rose-200/80 dark:border-rose-800/80">
-                  <FileCode className="w-3 h-3 text-rose-600 dark:text-rose-400" /> PDF
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-md border border-blue-200/80 dark:border-blue-800/80">
-                  <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Word
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-200/80 dark:border-emerald-800/80">
-                  <Table className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Excel
-                </span>
+              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                <span>PDF</span>
+                <span>•</span>
+                <span>Word (.docx)</span>
+                <span>•</span>
+                <span>Excel (.xlsx)</span>
+                <span>•</span>
+                <span>Архивы (.zip, .rar)</span>
               </div>
             </div>
           </div>
@@ -510,20 +663,17 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
-              isDragging ? 'ring-2 ring-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/80' : ''
+            className={`p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+              isDragging ? 'ring-1 ring-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40' : ''
             }`}
           >
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg">
-                  <Check className="w-4 h-4" />
+                <div className="p-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg">
+                  <Check className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block">
-                    Документы закупки загружены ({parsedFiles.length})
-                  </span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                    Можете добавить еще файлы или начать анализ
+                  <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 block">
+                    Загружено документов: {parsedFiles.length}
                   </span>
                 </div>
               </div>
@@ -532,11 +682,10 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
-                  <Plus className="w-4 h-4" />
-                  <Archive className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Добавить документ</span>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Добавить файл</span>
                 </button>
               </div>
             </div>
@@ -553,11 +702,36 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           {/* UPLOADED DOCUMENTS LIST */}
           {parsedFiles.length > 0 && (
             <div className="space-y-3 pt-1">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-                <span>Загружено файлов ({parsedFiles.length}):</span>
-                <span className="text-slate-500 dark:text-slate-400 font-medium">
-                  Общий объем: ~{(totalChars / 1000).toFixed(1)} тыс. символов
-                </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span>Пакет закупки ({parsedFiles.length} файл(ов)):</span>
+                  <div className="flex items-center gap-1.5 flex-wrap font-semibold text-[11px]">
+                    <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                      Договор: {parsedFiles.filter(f => f.category === 'contract').length}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                      ТЗ/Спец: {parsedFiles.filter(f => f.category === 'tz' || f.category === 'table').length}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      Извещение: {parsedFiles.filter(f => f.category === 'docs').length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleAutoClassifyAll}
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Автоматически распределить файлы по типам (Договор, ТЗ, Извещение)"
+                  >
+                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                    <span>Авто-сортировка</span>
+                  </button>
+                  <span className="text-slate-500 dark:text-slate-400 font-medium text-[11px]">
+                    ~{(totalChars / 1000).toFixed(1)} тыс. симв.
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -766,6 +940,137 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer"
               >
                 Сохранить и закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Direct EIS (zakupki.gov.ru) Import */}
+      {isEisModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-200/60 dark:border-indigo-800/60">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Загрузка закупки из ЕИС (zakupki.gov.ru)
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Автоматическое скачивание извещения, проекта контракта и ТЗ
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEisModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300 block">
+                  Номер закупки (ЕИС) или прямая ссылка:
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={eisQuery}
+                    onChange={(e) => setEisQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleFetchEis();
+                      }
+                    }}
+                    placeholder="Например: 0373200002824000001 или 32412345678"
+                    className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              {eisError && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{eisError}</span>
+                </div>
+              )}
+
+              {/* Quick Presets for 1-click loading */}
+              <div className="space-y-2 pt-1">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider">
+                  Быстрый выбор из реестра ЕИС:
+                </span>
+
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleFetchEis('0373200002824000001')}
+                    disabled={isEisFetching}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700/80 transition-colors flex items-center justify-between group cursor-pointer disabled:opacity-50"
+                  >
+                    <div>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                        № 0373200002824000001 (44-ФЗ)
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Поставка компьютерной техники и рабочих мест ГБУ • 4,25 млн ₽
+                      </span>
+                    </div>
+                    <Download className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleFetchEis('32412345678')}
+                    disabled={isEisFetching}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700/80 transition-colors flex items-center justify-between group cursor-pointer disabled:opacity-50"
+                  >
+                    <div>
+                      <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                        № 32412345678 (223-ФЗ)
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Закупка офисной мебели и оборудования • 2,85 млн ₽
+                      </span>
+                    </div>
+                    <Download className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsEisModalOpen(false)}
+                className="px-3.5 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={isEisFetching}
+                onClick={() => handleFetchEis()}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              >
+                {isEisFetching ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Скачивание из ЕИС...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Импортировать пакет закупки</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

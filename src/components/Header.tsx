@@ -1,24 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   ShieldAlert, 
   BookOpen, 
   Sun, 
   Moon, 
   MessageSquare, 
-  Search, 
-  BrainCircuit, 
   History, 
   Building2, 
   Calendar, 
   Cpu, 
   LogIn, 
   LogOut, 
-  Menu, 
-  X, 
-  User as UserIcon,
-  Sparkles,
-  ChevronRight,
-  Database
+  ChevronDown,
+  Package,
+  Wrench,
+  FileDiff,
+  Scale,
+  Calculator
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 
@@ -28,13 +26,16 @@ interface HeaderProps {
   onToggleDarkMode: () => void;
   isAnalyzing?: boolean;
   onOpenChat: () => void;
-  onOpenSearch: () => void;
-  onOpenDeepAudit: () => void;
+  onOpenSearch?: () => void;
+  onOpenDeepAudit?: () => void;
   onOpenHistory: () => void;
   onOpenSuppliersCatalog?: () => void;
   onOpenCalendar?: () => void;
   onOpenCustomerVerification?: () => void;
   onOpenAISettings?: () => void;
+  onOpenContractDiff?: () => void;
+  onOpenFasComplaint?: () => void;
+  onOpenBankGuarantee?: () => void;
   currentUser?: User | null;
   onOpenAuthModal?: () => void;
   onSignOut?: () => void;
@@ -44,436 +45,295 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenGuide, 
   isDarkMode, 
   onToggleDarkMode, 
-  isAnalyzing,
   onOpenChat,
-  onOpenSearch,
-  onOpenDeepAudit,
   onOpenHistory,
   onOpenSuppliersCatalog,
   onOpenCalendar,
   onOpenCustomerVerification,
   onOpenAISettings,
+  onOpenContractDiff,
+  onOpenFasComplaint,
+  onOpenBankGuarantee,
   currentUser,
   onOpenAuthModal,
   onSignOut,
 }) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const toolsRef = useRef<HTMLDivElement>(null);
   const isGoogleUser = currentUser && !currentUser.isAnonymous;
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (toolsRef.current && !toolsRef.current.contains(event.target as Node)) {
+        setIsToolsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
-    <>
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 sticky top-0 z-30 shadow-xs transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
-          
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-2.5 min-w-0 shrink">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-600 dark:bg-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
-              <ShieldAlert className="w-5 h-5" />
+    <header className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 sticky top-0 z-30 transition-colors">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-4">
+        
+        {/* Left: Brand Logo & Title */}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center font-bold text-sm shrink-0">
+              <ShieldAlert className="w-4 h-4 text-white dark:text-slate-900" />
             </div>
-            <div className="min-w-0 truncate">
-              <div className="flex items-center gap-1.5 truncate">
-                <h1 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight leading-none truncate">
-                  TenderAgent
-                </h1>
-                <span className="text-[9px] sm:text-[10px] font-black bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0">
-                  44/223-ФЗ
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5 hidden lg:block truncate">
-                Интеллектуальный анализ закупок, контрактов и проверок заказчиков
-              </p>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-base text-slate-900 dark:text-white tracking-tight leading-none">
+                TenderAgent
+              </span>
+              <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded">
+                223/44-ФЗ
+              </span>
             </div>
           </div>
 
-          {/* DESKTOP NAVIGATION BAR (md and larger) */}
-          <div className="hidden md:flex items-center gap-2 shrink-0">
-            {/* Core Action Group */}
-            <div className="flex p-1 bg-slate-100/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 items-center gap-1 shadow-2xs">
-              {/* AI Chat Button */}
+          {/* Desktop Navigation Links (Clean, minimal, 3 core + dropdown) */}
+          <nav className="hidden md:flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+            {onOpenSuppliersCatalog && (
               <button
                 type="button"
-                onClick={onOpenChat}
-                className="flex items-center gap-1.5 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
-                title="Открыть ИИ-Чат Консультант 223-ФЗ"
+                onClick={onOpenSuppliersCatalog}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
-                <MessageSquare className="w-3.5 h-3.5 text-white" />
-                <span>ИИ-Чат</span>
+                <Package className="w-3.5 h-3.5 text-slate-400" />
+                <span>Каталог товаров</span>
               </button>
+            )}
 
-              {/* Customer INN Check Button */}
-              {onOpenCustomerVerification && (
-                <button
-                  type="button"
-                  onClick={onOpenCustomerVerification}
-                  className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
-                  title="Проверка заказчика по ИНН (ФНС, РНП, Арбитраж)"
-                >
-                  <Building2 className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Проверка ИНН</span>
-                </button>
-              )}
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5 text-slate-400" />
+              <span>База закупок</span>
+            </button>
 
-              {/* Saved History Button */}
+            <button
+              type="button"
+              onClick={onOpenChat}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
+              <span>ИИ-Чат</span>
+            </button>
+
+            {/* Tools & Services Dropdown */}
+            <div className="relative" ref={toolsRef}>
               <button
                 type="button"
-                onClick={onOpenHistory}
-                className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
-                title="База данных сохраненных закупок"
+                onClick={() => setIsToolsOpen(!isToolsOpen)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isToolsOpen 
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white' 
+                    : 'hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
               >
-                <History className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                <span>База</span>
+                <Wrench className="w-3.5 h-3.5 text-slate-400" />
+                <span>Инструменты</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${isToolsOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Deadlines Calendar Button */}
-              {onOpenCalendar && (
-                <button
-                  type="button"
-                  onClick={onOpenCalendar}
-                  className="flex items-center gap-1.5 text-xs font-bold hover:bg-white dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shrink-0"
-                  title="Календарь дедлайнов и сроков"
-                >
-                  <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Сроки</span>
-                </button>
-              )}
-            </div>
-
-            {/* System Tools & Profile Group */}
-            <div className="flex p-1 bg-slate-100/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 items-center gap-1 shadow-2xs">
-              {/* AI Models Settings */}
-              {onOpenAISettings && (
-                <button
-                  type="button"
-                  onClick={onOpenAISettings}
-                  className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all cursor-pointer shrink-0"
-                  title="Настройка ИИ моделей"
-                >
-                  <Cpu className="w-4 h-4 text-indigo-500" />
-                </button>
-              )}
-
-              {/* Guide Button */}
-              <button
-                id="open-guide-btn"
-                type="button"
-                onClick={onOpenGuide}
-                className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all cursor-pointer shrink-0"
-                title="Регламент работы (44-ФЗ & 223-ФЗ)"
-              >
-                <BookOpen className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-              </button>
-
-              {/* Dark Mode Switcher */}
-              <button
-                type="button"
-                id="toggle-dark-mode-btn"
-                onClick={onToggleDarkMode}
-                className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all cursor-pointer shrink-0"
-                title={isDarkMode ? 'Переключить на светлую тему' : 'Переключить на тёмную тему'}
-              >
-                {isDarkMode ? (
-                  <Sun className="w-4 h-4 text-amber-400" />
-                ) : (
-                  <Moon className="w-4 h-4 text-indigo-600" />
-                )}
-              </button>
-
-              <div className="w-px h-4 bg-slate-300/80 dark:bg-slate-700 my-auto shrink-0 mx-0.5" />
-
-              {/* Google Auth Badge */}
-              {isGoogleUser ? (
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={onOpenHistory}
-                    className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 px-2 py-1 rounded-xl hover:bg-emerald-100 transition-all cursor-pointer"
-                    title={`Google Аккаунт: ${currentUser.email}`}
-                  >
-                    {currentUser.photoURL ? (
-                      <img
-                        src={currentUser.photoURL}
-                        alt="Google Avatar"
-                        className="w-4 h-4 rounded-full"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
-                        {(currentUser.email || 'G')[0].toUpperCase()}
-                      </div>
-                    )}
-                    <span className="text-[11px] font-extrabold max-w-[80px] truncate">
-                      {currentUser.displayName || currentUser.email?.split('@')[0]}
-                    </span>
-                  </button>
-                  {onSignOut && (
+              {/* Dropdown Menu Popover */}
+              {isToolsOpen && (
+                <div className="absolute left-0 mt-1.5 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg p-1 z-50 animate-fade-in text-xs font-normal">
+                  {onOpenCustomerVerification && (
                     <button
                       type="button"
-                      onClick={onSignOut}
-                      className="p-1.5 text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl transition-all cursor-pointer shrink-0"
-                      title="Выйти из Google аккаунта"
+                      onClick={() => {
+                        onOpenCustomerVerification();
+                        setIsToolsOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
                     >
-                      <LogOut className="w-3.5 h-3.5" />
+                      <Building2 className="w-4 h-4 text-slate-400" />
+                      <div>
+                        <span className="font-medium block">Проверка по ИНН</span>
+                        <span className="text-[10px] text-slate-400">ФНС, РНП, Арбитраж</span>
+                      </div>
+                    </button>
+                  )}
+
+                  {onOpenCalendar && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenCalendar();
+                        setIsToolsOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                    >
+                      <Calendar className="w-4 h-4 text-slate-400" />
+                      <div>
+                        <span className="font-medium block">Календарь сроков</span>
+                        <span className="text-[10px] text-slate-400">Дедлайны и этапы</span>
+                      </div>
+                    </button>
+                  )}
+
+                  {onOpenContractDiff && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenContractDiff();
+                        setIsToolsOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                    >
+                      <FileDiff className="w-4 h-4 text-indigo-500" />
+                      <div>
+                        <span className="font-medium block">Сравнение договоров</span>
+                        <span className="text-[10px] text-slate-400">Contract Diff & правки</span>
+                      </div>
+                    </button>
+                  )}
+
+                  {onOpenFasComplaint && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenFasComplaint();
+                        setIsToolsOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                    >
+                      <Scale className="w-4 h-4 text-red-500" />
+                      <div>
+                        <span className="font-medium block">Жалобы в ФАС РФ</span>
+                        <span className="text-[10px] text-slate-400">ст. 105 44-ФЗ / 135-ФЗ</span>
+                      </div>
+                    </button>
+                  )}
+
+                  {onOpenBankGuarantee && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenBankGuarantee();
+                        setIsToolsOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                    >
+                      <Calculator className="w-4 h-4 text-emerald-500" />
+                      <div>
+                        <span className="font-medium block">Калькулятор гарантий</span>
+                        <span className="text-[10px] text-slate-400">Обеспечение и БГ</span>
+                      </div>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenGuide();
+                      setIsToolsOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                  >
+                    <BookOpen className="w-4 h-4 text-slate-400" />
+                    <div>
+                      <span className="font-medium block">Регламент работы</span>
+                      <span className="text-[10px] text-slate-400">Нормы 223/44-ФЗ</span>
+                    </div>
+                  </button>
+
+                  {onOpenAISettings && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenAISettings();
+                        setIsToolsOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer border-t border-slate-100 dark:border-slate-800 mt-1"
+                    >
+                      <Cpu className="w-4 h-4 text-slate-400" />
+                      <div>
+                        <span className="font-medium block">Настройка ИИ</span>
+                        <span className="text-[10px] text-slate-400">Модели и ключи</span>
+                      </div>
                     </button>
                   )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onOpenAuthModal}
-                  className="flex items-center gap-1 text-xs font-extrabold bg-indigo-600 text-white hover:bg-indigo-700 px-2.5 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs shrink-0"
-                  title="Войти с помощью Google Аккаунта"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span className="text-[11px]">Вход</span>
-                </button>
               )}
             </div>
-          </div>
+          </nav>
+        </div>
 
-          {/* MOBILE TOP CONTROLS (Google Status + Mobile Menu Toggle) */}
-          <div className="flex md:hidden items-center gap-2">
-            {isGoogleUser ? (
+        {/* Right: Theme Toggle & User Auth */}
+        <div className="flex items-center gap-2">
+          {/* Theme Switcher */}
+          <button
+            type="button"
+            onClick={onToggleDarkMode}
+            className="p-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
+            title={isDarkMode ? 'Включить светлую тему' : 'Включить тёмную тему'}
+          >
+            {isDarkMode ? (
+              <Sun className="w-4 h-4 text-amber-400" />
+            ) : (
+              <Moon className="w-4 h-4" />
+            )}
+          </button>
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 my-auto" />
+
+          {/* User Auth */}
+          {isGoogleUser ? (
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={onOpenHistory}
-                className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 px-2 py-1 rounded-xl text-emerald-800 dark:text-emerald-200 shrink-0"
+                className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
+                title={`Аккаунт: ${currentUser.email}`}
               >
                 {currentUser.photoURL ? (
                   <img
                     src={currentUser.photoURL}
-                    alt="Google Avatar"
-                    className="w-4 h-4 rounded-full"
+                    alt="Avatar"
+                    className="w-5 h-5 rounded-full"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
-                    {(currentUser.email || 'G')[0].toUpperCase()}
+                  <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center text-[10px] font-bold">
+                    {(currentUser.email || 'U')[0].toUpperCase()}
                   </div>
                 )}
-                <span className="text-[11px] font-bold max-w-[70px] truncate">
+                <span className="text-xs max-w-[100px] truncate hidden sm:inline">
                   {currentUser.displayName || currentUser.email?.split('@')[0]}
                 </span>
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onOpenAuthModal}
-                className="flex items-center gap-1 text-xs font-extrabold bg-indigo-600 text-white px-2 py-1 rounded-xl shrink-0"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span className="text-[10px]">Вход</span>
-              </button>
-            )}
 
-            {/* Mobile Hamburger Menu Toggle */}
+              {onSignOut && (
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
+                  title="Выйти из аккаунта"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-all cursor-pointer active:scale-95"
-              aria-label="Открыть меню"
+              onClick={onOpenAuthModal}
+              className="flex items-center gap-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
             >
-              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Войти</span>
             </button>
-          </div>
-
+          )}
         </div>
-      </header>
 
-      {/* MOBILE DRAWER / SLIDE-OVER MENU */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden bg-slate-950/70 backdrop-blur-sm animate-fade-in flex flex-col justify-end sm:justify-start">
-          <div className="bg-white dark:bg-slate-900 border-t sm:border-b border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-b-3xl p-5 space-y-4 max-h-[85vh] overflow-y-auto shadow-2xl animate-slide-up">
-            
-            {/* Header of Mobile Menu */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-xs">
-                  TA
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Меню TenderAgent</h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Быстрый доступ к сервисам</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-xl"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* User Account Status Banner */}
-            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                  <UserIcon className="w-4 h-4" />
-                </div>
-                <div className="min-w-0 truncate">
-                  <span className="text-[11px] text-slate-400 uppercase tracking-wider font-bold block">
-                    {isGoogleUser ? 'Google Аккаунт' : 'Гостевой режим'}
-                  </span>
-                  <span className="text-xs font-extrabold text-slate-900 dark:text-white truncate block">
-                    {isGoogleUser ? currentUser?.email : 'Требуется вход Google'}
-                  </span>
-                </div>
-              </div>
-
-              {isGoogleUser ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onSignOut) onSignOut();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="px-2.5 py-1 bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 text-xs font-bold rounded-xl border border-red-200 dark:border-red-800 flex items-center gap-1 shrink-0"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Выйти</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onOpenAuthModal) onOpenAuthModal();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-xl flex items-center gap-1 shrink-0 shadow-2xs"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Войти</span>
-                </button>
-              )}
-            </div>
-
-            {/* Menu Links List */}
-            <div className="space-y-1.5">
-              
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenChat();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full p-3 bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800 rounded-2xl flex items-center justify-between text-indigo-900 dark:text-indigo-200 font-extrabold text-xs"
-              >
-                <div className="flex items-center gap-2.5">
-                  <MessageSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span>ИИ-Чат Консультант 223-ФЗ</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-indigo-400" />
-              </button>
-
-              {onOpenCustomerVerification && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenCustomerVerification();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full p-3 bg-amber-50/60 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800 rounded-2xl flex items-center justify-between text-amber-900 dark:text-amber-200 font-extrabold text-xs"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Building2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                    <span>Проверка заказчика по ИНН</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-amber-400" />
-                </button>
-              )}
-
-              {onOpenCalendar && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenCalendar();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-between text-slate-800 dark:text-slate-200 font-bold text-xs"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    <span>Календарь дедлайнов</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
-                </button>
-              )}
-
-              {onOpenAISettings && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpenAISettings();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-between text-slate-800 dark:text-slate-200 font-bold text-xs"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Cpu className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    <span>Настройка ИИ Моделей</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenHistory();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-between text-slate-800 dark:text-slate-200 font-bold text-xs"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Database className="w-4 h-4 text-slate-500 dark:text-slate-400" />
-                  <span>База данных и История закупок</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenGuide();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-between text-slate-800 dark:text-slate-200 font-bold text-xs"
-              >
-                <div className="flex items-center gap-2.5">
-                  <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span>Регламент работы (44-ФЗ & 223-ФЗ)</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-              </button>
-
-            </div>
-
-            {/* Footer Quick Controls inside Mobile Drawer */}
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <span className="text-xs font-extrabold text-slate-500 dark:text-slate-400">
-                Оформление темы:
-              </span>
-              <button
-                type="button"
-                onClick={onToggleDarkMode}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-extrabold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
-              >
-                {isDarkMode ? (
-                  <>
-                    <Sun className="w-4 h-4 text-amber-400" />
-                    <span>Светлая</span>
-                  </>
-                ) : (
-                  <>
-                    <Moon className="w-4 h-4 text-indigo-600" />
-                    <span>Тёмная</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-    </>
+      </div>
+    </header>
   );
 };
+

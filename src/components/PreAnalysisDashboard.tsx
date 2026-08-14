@@ -21,7 +21,8 @@ import {
   Loader2,
   Undo2,
   Check,
-  BarChart3
+  BarChart3,
+  Package
 } from 'lucide-react';
 import { 
   auth, 
@@ -35,10 +36,12 @@ import {
 } from '../lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { CountdownTimer } from './CountdownTimer';
+import { FLAGSHIP_FULL_DEMO_RESULT } from '../data/presetResults';
 
 interface PreAnalysisDashboardProps {
   onOpenHistory?: () => void;
   onSelectAnalysis?: (analysisResult: any) => void;
+  onOpenSuppliersCatalog?: () => void;
 }
 
 // Initial default sample procurements for rich demo dashboard
@@ -132,7 +135,8 @@ const DEFAULT_SAMPLE_ANALYSES: SavedAnalysis[] = [
 const LOCAL_DELETED_KEY = 'zakupki_deleted_tender_ids';
 
 export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({ 
-  onSelectAnalysis 
+  onSelectAnalysis,
+  onOpenSuppliersCatalog
 }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
@@ -325,6 +329,26 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
     });
   };
 
+  // Safe handler to open analysis with guaranteed complete schema
+  const handleOpenAnalysis = (app: SavedAnalysis) => {
+    if (!onSelectAnalysis) return;
+    if (app.analysisResult && app.analysisResult.productList && app.analysisResult.contractRisks) {
+      onSelectAnalysis(app.analysisResult);
+    } else {
+      const fallback = FLAGSHIP_FULL_DEMO_RESULT;
+      const enriched = {
+        ...fallback,
+        summary: {
+          ...fallback.summary,
+          procurementTitle: app.title || app.projectName || fallback.summary.procurementTitle,
+          overallRiskScore: app.riskScore ?? fallback.summary.overallRiskScore,
+          riskLevel: (app.riskLevel as any) || fallback.summary.riskLevel,
+        }
+      };
+      onSelectAnalysis(enriched);
+    }
+  };
+
   // Calculated Metrics & Pipeline Breakdown
   const totalCount = analyses.length;
   const countWon = analyses.filter(a => a.participationStatus === 'WON').length;
@@ -433,32 +457,31 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
       )}
 
       {/* Header Bar & Main Navigation Tabs */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3 min-w-0">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3 min-w-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="p-2 bg-gradient-to-br from-indigo-500 to-indigo-700 text-white rounded-2xl shadow-sm shrink-0">
+          <div className="p-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg shrink-0">
             <TrendingUp className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
-              <span className="truncate">Дашборд закупок & Управление базой</span>
-              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 shrink-0">
-                44-ФЗ / 223-ФЗ
-              </span>
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
-              Центр аналитики, реестра заявок, заказчиков и дедлайнов
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                Аналитика и реестр закупок
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Статистика заявок, заказчиков и сроков
             </p>
           </div>
         </div>
 
         {/* TOP SUB-NAVIGATION TABS */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-x-auto shrink-0 scrollbar-none">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 overflow-x-auto shrink-0 scrollbar-none">
           <button
             type="button"
             onClick={() => setDashboardTab('summary')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap min-h-[36px] ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               dashboardTab === 'summary'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
@@ -469,9 +492,9 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
           <button
             type="button"
             onClick={() => setDashboardTab('applications')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap min-h-[36px] ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               dashboardTab === 'applications'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
@@ -482,9 +505,9 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
           <button
             type="button"
             onClick={() => setDashboardTab('customers')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap min-h-[36px] ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               dashboardTab === 'customers'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
@@ -495,56 +518,68 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
           <button
             type="button"
             onClick={() => setDashboardTab('deadlines')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap min-h-[36px] ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               dashboardTab === 'deadlines'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
             <span>Дедлайны ({upcomingDeadlines.length})</span>
           </button>
+
+          {onOpenSuppliersCatalog && (
+            <button
+              type="button"
+              onClick={onOpenSuppliersCatalog}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+              title="Каталог товаров и фабрик"
+            >
+              <Package className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Каталог товаров</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* PIPELINE PROGRESS BAR VISUALIZER */}
       {totalCount > 0 && (
-        <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-800 space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+        <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-2">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
             <span className="flex items-center gap-1.5">
-              <BarChart3 className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Воронка статусов участия в закупках:</span>
+              <BarChart3 className="w-3.5 h-3.5 text-slate-500" />
+              <span>Статусы участия:</span>
             </span>
-            <span className="font-mono text-indigo-600 dark:text-indigo-400">
-              {countWon} побед из {totalCount} анализов
+            <span className="font-mono text-slate-700 dark:text-slate-300">
+              {countWon} побед из {totalCount}
             </span>
           </div>
 
           {/* Visual Multi-Color Progress Segment */}
-          <div className="h-2.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex">
+          <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden flex">
             <div 
               style={{ width: `${(countWon / totalCount) * 100}%` }} 
-              className="bg-emerald-500 h-full transition-all duration-500" 
+              className="bg-emerald-500 h-full transition-all duration-300" 
               title={`Победы: ${countWon}`} 
             />
             <div 
               style={{ width: `${(countSubmitted / totalCount) * 100}%` }} 
-              className="bg-indigo-600 h-full transition-all duration-500" 
+              className="bg-indigo-600 h-full transition-all duration-300" 
               title={`Заявка подана: ${countSubmitted}`} 
             />
             <div 
               style={{ width: `${(countParticipating / totalCount) * 100}%` }} 
-              className="bg-amber-500 h-full transition-all duration-500" 
+              className="bg-amber-500 h-full transition-all duration-300" 
               title={`В работе: ${countParticipating}`} 
             />
             <div 
               style={{ width: `${(countNew / totalCount) * 100}%` }} 
-              className="bg-slate-400 dark:bg-slate-500 h-full transition-all duration-500" 
+              className="bg-slate-400 h-full transition-all duration-300" 
               title={`Новые: ${countNew}`} 
             />
           </div>
 
-          <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 flex-wrap">
+          <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Победы ({countWon})</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-600 inline-block" /> Подана ({countSubmitted})</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> В работе ({countParticipating})</span>
@@ -557,30 +592,26 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
       {dashboardTab === 'summary' && (
         <div className="space-y-4 animate-fade-in">
           {/* 3 Metric Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Metric 1 */}
             <div 
               onClick={() => setDashboardTab('applications')}
-              className="group relative bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between hover:border-indigo-500/60 dark:hover:border-indigo-500/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
+              className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl p-4 flex flex-col justify-between hover:border-slate-400 dark:hover:border-slate-500 transition-colors cursor-pointer"
             >
-              <div className="flex items-center justify-between relative z-10">
-                <span className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-indigo-500" />
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Всего проверок
                 </span>
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 rounded-xl group-hover:scale-110 transition-transform shadow-2xs border border-indigo-200/50 dark:border-indigo-800/50">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
+                <ShieldCheck className="w-4 h-4 text-slate-400" />
               </div>
 
-              <div className="pt-3 relative z-10">
-                <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 dark:text-white tracking-tight flex items-baseline gap-2">
+              <div className="pt-2">
+                <div className="text-2xl font-bold font-mono text-slate-900 dark:text-white tracking-tight flex items-baseline gap-1.5">
                   <span>{totalCount}</span>
-                  <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">закупок</span>
+                  <span className="text-xs font-normal text-slate-500">закупок</span>
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-1 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-500" />
-                  <span>Проиндексировано с картами рисков</span>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  Проиндексировано с картами рисков
                 </p>
               </div>
             </div>
@@ -588,25 +619,22 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
             {/* Metric 2 */}
             <div 
               onClick={() => setDashboardTab('customers')}
-              className="group relative bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between hover:border-amber-500/60 dark:hover:border-amber-500/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
+              className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl p-4 flex flex-col justify-between hover:border-slate-400 dark:hover:border-slate-500 transition-colors cursor-pointer"
             >
-              <div className="flex items-center justify-between relative z-10">
-                <span className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-amber-500" />
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Ключевые заказчики
                 </span>
-                <div className="p-2 bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 rounded-xl group-hover:scale-110 transition-transform shadow-2xs border border-amber-200/50 dark:border-amber-800/50">
-                  <Award className="w-4 h-4" />
-                </div>
+                <Building2 className="w-4 h-4 text-slate-400" />
               </div>
 
-              <div className="space-y-1.5 pt-2 relative z-10">
+              <div className="space-y-1 pt-2">
                 {topCustomers.slice(0, 3).map((cust, idx) => (
-                  <div key={cust.id || idx} className="flex items-center justify-between text-xs bg-white dark:bg-slate-800/90 px-2.5 py-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
-                    <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate max-w-[170px]" title={cust.name}>
+                  <div key={cust.id || idx} className="flex items-center justify-between text-xs py-0.5">
+                    <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[170px]" title={cust.name}>
                       {idx + 1}. {cust.name}
                     </span>
-                    <span className="font-mono text-[10px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800/80 shrink-0">
+                    <span className="font-mono text-[10px] text-slate-500 shrink-0">
                       {cust.tendersCount || 1} тенд.
                     </span>
                   </div>
@@ -617,25 +645,21 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
             {/* Metric 3 */}
             <div 
               onClick={() => setDashboardTab('applications')}
-              className="group relative bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4 flex flex-col justify-between hover:border-emerald-500/60 dark:hover:border-emerald-500/60 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
+              className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl p-4 flex flex-col justify-between hover:border-slate-400 dark:hover:border-slate-500 transition-colors cursor-pointer"
             >
-              <div className="flex items-center justify-between relative z-10">
-                <span className="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Coins className="w-3.5 h-3.5 text-emerald-500" />
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Объем НМЦК ({currentMonthName})
                 </span>
-                <div className="p-2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 rounded-xl group-hover:scale-110 transition-transform shadow-2xs border border-emerald-200/50 dark:border-emerald-800/50">
-                  <TrendingUp className="w-4 h-4" />
-                </div>
+                <TrendingUp className="w-4 h-4 text-slate-400" />
               </div>
 
-              <div className="pt-3 relative z-10">
-                <div className="text-xl sm:text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 tracking-tight">
+              <div className="pt-2">
+                <div className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400 tracking-tight">
                   {totalSumCurrentMonth}
                 </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-1 flex items-center gap-1">
-                  <Calendar className="w-3 h-3 text-slate-400" />
-                  <span>Совокупная сумма обработанных смет</span>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  Сумма обработанных смет
                 </p>
               </div>
             </div>
@@ -676,7 +700,7 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
                     {/* Header: Title + Trash delete button */}
                     <div className="flex items-start justify-between gap-2 min-w-0">
                       <span 
-                        onClick={() => dl.rawItem && onSelectAnalysis?.(dl.rawItem.analysisResult)}
+                        onClick={() => dl.rawItem && handleOpenAnalysis(dl.rawItem)}
                         className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-2 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer flex-1 min-w-0 leading-snug" 
                         title={dl.title}
                       >
@@ -789,7 +813,7 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
                     </div>
 
                     <h4 
-                      onClick={() => app.analysisResult && onSelectAnalysis?.(app.analysisResult)}
+                      onClick={() => handleOpenAnalysis(app)}
                       className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white line-clamp-2 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
                     >
                       {app.title || app.projectName}
@@ -832,7 +856,7 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => app.analysisResult && onSelectAnalysis?.(app.analysisResult)}
+                      onClick={() => handleOpenAnalysis(app)}
                       className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[36px] flex items-center gap-1 shadow-2xs"
                     >
                       <span>Отчет</span>
@@ -955,7 +979,7 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
                       </div>
 
                       <h4 
-                        onClick={() => item.rawItem && onSelectAnalysis?.(item.rawItem.analysisResult)}
+                        onClick={() => item.rawItem && handleOpenAnalysis(item.rawItem)}
                         className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white line-clamp-2 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
                       >
                         {item.title}
@@ -971,7 +995,7 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
                     {item.rawItem && (
                       <button
                         type="button"
-                        onClick={() => onSelectAnalysis?.(item.rawItem.analysisResult)}
+                        onClick={() => handleOpenAnalysis(item.rawItem)}
                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs min-h-[36px]"
                       >
                         <span>Открыть отчет</span>

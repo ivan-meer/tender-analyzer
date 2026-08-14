@@ -15,9 +15,14 @@ import {
   Coins,
   Sparkles,
   X,
-  Target
+  Target,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { ContractRiskItem, RiskSeverity } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface ContractRisksTableProps {
   risks: ContractRiskItem[];
@@ -70,6 +75,7 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
   const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
   const [sortField, setSortField] = useState<SortField>('severity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Sync with external filters if passed from RiskMapCard
   useEffect(() => {
@@ -103,6 +109,13 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
       setSortField(field);
       setSortOrder('desc');
     }
+  };
+
+  const handleCopyRecommendation = (item: ContractRiskItem) => {
+    const textToCopy = `Пункт ${item.clauseNumber || 'договора'}: ${item.title}\nЦитата: «${item.clauseQuote || ''}»\nРиск: ${item.explanation}\nРекомендация: ${item.recommendation}`;
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const filteredRisks = risks.filter(r => {
@@ -140,28 +153,28 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
     switch (severity) {
       case 'CRITICAL':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 px-2.5 py-0.5 rounded-full uppercase">
-            <ShieldAlert className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-black bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+            <ShieldAlert className="w-3 h-3 text-rose-600 dark:text-rose-400" />
             Критический риск
           </span>
         );
       case 'HIGH':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2.5 py-0.5 rounded-full uppercase">
-            <AlertTriangle className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-black bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+            <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
             Высокий риск
           </span>
         );
       case 'MEDIUM':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-yellow-100 dark:bg-yellow-950/80 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800 px-2.5 py-0.5 rounded-full uppercase">
-            <AlertCircle className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1 text-[10px] font-black bg-yellow-100 dark:bg-yellow-950/80 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-800 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+            <AlertCircle className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
             Средний риск
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 rounded-full uppercase">
+          <span className="inline-flex items-center gap-1 text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
             Информация
           </span>
         );
@@ -227,15 +240,19 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
   };
 
   return (
-    <div id="contract-risks-table" className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-5 transition-colors duration-200">
+    <div id="contract-risks-table" className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-5 transition-colors duration-200">
       
       {/* Active Chart Sector Banner if redirected from RiskMapCard */}
       {(externalCategoryFilter || externalSeverityFilter || selectedCategory !== 'ALL' || selectedSeverity !== 'ALL') && (
-        <div className="bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 rounded-2xl p-3 flex items-center justify-between gap-3 text-xs">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/80 rounded-2xl p-3 flex items-center justify-between gap-3 text-xs shadow-2xs"
+        >
           <div className="flex items-center gap-2 font-bold text-indigo-900 dark:text-indigo-200">
             <Target className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
             <span>
-              Фильтр из карты рисков: {selectedCategory !== 'ALL' ? getCategoryTitle(selectedCategory) : ''} {selectedSeverity !== 'ALL' ? `[Уровень: ${selectedSeverity}]` : ''} ({filteredRisks.length} условий)
+              Активный фильтр: {selectedCategory !== 'ALL' ? getCategoryTitle(selectedCategory) : ''} {selectedSeverity !== 'ALL' ? `[Уровень: ${selectedSeverity}]` : ''} ({filteredRisks.length} условий)
             </span>
           </div>
           <button
@@ -245,18 +262,18 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
               setSelectedSeverity('ALL');
               if (onClearExternalFilter) onClearExternalFilter();
             }}
-            className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-200 font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+            className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-200 font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1 cursor-pointer shrink-0 active:scale-95"
           >
             <X className="w-3.5 h-3.5" />
             <span>Сбросить</span>
           </button>
-        </div>
+        </motion.div>
       )}
 
       {/* Header and Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800 pb-4 min-w-0">
         <div className="min-w-0">
-          <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2 truncate">
+          <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2 truncate tracking-tight">
             <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
             <span className="truncate">Реестр рисков проекта договора ({risks.length})</span>
           </h3>
@@ -265,7 +282,7 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
           </p>
         </div>
 
-        {/* Quick Filter Switcher (All / New / Critical / Financial) */}
+        {/* Quick Filter Switcher */}
         <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700 shrink-0 max-w-full overflow-x-auto no-scrollbar">
           <button
             type="button"
@@ -288,7 +305,7 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
             <button
               type="button"
               onClick={() => setQuickFilter('NEW')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer animate-pulse ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 quickFilter === 'NEW'
                   ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-400/50'
                   : 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-800'
@@ -314,7 +331,7 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
             }`}
           >
             <ShieldAlert className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
-            <span>Критичекие</span>
+            <span>Критичные</span>
             <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
               quickFilter === 'CRITICAL' ? 'bg-white/20 text-white' : 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'
             }`}>
@@ -344,12 +361,12 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
 
       {/* Filter and Sort controls row */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-        <div className="flex items-center gap-1.5 text-xs">
-          <Filter className="w-3.5 h-3.5 text-slate-400" />
+        <div className="flex items-center gap-1.5 text-xs flex-wrap">
+          <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 focus:outline-none focus:border-indigo-500"
+            className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 focus:outline-none focus:border-indigo-500 transition-colors"
           >
             <option value="ALL">Все категории</option>
             <option value="PENALTIES">Штрафы и неустойки</option>
@@ -362,7 +379,7 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
           <select
             value={selectedSeverity}
             onChange={(e) => setSelectedSeverity(e.target.value)}
-            className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 focus:outline-none focus:border-indigo-500"
+            className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 focus:outline-none focus:border-indigo-500 transition-colors"
           >
             <option value="ALL">Все уровни</option>
             <option value="CRITICAL">Критический</option>
@@ -430,127 +447,150 @@ export const ContractRisksTable: React.FC<ContractRisksTableProps> = ({
       </div>
 
       {sortedRisks.length === 0 ? (
-        <div className="text-center py-8 text-xs text-slate-400 dark:text-slate-500 font-medium">
-          По выбранным фильтрам рисков не найдено.
-        </div>
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center py-10 text-xs text-slate-400 dark:text-slate-500 font-medium bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-6"
+        >
+          <AlertCircle className="w-6 h-6 mx-auto mb-2 text-slate-400 opacity-60" />
+          По выбранным фильтрам рисков не найдено. Попробуйте сбросить параметры фильтрации.
+        </motion.div>
       ) : (
-        <div className="space-y-4">
-          {sortedRisks.map((item) => {
-            const legalNorm = getLegalNormInfo(item);
-            const isHighlighted = (
-              (externalCategoryFilter && item.category === externalCategoryFilter) ||
-              (externalSeverityFilter && item.severity === externalSeverityFilter)
-            );
+        <motion.div layout className="space-y-4">
+          <AnimatePresence mode="popLayout">
+            {sortedRisks.map((item) => {
+              const legalNorm = getLegalNormInfo(item);
+              const isHighlighted = (
+                (externalCategoryFilter && item.category === externalCategoryFilter) ||
+                (externalSeverityFilter && item.severity === externalSeverityFilter)
+              );
 
-            return (
-              <div
-                key={item.id}
-                className={`border rounded-2xl p-5 space-y-3 transition-all ${
-                  item.isNew
-                    ? 'ring-2 ring-amber-500/90 border-amber-400 bg-amber-50/80 dark:bg-amber-950/30 shadow-md'
-                    : isHighlighted
-                    ? 'ring-2 ring-indigo-500 shadow-md scale-[1.002]'
-                    : ''
-                } ${
-                  item.severity === 'CRITICAL' && !item.isNew
-                    ? 'bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900/60'
-                    : item.severity === 'HIGH' && !item.isNew
-                    ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60'
-                    : !item.isNew
-                    ? 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
-                    : ''
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/60 pb-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {item.isNew && (
-                      <span className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black rounded-lg flex items-center gap-1 shadow-xs animate-pulse">
-                        <Sparkles className="w-3.5 h-3.5 fill-white" />
-                        <span>⚡ НОВЫЙ РИСК{item.versionAdded ? ` (v${item.versionAdded})` : ''}</span>
+              return (
+                <motion.div
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.2 }}
+                  key={item.id}
+                  className={`border rounded-2xl p-5 space-y-3 transition-all ${
+                    item.isNew
+                      ? 'ring-2 ring-amber-500/90 border-amber-400 bg-amber-50/80 dark:bg-amber-950/30 shadow-md'
+                      : isHighlighted
+                      ? 'ring-2 ring-indigo-500 shadow-md scale-[1.002]'
+                      : ''
+                  } ${
+                    item.severity === 'CRITICAL' && !item.isNew
+                      ? 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60 hover:border-rose-300'
+                      : item.severity === 'HIGH' && !item.isNew
+                      ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60 hover:border-amber-300'
+                      : !item.isNew
+                      ? 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                      : ''
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/60 pb-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {item.isNew && (
+                        <span className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black rounded-lg flex items-center gap-1 shadow-xs animate-pulse">
+                          <Sparkles className="w-3.5 h-3.5 fill-white" />
+                          <span>⚡ НОВЫЙ РИСК{item.versionAdded ? ` (v${item.versionAdded})` : ''}</span>
+                        </span>
+                      )}
+                      <span className="text-[11px] font-mono text-indigo-700 dark:text-indigo-300 font-black bg-indigo-50 dark:bg-indigo-950 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                        {item.clauseNumber || 'Пункт договора'}
                       </span>
-                    )}
-                    <span className="text-[11px] font-mono text-indigo-700 dark:text-indigo-300 font-extrabold bg-indigo-50 dark:bg-indigo-950 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                      {item.clauseNumber || 'Пункт договора'}
-                    </span>
-                    <span className="text-sm font-bold text-slate-900 dark:text-white">
-                      {item.title}
-                    </span>
-                    {isHighlighted && !item.isNew && (
-                      <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-extrabold rounded-md flex items-center gap-1 shadow-2xs">
-                        <Sparkles className="w-3 h-3" />
-                        <span>Выбрано на карте</span>
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">
+                        {item.title}
                       </span>
-                    )}
-                  </div>
+                      {isHighlighted && !item.isNew && (
+                        <span className="px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-extrabold rounded-md flex items-center gap-1 shadow-2xs">
+                          <Sparkles className="w-3 h-3" />
+                          <span>Выбрано на карте</span>
+                        </span>
+                      )}
+                    </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Interactive Legal Norm Hover Tooltip */}
-                    <div className="relative group/tooltip inline-block">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50/80 dark:bg-indigo-950/90 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200/80 dark:border-indigo-800 px-2.5 py-1 rounded-lg cursor-help transition-all shadow-2xs">
-                        <Scale className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                        <span>{legalNorm.normArticle}</span>
-                        <HelpCircle className="w-3 h-3 text-indigo-400 ml-0.5" />
-                      </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Interactive Legal Norm Tooltip */}
+                      <div className="relative group/tooltip inline-block">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50/80 dark:bg-indigo-950/90 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200/80 dark:border-indigo-800 px-2.5 py-1 rounded-lg cursor-help transition-all shadow-2xs">
+                          <Scale className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                          <span>{legalNorm.normArticle}</span>
+                          <HelpCircle className="w-3 h-3 text-indigo-400 ml-0.5" />
+                        </span>
 
-                      {/* Floating Tooltip Box */}
-                      <div className="absolute left-0 sm:left-auto sm:right-0 bottom-full mb-2 hidden group-hover/tooltip:block z-50 w-72 sm:w-80 p-3.5 bg-slate-900 text-white text-xs rounded-2xl shadow-xl border border-slate-700 space-y-1.5 backdrop-blur-md">
-                        <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
-                          <span className="font-extrabold text-indigo-300 flex items-center gap-1.5">
-                            <Gavel className="w-3.5 h-3.5 text-amber-400" />
-                            {legalNorm.normArticle}
-                          </span>
-                          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">223-ФЗ / ГК РФ</span>
-                        </div>
-                        <p className="font-bold text-white text-xs">{legalNorm.normTitle}</p>
-                        <p className="text-slate-300 text-[11px] leading-relaxed">{legalNorm.normExplanation}</p>
-                        {legalNorm.fasPractice && (
-                          <div className="pt-1 text-[10px] text-amber-300 font-mono border-t border-slate-800 flex items-center gap-1">
-                            <span>⚖️ {legalNorm.fasPractice}</span>
+                        {/* Floating Tooltip Box */}
+                        <div className="absolute left-0 sm:left-auto sm:right-0 bottom-full mb-2 hidden group-hover/tooltip:block z-50 w-72 sm:w-80 p-3.5 bg-slate-900 text-white text-xs rounded-2xl shadow-xl border border-slate-700 space-y-1.5 backdrop-blur-md">
+                          <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
+                            <span className="font-extrabold text-indigo-300 flex items-center gap-1.5">
+                              <Gavel className="w-3.5 h-3.5 text-amber-400" />
+                              {legalNorm.normArticle}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">223-ФЗ / ГК РФ</span>
                           </div>
-                        )}
+                          <p className="font-bold text-white text-xs">{legalNorm.normTitle}</p>
+                          <p className="text-slate-300 text-[11px] leading-relaxed">{legalNorm.normExplanation}</p>
+                          {legalNorm.fasPractice && (
+                            <div className="pt-1 text-[10px] text-amber-300 font-mono border-t border-slate-800 flex items-center gap-1">
+                              <span>⚖️ {legalNorm.fasPractice}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
+
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        {getCategoryTitle(item.category)}
+                      </span>
+                      {getSeverityBadge(item.severity)}
+
+                      {/* Copy Risk Summary Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyRecommendation(item)}
+                        className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                        title="Скопировать пункт и рекомендации"
+                      >
+                        {copiedId === item.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quote from contract */}
+                  {item.clauseQuote && (
+                    <div className="bg-white dark:bg-slate-900/90 border-l-4 border-indigo-500 pl-3.5 py-2 pr-3 text-xs italic text-slate-700 dark:text-slate-300 font-serif rounded-r-xl border-y border-r border-slate-200 dark:border-slate-800 shadow-2xs">
+                      «{item.clauseQuote}»
+                    </div>
+                  )}
+
+                  {/* Explanation & Action */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1">
+                    <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl space-y-1 shadow-2xs">
+                      <div className="font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Правовые и финансовые риски:</span>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{item.explanation}</p>
                     </div>
 
-                    <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
-                      {getCategoryTitle(item.category)}
-                    </span>
-                    {getSeverityBadge(item.severity)}
-                  </div>
-                </div>
-
-                {/* Quote from contract */}
-                {item.clauseQuote && (
-                  <div className="bg-white dark:bg-slate-900/90 border-l-4 border-indigo-500 pl-3.5 py-2 pr-3 text-xs italic text-slate-700 dark:text-slate-300 font-serif rounded-r-xl border-y border-r border-slate-200 dark:border-slate-800 shadow-2xs">
-                    «{item.clauseQuote}»
-                  </div>
-                )}
-
-                {/* Explanation & Action */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1">
-                  <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl space-y-1 shadow-2xs">
-                    <div className="font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      <span>Правовые и финансовые риски:</span>
+                    <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl space-y-1 shadow-2xs">
+                      <div className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>Рекомендация и защитные шаги:</span>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{item.recommendation}</p>
                     </div>
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{item.explanation}</p>
                   </div>
-
-                  <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl space-y-1 shadow-2xs">
-                    <div className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Рекомендация и защитные шаги:</span>
-                    </div>
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{item.recommendation}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </motion.div>
       )}
     </div>
   );
 };
-
-
-

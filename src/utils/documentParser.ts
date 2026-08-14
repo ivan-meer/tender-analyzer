@@ -44,6 +44,61 @@ function extractReadableTextFromBuffer(buffer: ArrayBuffer): string {
   }
 }
 
+export function smartClassifyDocument(
+  fileName: string,
+  content: string = ''
+): ParsedDocument['category'] {
+  const lowerName = fileName.toLowerCase();
+  const lowerContentSample = (content || '').slice(0, 3000).toLowerCase();
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+
+  // 1. Check for Project of Contract
+  if (
+    lowerName.includes('договор') ||
+    lowerName.includes('проект') ||
+    lowerName.includes('контракт') ||
+    lowerName.includes('contract') ||
+    lowerContentSample.includes('проект договора') ||
+    lowerContentSample.includes('проект контракта') ||
+    lowerContentSample.includes('настоящий договор заключен') ||
+    lowerContentSample.includes('предмет договора')
+  ) {
+    return 'contract';
+  }
+
+  // 2. Check for Technical Specification / Specifications
+  if (
+    lowerName.includes('тз') ||
+    lowerName.includes('задание') ||
+    lowerName.includes('специфик') ||
+    lowerName.includes('tz') ||
+    lowerName.includes('требован') ||
+    lowerName.includes('ведомост') ||
+    lowerName.includes('товар') ||
+    lowerContentSample.includes('техническое задание') ||
+    lowerContentSample.includes('спецификация товара') ||
+    lowerContentSample.includes('ведомость объемов')
+  ) {
+    return 'tz';
+  }
+
+  // 3. Check for Tables / Estimates / Calc
+  if (
+    ['xlsx', 'xls', 'csv'].includes(ext) ||
+    lowerName.includes('смета') ||
+    lowerName.includes('таблиц') ||
+    lowerName.includes('прайс') ||
+    lowerName.includes('расчет') ||
+    lowerContentSample.includes('расчет начальной максимальной цены') ||
+    lowerContentSample.includes('сметный расчет')
+  ) {
+    return 'table';
+  }
+
+  // 4. Default to Procurement notice / documentation
+  return 'docs';
+}
+
 /**
  * Standardized Document Parser for PDF, Word (docx/doc), Excel (xlsx/xls/csv), and Text files.
  */
@@ -63,19 +118,7 @@ export async function parseDocumentFile(
     fileType = 'pdf';
   }
 
-  let autoCategory = category;
-  if (category === 'auto') {
-    const lowerName = file.name.toLowerCase();
-    if (lowerName.includes('договор') || lowerName.includes('проект') || lowerName.includes('contract')) {
-      autoCategory = 'contract';
-    } else if (lowerName.includes('тз') || lowerName.includes('задание') || lowerName.includes('специфик') || lowerName.includes('tz')) {
-      autoCategory = 'tz';
-    } else if (['xlsx', 'xls', 'csv'].includes(ext) || lowerName.includes('смета') || lowerName.includes('таблиц')) {
-      autoCategory = 'table';
-    } else {
-      autoCategory = 'docs';
-    }
-  }
+  let autoCategory = category === 'auto' ? smartClassifyDocument(file.name) : category;
 
   let extractedText = '';
 

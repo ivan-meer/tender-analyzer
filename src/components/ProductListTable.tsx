@@ -23,6 +23,7 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
+import { motion } from 'motion/react';
 
 interface ProductListTableProps {
   products: ProductItem[];
@@ -66,15 +67,19 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
 
   if (!products || products.length === 0) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center space-y-3">
-        <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center mx-auto">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center space-y-3 shadow-xs"
+      >
+        <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
           <Package className="w-6 h-6" />
         </div>
         <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Спецификация и список продукции не обнаружены</p>
         <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-md mx-auto">
           В загруженных файлах не найден явный перечень номенклатурных позиций. Загрузите файлы ТЗ или сметы в формате Excel (.xlsx) или таблицы Word.
         </p>
-      </div>
+      </motion.div>
     );
   }
 
@@ -96,7 +101,6 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
     if (sortField === 'name') {
       comparison = a.name.localeCompare(b.name, 'ru');
     } else if (sortField === 'quantity') {
-      // parse numeric value from quantity string e.g. "10 шт"
       const numA = parseFloat(a.quantity) || 0;
       const numB = parseFloat(b.quantity) || 0;
       comparison = numA - numB;
@@ -129,21 +133,21 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
     switch (status) {
       case 'RUSSIAN_REQUIRED':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 px-2.5 py-1 rounded-lg">
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 px-2.5 py-1 rounded-lg shadow-2xs">
             <ShieldAlert className="w-3 h-3 text-amber-600 dark:text-amber-400" />
             ПП РФ 1875: Требуется РФ
           </span>
         );
       case 'RESTRICTED':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-purple-100 dark:bg-purple-950/80 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-800 px-2.5 py-1 rounded-lg">
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-purple-100 dark:bg-purple-950/80 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-800 px-2.5 py-1 rounded-lg shadow-2xs">
             <Layers className="w-3 h-3 text-purple-600 dark:text-purple-400" />
             ПП РФ 1875: Ограничение
           </span>
         );
       case 'NOT_APPLICABLE':
         return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 px-2.5 py-1 rounded-lg">
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 px-2.5 py-1 rounded-lg shadow-2xs">
             <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
             Без ограничений
           </span>
@@ -159,7 +163,12 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xs overflow-hidden space-y-0 transition-colors duration-200">
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-xs overflow-hidden space-y-0 transition-colors duration-200"
+    >
       {/* Header Bar */}
       <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
         <div className="flex items-center gap-3 min-w-0">
@@ -167,7 +176,7 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
             <FileSpreadsheet className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white truncate">
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-white truncate">
               Спецификация и Параметры Продукции ({products.length} позиций)
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
@@ -181,11 +190,11 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
           <button
             type="button"
             onClick={() => handleOpenAgentSearch()}
-            className="flex items-center gap-1.5 text-xs font-extrabold bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-sm shadow-cyan-950/20"
+            className="flex items-center gap-1.5 text-xs font-extrabold bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 active:scale-95 text-white px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-sm shadow-cyan-950/20"
             title="Запустить ИИ-Агент для генерации промптов и поиска в сети по всей продукции"
           >
             <Bot className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-            <span>🤖 ИИ-Агент Поиска & Промпты</span>
+            <span>🤖 ИИ-Агент Поиска</span>
           </button>
 
           <div className="relative min-w-[220px]">
@@ -195,14 +204,14 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Поиск по наименованию, габаритам, ТЗ..."
-              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-medium"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-medium transition-colors"
             />
           </div>
 
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-500 shadow-2xs"
+            className="text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-500 shadow-2xs transition-colors"
           >
             <option value="ALL">Все статусы ПП 1875</option>
             <option value="RUSSIAN_REQUIRED">Требуется РФ</option>
@@ -301,7 +310,7 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
                     {item.name}
                   </td>
                   <td className="py-3.5 px-4">
-                    <span className="inline-block px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-extrabold rounded-lg">
+                    <span className="inline-block px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-extrabold rounded-lg shadow-2xs">
                       {item.quantity}
                     </span>
                   </td>
@@ -350,7 +359,7 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
                             return (
                               <div 
                                 key={pIdx} 
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] border font-medium shadow-2xs ${iconConfig.bgClass} ${iconConfig.borderClass} ${iconConfig.textClass}`}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] border font-medium shadow-2xs transition-all hover:scale-102 ${iconConfig.bgClass} ${iconConfig.borderClass} ${iconConfig.textClass}`}
                               >
                                 {iconConfig.icon}
                                 <span className="font-bold opacity-80">{param.name}:</span>
@@ -378,7 +387,7 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
                       <button
                         type="button"
                         onClick={() => handleOpenAgentSearch(item)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white rounded-xl font-bold text-xs transition-all cursor-pointer shadow-xs"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 active:scale-95 text-white rounded-xl font-bold text-xs transition-all cursor-pointer shadow-xs"
                         title="Сгенерировать точечные ИИ-промпты и запустить Агент Поиска"
                       >
                         <Bot className="w-3.5 h-3.5 text-amber-300" />
@@ -388,7 +397,7 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
                       <button
                         type="button"
                         onClick={() => handleOpenSearch(item)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white border border-indigo-200 dark:border-indigo-800 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-2xs"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white border border-indigo-200 dark:border-indigo-800 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-2xs active:scale-95"
                         title="Найти заводские аналоги и поставщиков в РФ по параметрам ТЗ"
                       >
                         <Globe className="w-3.5 h-3.5" />
@@ -426,6 +435,6 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
         procurementProducts={products}
         initialSelectedProduct={selectedProductForAgent}
       />
-    </div>
+    </motion.div>
   );
 };
