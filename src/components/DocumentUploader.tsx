@@ -28,7 +28,8 @@ import {
   Building2,
   ExternalLink,
   Scale,
-  Calculator
+  Calculator,
+  ChevronDown
 } from 'lucide-react';
 import { AnalysisInput, ProcedureType } from '../types';
 import { SAMPLE_PROCUREMENTS } from '../data/sampleProcurements';
@@ -430,6 +431,8 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     }
   };
 
+  const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
+
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xs overflow-hidden transition-colors duration-200">
       <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
@@ -483,45 +486,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               <span>ЕИС (zakupki.gov.ru)</span>
             </button>
 
-            {onOpenContractDiff && (
-              <button
-                type="button"
-                onClick={() => {
-                  const contractDoc = parsedFiles.find(f => f.category === 'contract');
-                  onOpenContractDiff(contractDoc?.content || pastedText);
-                }}
-                className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 px-3 py-1.5 rounded-lg cursor-pointer"
-                title="Сравнить две редакции договора и выявить скрытые изменения Заказчика"
-              >
-                <FileDiff className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Diff правок</span>
-              </button>
-            )}
-
-            {onOpenFasComplaint && (
-              <button
-                type="button"
-                onClick={onOpenFasComplaint}
-                className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-950/40 px-3 py-1.5 rounded-lg cursor-pointer"
-                title="Подготовить жалобу в ФАС РФ или запрос на разъяснение положений ТЗ"
-              >
-                <Scale className="w-3.5 h-3.5" />
-                <span>ФАС РФ</span>
-              </button>
-            )}
-
-            {onOpenBankGuarantee && (
-              <button
-                type="button"
-                onClick={onOpenBankGuarantee}
-                className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 px-3 py-1.5 rounded-lg cursor-pointer"
-                title="Калькулятор сумм обеспечения заявки/контракта и банковских гарантий"
-              >
-                <Calculator className="w-3.5 h-3.5" />
-                <span>Гарантии</span>
-              </button>
-            )}
-
+            {/* INSTRUCTION / NOTES BUTTON */}
             <button
               type="button"
               onClick={() => setIsNotesModalOpen(true)}
@@ -538,26 +503,107 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               </span>
             </button>
 
-            {onOpenScanModal && (
+            {/* SECONDARY TOOLS DROPDOWN */}
+            <div className="relative">
               <button
                 type="button"
-                onClick={onOpenScanModal}
-                className="text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer"
-                title="Распознать скан документа"
+                onClick={() => setIsToolsDropdownOpen(!isToolsDropdownOpen)}
+                className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 px-2.5 py-1.5 rounded-lg cursor-pointer"
+                title="Дополнительные инструменты"
               >
-                <Camera className="w-3.5 h-3.5 text-slate-500" />
-                <span>Скан (OCR)</span>
+                <span>Инструменты</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isToolsDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
-            )}
+
+              {isToolsDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-20" 
+                    onClick={() => setIsToolsDropdownOpen(false)}
+                  />
+                  <div className="absolute right-0 mt-1.5 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-30 py-1 text-xs animate-fadeIn">
+                    {onOpenContractDiff && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsToolsDropdownOpen(false);
+                          const contractDoc = parsedFiles.find(f => f.category === 'contract');
+                          onOpenContractDiff(contractDoc?.content || pastedText);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-left transition-colors cursor-pointer"
+                      >
+                        <FileDiff className="w-4 h-4 text-indigo-500 shrink-0" />
+                        <div>
+                          <div className="font-semibold">Diff правок договора</div>
+                          <div className="text-[10px] text-slate-400">Сравнение версий</div>
+                        </div>
+                      </button>
+                    )}
+
+                    {onOpenFasComplaint && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsToolsDropdownOpen(false);
+                          onOpenFasComplaint();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-left transition-colors cursor-pointer"
+                      >
+                        <Scale className="w-4 h-4 text-red-500 shrink-0" />
+                        <div>
+                          <div className="font-semibold">Жалобы в ФАС РФ</div>
+                          <div className="text-[10px] text-slate-400">ст. 105 44-ФЗ / 135-ФЗ</div>
+                        </div>
+                      </button>
+                    )}
+
+                    {onOpenBankGuarantee && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsToolsDropdownOpen(false);
+                          onOpenBankGuarantee();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-left transition-colors cursor-pointer"
+                      >
+                        <Calculator className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <div>
+                          <div className="font-semibold">Калькулятор гарантий</div>
+                          <div className="text-[10px] text-slate-400">Обеспечение и БГ</div>
+                        </div>
+                      </button>
+                    )}
+
+                    {onOpenScanModal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsToolsDropdownOpen(false);
+                          onOpenScanModal();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-left transition-colors cursor-pointer border-t border-slate-100 dark:border-slate-700/60"
+                      >
+                        <Camera className="w-4 h-4 text-slate-500 shrink-0" />
+                        <div>
+                          <div className="font-semibold">Распознать скан (OCR)</div>
+                          <div className="text-[10px] text-slate-400">Анализ сканов и фото</div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
 
             {hasContent && (
               <button
                 type="button"
                 onClick={handleClearAll}
-                className="text-xs text-slate-500 hover:text-red-500 dark:text-slate-400 font-semibold flex items-center gap-1 transition-colors px-2.5 py-1.5 rounded-lg cursor-pointer"
+                className="text-xs text-slate-500 hover:text-red-500 dark:text-slate-400 font-semibold flex items-center gap-1 transition-colors px-2 py-1.5 rounded-lg cursor-pointer"
+                title="Очистить все файлы"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Очистить
+                <span className="hidden sm:inline">Очистить</span>
               </button>
             )}
           </div>
