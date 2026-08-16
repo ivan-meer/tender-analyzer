@@ -47,6 +47,8 @@ export default function App() {
     clearExternalFilters,
     handleAnalyze,
     handleLoadPresetResult,
+    cancelAnalysis,
+    forceInstantAudit,
     resetAnalysis,
   } = useAnalysis();
 
@@ -127,6 +129,7 @@ export default function App() {
                 onOpenContractDiff={(text) => modals.openContractDiff(text)}
                 onOpenFasComplaint={() => modals.setIsFasComplaintOpen(true)}
                 onOpenBankGuarantee={() => modals.setIsBankGuaranteeOpen(true)}
+                onOpenAISettings={() => modals.setIsAISettingsOpen(true)}
               />
             </div>
           </>
@@ -211,7 +214,11 @@ export default function App() {
 
         {/* Screen 2: Loading State Progress Screen */}
         {isAnalyzing && (
-          <AnalysisProgressScreen procedureType={activeProcedureType} />
+          <AnalysisProgressScreen
+            procedureType={activeProcedureType}
+            onCancel={cancelAnalysis}
+            onForceInstant={forceInstantAudit}
+          />
         )}
 
         {/* Screen 3: Analysis Results Report View */}

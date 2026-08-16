@@ -25,6 +25,10 @@ export function getStoredLLMConfig(): LLMConfig {
 export function saveLLMConfig(config: LLMConfig): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    // Dispatch custom event for real-time reactivity in other components
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('llm_config_changed', { detail: config }));
+    }
   } catch (err) {
     console.warn('Failed to save LLM config:', err);
   }

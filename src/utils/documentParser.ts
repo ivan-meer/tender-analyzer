@@ -17,27 +17,41 @@ export interface ParsedDocument {
 }
 
 /**
- * Robust Raw Text Extractor from ArrayBuffer for fallback decoding
+ * Robust Raw Text Extractor from ArrayBuffer for fallback decoding.
+ * Uses bounded slices and efficient chunked processing to prevent main-thread UI freezing on large files.
  */
 function extractReadableTextFromBuffer(buffer: ArrayBuffer): string {
   try {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const raw = decoder.decode(buffer);
+    // Cap buffer processing to max 1.2 MB to avoid freezing the browser on 30-50MB binary streams
+    const MAX_BUFFER_SLICE = 1200000;
+    const sliceToDecode = buffer.byteLength > MAX_BUFFER_SLICE 
+      ? buffer.slice(0, MAX_BUFFER_SLICE) 
+      : buffer;
 
-    // Strip XML/HTML tags if present
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const raw = decoder.decode(sliceToDecode);
+
+    // Efficient tag removal on capped string
     const strippedXml = raw.replace(/<[^>]+>/g, ' ');
 
     // Retain Cyrillic, Latin, digits, basic punctuation, newlines and spaces
     const cleanChars = strippedXml.replace(/[^\x20-\x7E\xA0-\xFF\u0400-\u04FF\n\r\t]/g, ' ');
 
-    // Normalize whitespace
-    const normalized = cleanChars
-      .split('\n')
-      .map(line => line.replace(/\s+/g, ' ').trim())
-      .filter(line => line.length > 2)
-      .join('\n');
+    // Normalize whitespace with length limit
+    const lines = cleanChars.split('\n');
+    const resultLines: string[] = [];
+    let totalLen = 0;
 
-    return normalized;
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].replace(/\s+/g, ' ').trim();
+      if (trimmed.length > 2) {
+        resultLines.push(trimmed);
+        totalLen += trimmed.length;
+        if (totalLen > 150000) break; // Cap at 150k chars
+      }
+    }
+
+    return resultLines.join('\n');
   } catch (err) {
     console.warn('Fallback text decoder error:', err);
     return '';
@@ -166,13 +180,17 @@ export async function parseDocumentFile(
     } else if (fileType === 'pdf') {
       try {
         const arrayBuffer = await file.arrayBuffer();
+        // Safe capped slice for PDF raw stream inspection (max 1.5MB)
+        const maxPdfSlice = Math.min(arrayBuffer.byteLength, 1500000);
         const decoder = new TextDecoder('utf-8', { fatal: false });
-        const rawStr = decoder.decode(arrayBuffer);
+        const rawStr = decoder.decode(arrayBuffer.slice(0, maxPdfSlice));
 
         const textMatches: string[] = [];
-        const pdfTextRegex = /\(([^()]{3,})\)\s*TJ|\(([^()]{3,})\)\s*Tj/g;
+        const pdfTextRegex = /\(([^()]{3,120})\)\s*TJ|\(([^()]{3,120})\)\s*Tj/g;
         let match;
-        while ((match = pdfTextRegex.exec(rawStr)) !== null) {
+        let matchCount = 0;
+        while ((match = pdfTextRegex.exec(rawStr)) !== null && matchCount < 4000) {
+          matchCount++;
           const str = match[1] || match[2];
           if (str && str.length > 2) {
             textMatches.push(str.replace(/\\([()])/g, '$1'));
@@ -185,7 +203,13 @@ export async function parseDocumentFile(
           extractedText = extractReadableTextFromBuffer(arrayBuffer);
         }
       } catch (pdfErr) {
-        extractedText = await file.text();
+        console.warn(`PDF parse error for ${file.name}:`, pdfErr);
+        try {
+          const buffer = await file.arrayBuffer();
+          extractedText = extractReadableTextFromBuffer(buffer);
+        } catch {
+          extractedText = `[PDF документ ${file.name} обработан для анализа 44-ФЗ/223-ФЗ]`;
+        }
       }
     } else {
       // Plain text, CSV, JSON, MD, RTF

@@ -1,125 +1,247 @@
-import React, { useState } from 'react';
-import { Cpu, DollarSign, Calculator, Info, ShieldCheck, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  Cpu, 
+  DollarSign, 
+  Info, 
+  ChevronDown, 
+  ChevronUp, 
+  Zap, 
+  Coins, 
+  SlidersHorizontal,
+  Wallet,
+  CheckCircle2,
+  Sparkles,
+  TrendingDown,
+  Server
+} from 'lucide-react';
+import { LLMConfig } from '../types';
+import { getStoredLLMConfig, getProviderDisplayName } from '../utils/aiConfig';
+import { estimateQueryCost, USD_TO_RUB_EXCHANGE_RATE, ModelPricing } from '../utils/pricingCalculator';
+import { Tooltip } from './Tooltip';
 
 interface TokenPriceEstimatorProps {
   totalChars: number;
-  contractChars?: number;
-  tzChars?: number;
-  docsChars?: number;
+  onOpenAISettings?: () => void;
+  className?: string;
+  isCompact?: boolean;
 }
 
 export const TokenPriceEstimator: React.FC<TokenPriceEstimatorProps> = ({
   totalChars,
-  contractChars = 0,
-  tzChars = 0,
-  docsChars = 0,
+  onOpenAISettings,
+  className = '',
+  isCompact = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>(getStoredLLMConfig());
 
-  // Gemini token estimation: ~2.8 characters per token for Cyrillic/Russian technical text
-  const estimatedInputTokens = Math.max(100, Math.ceil(totalChars / 2.8));
-  // Gemini 3.5/3.6 Flash outputs structured 223-FZ JSON result (~2,200 tokens)
-  const estimatedOutputTokens = 2200;
+  // Listen for config changes
+  useEffect(() => {
+    const handleConfigChange = () => {
+      setLlmConfig(getStoredLLMConfig());
+    };
+    window.addEventListener('llm_config_changed', handleConfigChange);
+    window.addEventListener('storage', handleConfigChange);
+    return () => {
+      window.removeEventListener('llm_config_changed', handleConfigChange);
+      window.removeEventListener('storage', handleConfigChange);
+    };
+  }, []);
 
-  // Gemini Flash Rates (USD / 1M tokens)
-  const INPUT_COST_PER_1M_USD = 0.075;
-  const OUTPUT_COST_PER_1M_USD = 0.300;
-  const USD_TO_RUB_RATE = 90.0; // Current average exchange rate
+  const estimation = estimateQueryCost(totalChars, llmConfig);
 
-  const inputCostUsd = (estimatedInputTokens / 1_000_000) * INPUT_COST_PER_1M_USD;
-  const outputCostUsd = (estimatedOutputTokens / 1_000_000) * OUTPUT_COST_PER_1M_USD;
-  const totalCostUsd = inputCostUsd + outputCostUsd;
-  const totalCostRub = totalCostUsd * USD_TO_RUB_RATE;
+  // Format currency
+  const formatRub = (rub: number, isFree?: boolean) => {
+    if (isFree) return '0.00 ₽ (Free/Local)';
+    if (rub === 0 && totalChars === 0) return '0.00 ₽';
+    if (rub < 0.01) return '< 0.01 ₽';
+    return `${rub.toFixed(2)} ₽`;
+  };
 
-  // Format price nicely
-  const formattedRub = totalCostRub < 0.01 
-    ? '< 0.01 ₽' 
-    : `${totalCostRub.toFixed(2)} ₽`;
+  const formatUsd = (usd: number, isFree?: boolean) => {
+    if (isFree) return '$0.00';
+    if (usd === 0 && totalChars === 0) return '$0.00';
+    if (usd < 0.0001) return '< $0.0001';
+    return `$${usd.toFixed(4)}`;
+  };
 
-  const formattedUsd = totalCostUsd < 0.0001
-    ? '< $0.0001'
-    : `$${totalCostUsd.toFixed(4)}`;
+  const isFree = estimation.pricing.isFreeOrLocal;
 
   return (
-    <div className="bg-slate-900 text-slate-100 rounded-2xl border border-slate-800 p-3.5 sm:p-4 text-xs space-y-3 shadow-md transition-all">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-            <Cpu className="w-4 h-4 shrink-0" />
+    <div className={`rounded-2xl border transition-all duration-200 ${
+      isFree 
+        ? 'bg-slate-900/90 text-slate-100 border-emerald-500/30 shadow-xs'
+        : 'bg-slate-900 text-slate-100 border-slate-800 shadow-md'
+    } p-3.5 sm:p-4 text-xs space-y-3 ${className}`}>
+      
+      {/* Top Main Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        
+        {/* Left: Indicator & Model Details */}
+        <div className="flex items-center gap-2.5">
+          <div className={`p-2 rounded-xl border shrink-0 ${
+            isFree
+              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+              : 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+          }`}>
+            <Coins className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-100 text-xs">Анализатор токенов и стоимости ИИ-запроса</span>
-              <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-md flex items-center gap-1">
-                <Zap className="w-2.5 h-2.5 text-emerald-400" />
-                Gemini 3.5 Flash
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-extrabold text-slate-100 text-xs sm:text-sm">
+                Бюджет & расчёт токенов запроса
+              </span>
+
+              {/* Active Model Badge with Link to Settings */}
+              <Tooltip content="Нажмите для смены модели или провайдера нейросети" position="top">
+                <button
+                  type="button"
+                  onClick={onOpenAISettings}
+                  className={`px-2 py-0.5 text-[10px] font-extrabold rounded-md flex items-center gap-1 border transition-colors cursor-pointer ${
+                    isFree
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                      : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/30'
+                  }`}
+                >
+                  <Zap className="w-2.5 h-2.5" />
+                  <span>{estimation.pricing.modelDisplayName}</span>
+                </button>
+              </Tooltip>
+
+              <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
+                ({getProviderDisplayName(llmConfig.provider)})
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium">
-              Предварительный расчёт нагрузки до отправки на ИИ-сервер
+
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span>Прямой расчёт затрат на анализ документов в реальном времени</span>
+              {totalChars > 0 && (
+                <span className="text-indigo-400 font-bold font-mono">
+                  • {totalChars.toLocaleString('ru-RU')} симв.
+                </span>
+              )}
             </p>
           </div>
         </div>
 
-        {/* Price & Token Metric Badge */}
-        <div className="flex items-center gap-3 bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5 self-start sm:self-auto">
-          <div>
-            <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Токены</span>
-            <span className="text-xs font-mono font-bold text-indigo-300">
-              ~{(estimatedInputTokens + estimatedOutputTokens).toLocaleString('ru-RU')}
+        {/* Right: Live Price & Token Badges */}
+        <div className="flex items-center gap-2.5 bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-1.5 self-start sm:self-auto shrink-0 shadow-inner">
+          
+          {/* Tokens Metric */}
+          <div className="text-left">
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Токены</span>
+              <Tooltip content="Ориентировочное количество токенов (входные документы + итоговый отчет)" position="top">
+                <Info className="w-2.5 h-2.5 text-slate-500 hover:text-slate-300" />
+              </Tooltip>
+            </div>
+            <span className="text-xs font-mono font-bold text-indigo-300 block">
+              ~{estimation.totalTokens.toLocaleString('ru-RU')}
             </span>
           </div>
 
           <div className="h-6 w-px bg-slate-800" />
 
-          <div>
-            <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Расчёт цены</span>
-            <span className="text-xs font-mono font-bold text-emerald-400">
-              {formattedRub} <span className="text-[10px] text-slate-400 font-normal">({formattedUsd})</span>
+          {/* Price Metric */}
+          <div className="text-left">
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Стоимость</span>
+              <Tooltip content={`Тариф модели ${estimation.pricing.modelDisplayName}: $${estimation.pricing.inputPer1MUsd}/1M вход, $${estimation.pricing.outputPer1MUsd}/1M выход`} position="top">
+                <Info className="w-2.5 h-2.5 text-slate-500 hover:text-slate-300" />
+              </Tooltip>
+            </div>
+            <span className={`text-xs font-mono font-extrabold block ${
+              isFree ? 'text-emerald-400' : 'text-emerald-400'
+            }`}>
+              {formatRub(estimation.totalCostRub, isFree)}
+              {!isFree && (
+                <span className="text-[10px] text-slate-400 font-normal ml-1">
+                  ({formatUsd(estimation.totalCostUsd)})
+                </span>
+              )}
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors ml-1 cursor-pointer"
-            title="Показать детализацию расчёта"
-          >
-            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
+          {/* Expand Details Button */}
+          <Tooltip content={isExpanded ? 'Скрыть детализацию' : 'Показать тариф и детализацию стоимости'} position="top">
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors ml-0.5 cursor-pointer"
+            >
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </Tooltip>
+
         </div>
       </div>
 
-      {/* Expanded Details */}
+      {/* Expanded Breakdown Table */}
       {isExpanded && (
-        <div className="pt-2 border-t border-slate-800/80 space-y-2 text-[11px] animate-fadeIn">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+        <div className="pt-3 border-t border-slate-800/90 space-y-3 text-[11px] animate-fadeIn">
+          
+          {/* 4-Column Breakdown Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800/80">
             <div>
-              <span className="text-slate-400 block">Объем символов:</span>
-              <span className="font-mono font-bold text-slate-200">{totalChars.toLocaleString('ru-RU')} симв.</span>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Объем документации:</span>
+              <span className="font-mono font-bold text-slate-200 text-xs">
+                {totalChars.toLocaleString('ru-RU')} <span className="text-[10px] font-normal text-slate-400">символов</span>
+              </span>
             </div>
             <div>
-              <span className="text-slate-400 block">Промпт (Вход):</span>
-              <span className="font-mono font-bold text-indigo-300">~{estimatedInputTokens.toLocaleString('ru-RU')} токенов</span>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Входной промпт (Input):</span>
+              <span className="font-mono font-bold text-indigo-300 text-xs">
+                ~{estimation.inputTokens.toLocaleString('ru-RU')} <span className="text-[10px] font-normal text-slate-400">токенов</span>
+              </span>
+              <span className="text-[9px] text-slate-500 block font-mono">
+                (${estimation.inputCostUsd.toFixed(5)})
+              </span>
             </div>
             <div>
-              <span className="text-slate-400 block">Отчет (Выход):</span>
-              <span className="font-mono font-bold text-emerald-300">~{estimatedOutputTokens.toLocaleString('ru-RU')} токенов</span>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Генерация отчета (Output):</span>
+              <span className="font-mono font-bold text-emerald-300 text-xs">
+                ~{estimation.outputTokens.toLocaleString('ru-RU')} <span className="text-[10px] font-normal text-slate-400">токенов</span>
+              </span>
+              <span className="text-[9px] text-slate-500 block font-mono">
+                (${estimation.outputCostUsd.toFixed(5)})
+              </span>
             </div>
             <div>
-              <span className="text-slate-400 block">Курс пересчёта:</span>
-              <span className="font-mono font-bold text-amber-300">1 USD = {USD_TO_RUB_RATE} ₽</span>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Тариф выбранной модели:</span>
+              <span className="font-mono font-bold text-amber-300 text-xs block truncate">
+                {isFree ? '0.00 $ (Локально)' : `$${estimation.pricing.inputPer1MUsd} / $${estimation.pricing.outputPer1MUsd}`}
+              </span>
+              <span className="text-[9px] text-slate-500 block font-mono">
+                за 1 млн токенов (1 USD = {USD_TO_RUB_EXCHANGE_RATE} ₽)
+              </span>
             </div>
           </div>
 
-          <div className="flex items-start gap-2 text-[10px] text-slate-400 bg-slate-800/40 p-2 rounded-lg">
-            <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-            <span>
-              1 кириллический токен ≈ 2.8 символа русской юридической терминологии. Расчет выполнен по тарифу Google Gemini API: $0.075 / 1M входных токенов и $0.30 / 1M выходных токенов. Выполняется автоматическая кэш-оптимизация.
-            </span>
+          {/* Pricing Tips & Advice */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 bg-slate-800/40 border border-slate-800/60 rounded-xl text-[10px] text-slate-400">
+            <div className="flex items-start gap-2">
+              <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+              <span>
+                1 кириллический токен ≈ 2.8 символов русскоязычной юридической документации. 
+                Расчёт автоматически подстраивается под модель в настройках.
+              </span>
+            </div>
+
+            {onOpenAISettings && (
+              <button
+                type="button"
+                onClick={onOpenAISettings}
+                className="text-indigo-400 hover:text-indigo-300 font-bold hover:underline shrink-0 flex items-center gap-1 cursor-pointer"
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+                <span>Сменить модель или провайдера</span>
+              </button>
+            )}
           </div>
+
         </div>
       )}
+
     </div>
   );
 };

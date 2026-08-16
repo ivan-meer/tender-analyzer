@@ -15,6 +15,7 @@ import { useSqlExecutor } from '../hooks/useSqlExecutor';
 import { getUniqueProductImageUrl } from '../utils/imageMapper';
 import { MermaidDiagram } from './MermaidDiagram';
 import { VERIFIED_SUPPLIERS } from '../data/verifiedSuppliers';
+import { TokenPriceEstimator } from './TokenPriceEstimator';
 
 export interface AttachedFile {
   id: string;
@@ -2118,6 +2119,14 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
             ))}
           </div>
         )}
+
+        {/* Live Token & Real-time Budget Estimation for Current Message / Attached Context */}
+        <div className="px-3 py-1.5 bg-slate-950/60 border-t border-slate-200 dark:border-slate-800/80">
+          <TokenPriceEstimator 
+            totalChars={inputText.length + attachedFiles.reduce((acc, f) => acc + (f.content?.length || f.size || 0), 0)}
+            isCompact={true}
+          />
+        </div>
 
         {/* Input Form */}
         <form

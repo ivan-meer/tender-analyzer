@@ -5,9 +5,10 @@ import { ProcedureType } from '../types';
 interface AnalysisProgressScreenProps {
   procedureType?: ProcedureType;
   onCancel?: () => void;
+  onForceInstant?: () => void;
 }
 
-export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ procedureType }) => {
+export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ procedureType, onCancel, onForceInstant }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(12);
 
@@ -189,15 +190,39 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ 
           })}
         </div>
 
-        {/* Bottom Security Note */}
-        <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            {is44FZ ? 'Проверка согласно законодательству 44-ФЗ и ПП РФ № 1875' : 'Проверка согласно регламенту 223-ФЗ и ПП РФ № 1875'}
-          </span>
-          <span className="font-mono text-[10px] text-slate-500">
-            ~3-5 сек.
-          </span>
+        {/* Bottom Actions & Security Note */}
+        <div className="pt-2 border-t border-slate-800 space-y-3">
+          <div className="text-[11px] text-slate-400 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              {is44FZ ? 'Проверка согласно законодательству 44-ФЗ и ПП РФ № 1875' : 'Проверка согласно регламенту 223-ФЗ и ПП РФ № 1875'}
+            </span>
+            <span className="font-mono text-[10px] text-slate-500">
+              ~3-5 сек.
+            </span>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            {onCancel && (
+              <button
+                id="cancel-analysis-btn"
+                onClick={onCancel}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 rounded-xl transition-all border border-slate-700/60"
+              >
+                Отменить
+              </button>
+            )}
+            {onForceInstant && (
+              <button
+                id="force-instant-analysis-btn"
+                onClick={onForceInstant}
+                className="px-3.5 py-1.5 text-xs font-bold text-indigo-200 hover:text-white bg-indigo-600/30 hover:bg-indigo-600/50 rounded-xl transition-all border border-indigo-500/40 flex items-center gap-1.5"
+              >
+                <Zap className="w-3.5 h-3.5 text-indigo-400" />
+                Мгновенный результат
+              </button>
+            )}
+          </div>
         </div>
 
       </div>

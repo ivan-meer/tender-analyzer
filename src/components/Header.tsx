@@ -19,6 +19,7 @@ import {
   Calculator
 } from 'lucide-react';
 import { User } from 'firebase/auth';
+import { Tooltip } from './Tooltip';
 
 interface HeaderProps {
   onOpenGuide: () => void;
@@ -96,49 +97,57 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Desktop Navigation Links (Clean, minimal, 3 core + dropdown) */}
           <nav className="hidden md:flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
             {onOpenSuppliersCatalog && (
-              <button
-                type="button"
-                onClick={onOpenSuppliersCatalog}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <Package className="w-3.5 h-3.5 text-slate-400" />
-                <span>Каталог товаров</span>
-              </button>
+              <Tooltip content="Каталог товарных позиций и складских остатков" position="bottom">
+                <button
+                  type="button"
+                  onClick={onOpenSuppliersCatalog}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <Package className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Каталог товаров</span>
+                </button>
+              </Tooltip>
             )}
 
-            <button
-              type="button"
-              onClick={onOpenHistory}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              <History className="w-3.5 h-3.5 text-slate-400" />
-              <span>База закупок</span>
-            </button>
+            <Tooltip content="История предыдущих аудитов и сохраненных закупок" position="bottom">
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <History className="w-3.5 h-3.5 text-slate-400" />
+                <span>База закупок</span>
+              </button>
+            </Tooltip>
 
-            <button
-              type="button"
-              onClick={onOpenChat}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
-              <span>ИИ-Чат</span>
-            </button>
+            <Tooltip content="Интерактивный диалог с экспертом по 223/44-ФЗ" position="bottom">
+              <button
+                type="button"
+                onClick={onOpenChat}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
+                <span>ИИ-Чат</span>
+              </button>
+            </Tooltip>
 
             {/* Tools & Services Dropdown */}
             <div className="relative" ref={toolsRef}>
-              <button
-                type="button"
-                onClick={() => setIsToolsOpen(!isToolsOpen)}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                  isToolsOpen 
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white' 
-                    : 'hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Wrench className="w-3.5 h-3.5 text-slate-400" />
-                <span>Инструменты</span>
-                <ChevronDown className={`w-3 h-3 transition-transform ${isToolsOpen ? 'rotate-180' : ''}`} />
-              </button>
+              <Tooltip content="Юридические калькуляторы, сравнение версий и проверка контрагентов" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => setIsToolsOpen(!isToolsOpen)}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                    isToolsOpen 
+                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white' 
+                      : 'hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Wrench className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Инструменты</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${isToolsOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </Tooltip>
 
               {/* Dropdown Menu Popover */}
               {isToolsOpen && (
@@ -268,67 +277,72 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right: Theme Toggle & User Auth */}
         <div className="flex items-center gap-2">
           {/* Theme Switcher */}
-          <button
-            type="button"
-            onClick={onToggleDarkMode}
-            className="p-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
-            title={isDarkMode ? 'Включить светлую тему' : 'Включить тёмную тему'}
-          >
-            {isDarkMode ? (
-              <Sun className="w-4 h-4 text-amber-400" />
-            ) : (
-              <Moon className="w-4 h-4" />
-            )}
-          </button>
+          <Tooltip content={isDarkMode ? 'Включить светлую тему' : 'Включить тёмную тему'} position="bottom">
+            <button
+              type="button"
+              onClick={onToggleDarkMode}
+              className="p-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
+            >
+              {isDarkMode ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+            </button>
+          </Tooltip>
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 my-auto" />
 
           {/* User Auth */}
           {isGoogleUser ? (
             <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={onOpenHistory}
-                className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
-                title={`Аккаунт: ${currentUser.email}`}
-              >
-                {currentUser.photoURL ? (
-                  <img
-                    src={currentUser.photoURL}
-                    alt="Avatar"
-                    className="w-5 h-5 rounded-full"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center text-[10px] font-bold">
-                    {(currentUser.email || 'U')[0].toUpperCase()}
-                  </div>
-                )}
-                <span className="text-xs max-w-[100px] truncate hidden sm:inline">
-                  {currentUser.displayName || currentUser.email?.split('@')[0]}
-                </span>
-              </button>
-
-              {onSignOut && (
+              <Tooltip content={`Личный кабинет: ${currentUser.email}`} position="bottom">
                 <button
                   type="button"
-                  onClick={onSignOut}
-                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
-                  title="Выйти из аккаунта"
+                  onClick={onOpenHistory}
+                  className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
                 >
-                  <LogOut className="w-4 h-4" />
+                  {currentUser.photoURL ? (
+                    <img
+                      src={currentUser.photoURL}
+                      alt="Avatar"
+                      className="w-5 h-5 rounded-full"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center text-[10px] font-bold">
+                      {(currentUser.email || 'U')[0].toUpperCase()}
+                    </div>
+                  )}
+                  <span className="text-xs max-w-[100px] truncate hidden sm:inline">
+                    {currentUser.displayName || currentUser.email?.split('@')[0]}
+                  </span>
                 </button>
+              </Tooltip>
+
+              {onSignOut && (
+                <Tooltip content="Выйти из учетной записи" position="bottom">
+                  <button
+                    type="button"
+                    onClick={onSignOut}
+                    className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               )}
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={onOpenAuthModal}
-              className="flex items-center gap-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Войти</span>
-            </button>
+            <Tooltip content="Авторизация для сохранения закупок и отчетов в облаке" position="bottom">
+              <button
+                type="button"
+                onClick={onOpenAuthModal}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Войти</span>
+              </button>
+            </Tooltip>
           )}
         </div>
 

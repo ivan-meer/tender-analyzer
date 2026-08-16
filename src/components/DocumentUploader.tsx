@@ -44,6 +44,7 @@ import { detectLawTypeFromContent, LawDetectionResult } from '../utils/lawDetect
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { TokenPriceEstimator } from './TokenPriceEstimator';
 import { Camera } from 'lucide-react';
+import { Tooltip } from './Tooltip';
 
 interface DocumentUploaderProps {
   onAnalyze: (input: AnalysisInput) => void;
@@ -54,6 +55,7 @@ interface DocumentUploaderProps {
   onOpenContractDiff?: (initialOriginalText?: string) => void;
   onOpenFasComplaint?: () => void;
   onOpenBankGuarantee?: () => void;
+  onOpenAISettings?: () => void;
 }
 
 const ALLOWED_EXTENSIONS = ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'pdf', 'docx', 'doc', 'rtf', 'xlsx', 'xls', 'csv', 'txt', 'json', 'md'];
@@ -67,6 +69,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   onOpenContractDiff,
   onOpenFasComplaint,
   onOpenBankGuarantee,
+  onOpenAISettings,
 }) => {
   const [lawType, setLawType] = useState<'223_FZ' | '44_FZ' | 'COMMERCIAL'>(() => {
     const saved = localStorage.getItem('selected_law_type');
@@ -464,56 +467,60 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             {/* DEMO REPORT BUTTON */}
             {onLoadPresetResult && (
-              <button
-                type="button"
-                onClick={() => onLoadPresetResult('sample-furniture-223fz')}
-                className="text-xs bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
-                title="Показать эталонный отчёт"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Демо-отчет</span>
-              </button>
+              <Tooltip content="Загрузить готовый пример детального аудита закупки мебели по 223-ФЗ" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => onLoadPresetResult('sample-furniture-223fz')}
+                  className="text-xs bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Демо-отчет</span>
+                </button>
+              </Tooltip>
             )}
 
             {/* EIS (zakupki.gov.ru) IMPORT BUTTON */}
-            <button
-              type="button"
-              onClick={() => setIsEisModalOpen(true)}
-              className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 px-3 py-1.5 rounded-lg cursor-pointer"
-              title="Загрузить закупку по номеру или ссылке из ЕИС (zakupki.gov.ru)"
-            >
-              <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>ЕИС (zakupki.gov.ru)</span>
-            </button>
+            <Tooltip content="Загрузить закупку по номеру из ЕИС (zakupki.gov.ru)" position="bottom">
+              <button
+                type="button"
+                onClick={() => setIsEisModalOpen(true)}
+                className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 px-3 py-1.5 rounded-lg cursor-pointer"
+              >
+                <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>ЕИС (zakupki.gov.ru)</span>
+              </button>
+            </Tooltip>
 
             {/* INSTRUCTION / NOTES BUTTON */}
-            <button
-              type="button"
-              onClick={() => setIsNotesModalOpen(true)}
-              className={`text-xs font-semibold flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg border cursor-pointer ${
-                pastedText.trim() || additionalNotes.trim()
-                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-              }`}
-              title="Добавить особые указания или вставить текст вручную"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
-              <span>
-                {pastedText.trim() || additionalNotes.trim() ? 'Инструкция (есть)' : 'Инструкция'}
-              </span>
-            </button>
+            <Tooltip content="Ввести особые указания юристу или вставить фрагмент текста вручную" position="bottom">
+              <button
+                type="button"
+                onClick={() => setIsNotesModalOpen(true)}
+                className={`text-xs font-semibold flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-lg border cursor-pointer ${
+                  pastedText.trim() || additionalNotes.trim()
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
+                <span>
+                  {pastedText.trim() || additionalNotes.trim() ? 'Инструкция (есть)' : 'Инструкция'}
+                </span>
+              </button>
+            </Tooltip>
 
             {/* SECONDARY TOOLS DROPDOWN */}
             <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsToolsDropdownOpen(!isToolsDropdownOpen)}
-                className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 px-2.5 py-1.5 rounded-lg cursor-pointer"
-                title="Дополнительные инструменты"
-              >
-                <span>Инструменты</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isToolsDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
+              <Tooltip content="Дополнительные сервисы: Diff договоров, жалобы ФАС, банковские гарантии" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => setIsToolsDropdownOpen(!isToolsDropdownOpen)}
+                  className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 px-2.5 py-1.5 rounded-lg cursor-pointer"
+                >
+                  <span>Инструменты</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isToolsDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </Tooltip>
 
               {isToolsDropdownOpen && (
                 <>
@@ -765,15 +772,16 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleAutoClassifyAll}
-                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 transition-colors flex items-center gap-1 cursor-pointer"
-                    title="Автоматически распределить файлы по типам (Договор, ТЗ, Извещение)"
-                  >
-                    <Sparkles className="w-3 h-3 text-indigo-500" />
-                    <span>Авто-сортировка</span>
-                  </button>
+                  <Tooltip content="Автоматически классифицировать файлы по типам (Договор, ТЗ, Извещение, Смета)" position="top">
+                    <button
+                      type="button"
+                      onClick={handleAutoClassifyAll}
+                      className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3 text-indigo-500" />
+                      <span>Авто-сортировка</span>
+                    </button>
+                  </Tooltip>
                   <span className="text-slate-500 dark:text-slate-400 font-medium text-[11px]">
                     ~{(totalChars / 1000).toFixed(1)} тыс. симв.
                   </span>
@@ -821,24 +829,26 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                           <option value="auto">📁 Общий документ</option>
                         </select>
 
-                        <button
-                          type="button"
-                          onClick={() => setModalDocument(file)}
-                          className="px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 flex items-center gap-1 shadow-2xs"
-                          title="Открыть полноэкранный ридер с поиском и таблицами"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                          <span>Просмотр</span>
-                        </button>
+                        <Tooltip content="Открыть полноэкранный ридер текста и таблиц" position="top">
+                          <button
+                            type="button"
+                            onClick={() => setModalDocument(file)}
+                            className="px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 flex items-center gap-1 shadow-2xs"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                            <span>Просмотр</span>
+                          </button>
+                        </Tooltip>
 
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFile(file.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
-                          title="Удалить файл"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <Tooltip content="Удалить данный документ из пакета закупки" position="top">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(file.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
                       </div>
                     </div>
 
@@ -870,7 +880,10 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           )}
 
         {/* Live Token & Price Estimator Calculator */}
-        <TokenPriceEstimator totalChars={totalChars} />
+        <TokenPriceEstimator 
+          totalChars={totalChars} 
+          onOpenAISettings={onOpenAISettings} 
+        />
 
         {/* Action Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
@@ -887,39 +900,42 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
           <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
             {onLoadPresetResult && (
-              <button
-                type="button"
-                onClick={() => onLoadPresetResult('sample-furniture-223fz')}
-                className="flex-1 sm:flex-initial px-3.5 py-2.5 min-h-[44px] rounded-2xl text-xs font-bold bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
-                title="Показать эталонный отчёт без обращения к API ИИ"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-slate-950" />
-                <span>Быстрый демо-отчет</span>
-              </button>
+              <Tooltip content="Мгновенно открыть готовый результат аудита без отправки запроса к нейросети" position="top">
+                <button
+                  type="button"
+                  onClick={() => onLoadPresetResult('sample-furniture-223fz')}
+                  className="flex-1 sm:flex-initial px-3.5 py-2.5 min-h-[44px] rounded-2xl text-xs font-bold bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Быстрый демо-отчет</span>
+                </button>
+              </Tooltip>
             )}
 
-            <button
-              id="start-analysis-btn"
-              type="submit"
-              disabled={!hasContent || isAnalyzing || isProcessing}
-              className={`flex-1 sm:flex-initial px-5 py-3 min-h-[44px] rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
-                hasContent && !isAnalyzing && !isProcessing
-                  ? 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white shadow-indigo-200 dark:shadow-indigo-950 active:scale-95'
-                  : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
-              }`}
-            >
-              {isAnalyzing ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Выполняется ИИ-анализ ({lawType === '44_FZ' ? '44-ФЗ' : lawType === '223_FZ' ? '223-ФЗ' : 'Закупка'})...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 text-white" />
-                  <span>Проанализировать закупку</span>
-                </>
-              )}
-            </button>
+            <Tooltip content={!hasContent ? "Загрузите хотя бы один файл документации" : "Запустить комплексный аудит закупки с проверкой рисков и протоколом разногласий"} position="top">
+              <button
+                id="start-analysis-btn"
+                type="submit"
+                disabled={!hasContent || isAnalyzing || isProcessing}
+                className={`flex-1 sm:flex-initial px-5 py-3 min-h-[44px] rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
+                  hasContent && !isAnalyzing && !isProcessing
+                    ? 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white shadow-indigo-200 dark:shadow-indigo-950 active:scale-95'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                }`}
+              >
+                {isAnalyzing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Выполняется ИИ-анализ ({lawType === '44_FZ' ? '44-ФЗ' : lawType === '223_FZ' ? '223-ФЗ' : 'Закупка'})...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-white" />
+                    <span>Проанализировать закупку</span>
+                  </>
+                )}
+              </button>
+            </Tooltip>
           </div>
         </div>
       </form>
