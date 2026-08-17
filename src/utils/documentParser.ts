@@ -2,12 +2,23 @@ import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 
+export type DocumentCategory = 
+  | 'contract'          // Проект контракта / договора / соглашение
+  | 'tz'                // Техническое задание / Описание объекта закупки / КТРУ
+  | 'table'             // Смета / Спецификация / Обоснование НМЦК / Таблица цен
+  | 'docs'              // Извещение / Правила закупки / Регламент
+  | 'forms'             // Формы заявок / Оферта / Декларации участника
+  | 'national_regime'   // Документы нацрежима (ГИСП, РЭП, ПП 1875/616/878)
+  | 'commercial_rfp'    // Запрос предложений RFP/RFQ / Прайс-лист КП
+  | 'qualification'     // Документы должной осмотрительности / Карточка / Сертификаты
+  | 'auto';             // Общий документ / Авто-определение
+
 export interface ParsedDocument {
   id: string;
   fileName: string;
-  fileType: 'pdf' | 'word' | 'excel' | 'text' | 'archive' | 'unknown';
+  fileType: 'pdf' | 'word' | 'excel' | 'text' | 'archive' | 'image' | 'xml' | 'unknown';
   fileSize: number;
-  category: 'contract' | 'docs' | 'tz' | 'table' | 'auto';
+  category: DocumentCategory;
   content: string;
   charCount: number;
   status: 'ready' | 'error' | 'processing';
@@ -61,26 +72,103 @@ function extractReadableTextFromBuffer(buffer: ArrayBuffer): string {
 export function smartClassifyDocument(
   fileName: string,
   content: string = ''
-): ParsedDocument['category'] {
+): DocumentCategory {
   const lowerName = fileName.toLowerCase();
-  const lowerContentSample = (content || '').slice(0, 3000).toLowerCase();
+  const lowerContentSample = (content || '').slice(0, 4000).toLowerCase();
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
 
-  // 1. Check for Project of Contract
+  // 1. National Regime & Registry Documents (44-FZ & 223-FZ)
+  if (
+    lowerName.includes('гисп') ||
+    lowerName.includes('рэп') ||
+    lowerName.includes('минпромторг') ||
+    lowerName.includes('реестр') ||
+    lowerName.includes('1875') ||
+    lowerName.includes('616') ||
+    lowerName.includes('617') ||
+    lowerName.includes('878') ||
+    lowerName.includes('нацрежим') ||
+    lowerName.includes('страна происхожд') ||
+    lowerContentSample.includes('реестровый номер минпромторга') ||
+    lowerContentSample.includes('выписка из реестра российской') ||
+    lowerContentSample.includes('постановление правительства № 1875') ||
+    lowerContentSample.includes('постановление правительства № 616')
+  ) {
+    return 'national_regime';
+  }
+
+  // 2. Commercial RFP / RFQ / Quotation Requests & Price Matrices
+  if (
+    lowerName.includes('rfp') ||
+    lowerName.includes('rfq') ||
+    lowerName.includes('запрос предложений') ||
+    lowerName.includes('коммерческое предложение') ||
+    lowerName.includes('шаблон кп') ||
+    lowerName.includes('форма кп') ||
+    lowerName.includes('прайс') ||
+    lowerName.includes('матрица цен') ||
+    lowerContentSample.includes('request for proposal') ||
+    lowerContentSample.includes('запрос коммерческих предложений') ||
+    lowerContentSample.includes('форма коммерческого предложения')
+  ) {
+    return 'commercial_rfp';
+  }
+
+  // 3. Application Forms & Participant Declarations (223-FZ & 44-FZ)
+  if (
+    lowerName.includes('форма 1') ||
+    lowerName.includes('форма 2') ||
+    lowerName.includes('форма 3') ||
+    lowerName.includes('форма заявки') ||
+    lowerName.includes('деклараци') ||
+    lowerName.includes('оферт') ||
+    lowerName.includes('согласие') ||
+    lowerName.includes('письмо о подаче') ||
+    lowerContentSample.includes('форма заявки на участие') ||
+    lowerContentSample.includes('декларация о соответствии') ||
+    lowerContentSample.includes('настоящим письмом подтверждаем')
+  ) {
+    return 'forms';
+  }
+
+  // 4. Due Diligence / Qualification / Certificates (Commercial & 223-FZ)
+  if (
+    lowerName.includes('карточка') ||
+    lowerName.includes('квалификац') ||
+    lowerName.includes('сертификат') ||
+    lowerName.includes('декларация еас') ||
+    lowerName.includes('егрюл') ||
+    lowerName.includes('бухгалтер') ||
+    lowerName.includes('баланс') ||
+    lowerName.includes('nda') ||
+    lowerName.includes('конфиденциальн') ||
+    lowerContentSample.includes('карточка предприятия') ||
+    lowerContentSample.includes('сертификат соответствия') ||
+    lowerContentSample.includes('бухгалтерский баланс')
+  ) {
+    return 'qualification';
+  }
+
+  // 5. Check for Project of Contract / State Contract / Framework Agreement
   if (
     lowerName.includes('договор') ||
     lowerName.includes('проект') ||
     lowerName.includes('контракт') ||
     lowerName.includes('contract') ||
+    lowerName.includes('пгк') ||
+    lowerName.includes('соглашение') ||
+    lowerContentSample.includes('проект государственного контракта') ||
     lowerContentSample.includes('проект договора') ||
     lowerContentSample.includes('проект контракта') ||
+    lowerContentSample.includes('настоящий контракт заключен') ||
     lowerContentSample.includes('настоящий договор заключен') ||
+    lowerContentSample.includes('предмет контракта') ||
     lowerContentSample.includes('предмет договора')
   ) {
     return 'contract';
   }
 
-  // 2. Check for Technical Specification / Specifications
+  // 6. Check for Technical Specification / Statement of Work / KTRU / SOW
   if (
     lowerName.includes('тз') ||
     lowerName.includes('задание') ||
@@ -89,50 +177,62 @@ export function smartClassifyDocument(
     lowerName.includes('требован') ||
     lowerName.includes('ведомост') ||
     lowerName.includes('товар') ||
+    lowerName.includes('ктру') ||
+    lowerName.includes('описание объекта') ||
+    lowerName.includes('ооз') ||
+    lowerName.includes('sow') ||
+    lowerContentSample.includes('описание объекта закупки') ||
     lowerContentSample.includes('техническое задание') ||
     lowerContentSample.includes('спецификация товара') ||
-    lowerContentSample.includes('ведомость объемов')
+    lowerContentSample.includes('ведомость объемов работ') ||
+    lowerContentSample.includes('код ктру')
   ) {
     return 'tz';
   }
 
-  // 3. Check for Tables / Estimates / Calc
+  // 7. Check for Tables / Estimates / Calculation of NMCC / Bill of Quantities
   if (
-    ['xlsx', 'xls', 'csv'].includes(ext) ||
+    ['xlsx', 'xls', 'xlsm', 'csv', 'tsv', 'ods'].includes(ext) ||
     lowerName.includes('смета') ||
     lowerName.includes('таблиц') ||
-    lowerName.includes('прайс') ||
     lowerName.includes('расчет') ||
+    lowerName.includes('нмцк') ||
+    lowerName.includes('обоснование') ||
+    lowerName.includes('вор') ||
     lowerContentSample.includes('расчет начальной максимальной цены') ||
-    lowerContentSample.includes('сметный расчет')
+    lowerContentSample.includes('обоснование нмцк') ||
+    lowerContentSample.includes('локальный сметный расчет') ||
+    lowerContentSample.includes('ведомость объемов')
   ) {
     return 'table';
   }
 
-  // 4. Default to Procurement notice / documentation
+  // 8. Default to Procurement notice / documentation / regulations
   return 'docs';
 }
 
 /**
- * Standardized Document Parser for PDF, Word (docx/doc), Excel (xlsx/xls/csv), and Text files.
+ * Standardized Document Parser for PDF, Word (docx/doc/rtf/odt), Excel (xlsx/xls/xlsm/csv), XML, and Text files.
  */
 export async function parseDocumentFile(
   file: File,
-  category: 'contract' | 'docs' | 'tz' | 'table' | 'auto' = 'auto'
+  category: DocumentCategory = 'auto'
 ): Promise<ParsedDocument> {
   const fileId = `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
 
   let fileType: ParsedDocument['fileType'] = 'text';
-  if (['xlsx', 'xls', 'csv'].includes(ext)) {
+  if (['xlsx', 'xls', 'xlsm', 'csv', 'tsv', 'ods'].includes(ext)) {
     fileType = 'excel';
-  } else if (['docx', 'doc', 'rtf'].includes(ext)) {
+  } else if (['docx', 'doc', 'rtf', 'odt'].includes(ext)) {
     fileType = 'word';
   } else if (ext === 'pdf') {
     fileType = 'pdf';
+  } else if (['xml', 'json'].includes(ext)) {
+    fileType = 'xml';
+  } else if (['png', 'jpg', 'jpeg', 'tiff', 'bmp', 'webp'].includes(ext)) {
+    fileType = 'image';
   }
-
-  let autoCategory = category === 'auto' ? smartClassifyDocument(file.name) : category;
 
   let extractedText = '';
 
@@ -169,7 +269,7 @@ export async function parseDocumentFile(
           extractedText = extractReadableTextFromBuffer(buffer);
         }
       } else {
-        // Fallback for older .doc / .rtf files or text format
+        // Fallback for older .doc / .rtf / .odt files
         try {
           const buffer = await file.arrayBuffer();
           extractedText = extractReadableTextFromBuffer(buffer);
@@ -208,11 +308,25 @@ export async function parseDocumentFile(
           const buffer = await file.arrayBuffer();
           extractedText = extractReadableTextFromBuffer(buffer);
         } catch {
-          extractedText = `[PDF документ ${file.name} обработан для анализа 44-ФЗ/223-ФЗ]`;
+          extractedText = `[PDF документ ${file.name} обработан для анализа 44-ФЗ / 223-ФЗ / Коммерческих закупок]`;
         }
       }
+    } else if (fileType === 'xml') {
+      // EIS XML export format or structured data
+      try {
+        const rawXml = await file.text();
+        // Strip XML tags cleanly to extract key procurement fields
+        extractedText = rawXml
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      } catch (xmlErr) {
+        extractedText = await file.text();
+      }
+    } else if (fileType === 'image') {
+      extractedText = `[Графический скан ${file.name} (${formatFileSize(file.size)}). Рекомендуется использовать встроенный сервис OCR / распознавание]`;
     } else {
-      // Plain text, CSV, JSON, MD, RTF
+      // Plain text, CSV, JSON, MD
       extractedText = await file.text();
     }
   } catch (outerErr: any) {
@@ -235,6 +349,8 @@ export async function parseDocumentFile(
     cleanedText = `[Документ ${file.name} загружен. Текст закупки обработан]`;
   }
 
+  const autoCategory = category === 'auto' ? smartClassifyDocument(file.name, cleanedText) : category;
+
   return {
     id: fileId,
     fileName: file.name,
@@ -252,7 +368,7 @@ export async function parseDocumentFile(
  */
 export async function parseArchiveFile(
   archiveFile: File,
-  category: 'contract' | 'docs' | 'tz' | 'table' | 'auto' = 'auto'
+  category: DocumentCategory = 'auto'
 ): Promise<ParsedDocument[]> {
   const extractedParsedDocs: ParsedDocument[] = [];
 
@@ -332,7 +448,7 @@ export async function parseArchiveFile(
  */
 export async function parseFileOrArchive(
   file: File,
-  category: 'contract' | 'docs' | 'tz' | 'table' | 'auto' = 'auto'
+  category: DocumentCategory = 'auto'
 ): Promise<ParsedDocument[]> {
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
 

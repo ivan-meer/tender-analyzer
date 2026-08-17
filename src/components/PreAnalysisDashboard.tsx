@@ -36,7 +36,7 @@ import {
 } from '../lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { CountdownTimer } from './CountdownTimer';
-import { FLAGSHIP_FULL_DEMO_RESULT } from '../data/presetResults';
+import { FLAGSHIP_FULL_DEMO_RESULT, MEDICAL_44FZ_DEMO_RESULT } from '../data/presetResults';
 
 interface PreAnalysisDashboardProps {
   onOpenHistory?: () => void;
@@ -335,7 +335,13 @@ export const PreAnalysisDashboard: React.FC<PreAnalysisDashboardProps> = ({
     if (app.analysisResult && app.analysisResult.productList && app.analysisResult.contractRisks) {
       onSelectAnalysis(app.analysisResult);
     } else {
-      const fallback = FLAGSHIP_FULL_DEMO_RESULT;
+      const is44FZ = Boolean(
+        app.title?.includes('44-ФЗ') || 
+        app.projectName?.includes('44-ФЗ') || 
+        app.procurementNumber?.startsWith('0') ||
+        app.id === 'sample-3'
+      );
+      const fallback = is44FZ ? MEDICAL_44FZ_DEMO_RESULT : FLAGSHIP_FULL_DEMO_RESULT;
       const enriched = {
         ...fallback,
         summary: {

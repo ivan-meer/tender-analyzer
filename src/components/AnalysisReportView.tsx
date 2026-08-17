@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AnalysisResult } from '../types';
 import { ReportTab } from '../hooks/useAnalysis';
 import { AnalysisVersionHistoryBanner } from './AnalysisVersionHistoryBanner';
@@ -29,7 +29,10 @@ import {
   BookOpen,
   FileDiff,
   Scale,
-  Calculator
+  Calculator,
+  ChevronDown,
+  Sparkles,
+  Share2
 } from 'lucide-react';
 
 interface AnalysisReportViewProps {
@@ -58,6 +61,8 @@ interface AnalysisReportViewProps {
   isExportingGoogleSheets: boolean;
   googleDocsSuccessUrl: string | null;
   googleSheetsSuccessUrl: string | null;
+  exportError?: string | null;
+  onClearExportError?: () => void;
   onExportGoogleDocs: () => void;
   onExportGoogleSheets: () => void;
   onExportTxt: () => void;
@@ -85,10 +90,15 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
   isExportingGoogleSheets,
   googleDocsSuccessUrl,
   googleSheetsSuccessUrl,
+  exportError,
+  onClearExportError,
   onExportGoogleDocs,
   onExportGoogleSheets,
   onExportTxt,
 }) => {
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
+
   const productsCount = analysisResult?.productList?.length || 0;
   const risksCount = analysisResult?.contractRisks?.length || 0;
   const criticalRisksCount =
@@ -98,12 +108,14 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
     ? Object.keys(analysisResult.generatedTemplates).length
     : 0;
 
+  const hasLegalTools = Boolean(onOpenContractDiff || onOpenFasComplaint || onOpenBankGuarantee);
+
   return (
     <div id="analysis-results-section" className="space-y-5 animate-fade-in pt-2">
       {/* Top Toolbar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-3xl shadow-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-3xl shadow-xs">
         {/* Back Button & Title */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <button
             type="button"
             onClick={onReset}
@@ -111,104 +123,199 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
             title="Вернуться к экрану загрузки файлов"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Загрузить новый файл</span>
+            <span className="hidden sm:inline">Новый анализ</span>
           </button>
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded-md uppercase">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded-md uppercase shrink-0">
                 Отчет готов
               </span>
-              <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white truncate">
+              <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white truncate" title={analysisResult?.summary?.projectName || analysisResult?.summary?.procurementTitle}>
                 {analysisResult?.summary?.projectName || analysisResult?.summary?.procurementTitle || 'Анализ закупки'}
               </h2>
             </div>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+        {/* Action Buttons & Dropdowns */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* History Button */}
           <button
             type="button"
             onClick={onOpenHistory}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
             title="Открыть историю сохранений"
           >
             <History className="w-4 h-4 text-slate-500" />
             <span className="hidden sm:inline">История БД</span>
           </button>
 
-          {onOpenContractDiff && (
-            <button
-              type="button"
-              onClick={onOpenContractDiff}
-              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
-              title="Сравнить редакции договора и составить протокол разногласий"
-            >
-              <FileDiff className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span>Diff правок</span>
-            </button>
+          {/* Legal Tools Dropdown */}
+          {hasLegalTools && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsToolsMenuOpen(!isToolsMenuOpen);
+                  setIsExportMenuOpen(false);
+                }}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
+                title="Дополнительные юридические инструменты"
+              >
+                <FileDiff className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Инструменты</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isToolsMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isToolsMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setIsToolsMenuOpen(false)} />
+                  <div className="absolute right-0 mt-1.5 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-30 p-1.5 text-xs animate-fade-in space-y-1">
+                    {onOpenContractDiff && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenContractDiff();
+                          setIsToolsMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                      >
+                        <FileDiff className="w-4 h-4 text-indigo-500 shrink-0" />
+                        <div>
+                          <span className="font-bold block">Diff правок договора</span>
+                          <span className="text-[10px] text-slate-400">Протокол разногласий</span>
+                        </div>
+                      </button>
+                    )}
+
+                    {onOpenFasComplaint && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenFasComplaint();
+                          setIsToolsMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                      >
+                        <Scale className="w-4 h-4 text-rose-500 shrink-0" />
+                        <div>
+                          <span className="font-bold block">Жалоба в ФАС РФ</span>
+                          <span className="text-[10px] text-slate-400">ст. 105 44-ФЗ / 135-ФЗ</span>
+                        </div>
+                      </button>
+                    )}
+
+                    {onOpenBankGuarantee && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenBankGuarantee();
+                          setIsToolsMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                      >
+                        <Calculator className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <div>
+                          <span className="font-bold block">Калькулятор БГ</span>
+                          <span className="text-[10px] text-slate-400">Обеспечение и гарантии</span>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
-          {onOpenFasComplaint && (
+          {/* Export Dropdown */}
+          <div className="relative">
             <button
               type="button"
-              onClick={onOpenFasComplaint}
-              className="flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/80 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
-              title="Сформировать жалобу в ФАС РФ по ст. 105 44-ФЗ"
+              onClick={() => {
+                setIsExportMenuOpen(!isExportMenuOpen);
+                setIsToolsMenuOpen(false);
+              }}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
+              title="Экспорт отчета в Google Docs, Google Sheets, TXT"
             >
-              <Scale className="w-4 h-4 text-red-600 dark:text-red-400" />
-              <span>ФАС РФ</span>
+              <Share2 className="w-4 h-4 text-slate-500" />
+              <span>Экспорт</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExportMenuOpen ? 'rotate-180' : ''}`} />
             </button>
-          )}
 
-          {onOpenBankGuarantee && (
-            <button
-              type="button"
-              onClick={onOpenBankGuarantee}
-              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/80 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold transition-all cursor-pointer"
-              title="Рассчитать обеспечение и комиссию независимой банковской гарантии"
-            >
-              <Calculator className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Калькулятор БГ</span>
-            </button>
-          )}
+            {isExportMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setIsExportMenuOpen(false)} />
+                <div className="absolute right-0 mt-1.5 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-30 p-1.5 text-xs animate-fade-in space-y-1">
+                  <button
+                    id="export-gdocs-report-btn"
+                    type="button"
+                    onClick={() => {
+                      onExportGoogleDocs();
+                      setIsExportMenuOpen(false);
+                    }}
+                    disabled={isExportingGoogleDocs}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors text-left cursor-pointer disabled:opacity-50"
+                  >
+                    {isExportingGoogleDocs ? (
+                      <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                    )}
+                    <div>
+                      <span className="font-bold block">Google Документ</span>
+                      <span className="text-[10px] text-slate-400">Экспорт полного отчета в Docs</span>
+                    </div>
+                  </button>
 
-          <button
-            id="export-gdocs-report-btn"
-            onClick={onExportGoogleDocs}
-            disabled={isExportingGoogleDocs}
-            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
-            title="Сохранить отчет непосредственно в Ваш Google Документ"
-          >
-            {isExportingGoogleDocs ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <FileText className="w-4 h-4" />
+                  <button
+                    id="export-gsheets-report-btn"
+                    type="button"
+                    onClick={() => {
+                      onExportGoogleSheets();
+                      setIsExportMenuOpen(false);
+                    }}
+                    disabled={isExportingGoogleSheets}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors text-left cursor-pointer disabled:opacity-50"
+                  >
+                    {isExportingGoogleSheets ? (
+                      <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                    ) : (
+                      <Table className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                    <div>
+                      <span className="font-bold block">Google Таблица</span>
+                      <span className="text-[10px] text-slate-400">Спецификация и таблица рисков</span>
+                    </div>
+                  </button>
+
+                  <button
+                    id="export-txt-report-btn"
+                    type="button"
+                    onClick={() => {
+                      onExportTxt();
+                      setIsExportMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                    <div>
+                      <span className="font-bold block">Текстовый файл (.TXT)</span>
+                      <span className="text-[10px] text-slate-400">Быстрое сохранение в блокнот</span>
+                    </div>
+                  </button>
+                </div>
+              </>
             )}
-            <span>Google Doc</span>
-          </button>
+          </div>
 
-          <button
-            id="export-gsheets-report-btn"
-            onClick={onExportGoogleSheets}
-            disabled={isExportingGoogleSheets}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
-            title="Сохранить ТЗ и Риски в Google Таблицу"
-          >
-            {isExportingGoogleSheets ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <Table className="w-4 h-4" />
-            )}
-            <span>Google Sheet</span>
-          </button>
-
+          {/* Primary CTA: PDF Report */}
           <button
             id="export-pdf-report-btn"
             onClick={onOpenPdfPreview}
             disabled={isExportingPdf}
-            className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
             title="Предпросмотр и скачивание PDF-отчета"
           >
             {isExportingPdf ? (
@@ -218,18 +325,29 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
             )}
             <span>PDF Отчет</span>
           </button>
-
-          <button
-            id="export-txt-report-btn"
-            onClick={onExportTxt}
-            className="flex items-center gap-1 px-2.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
-            title="Скачать текстовую версию"
-          >
-            <FileText className="w-4 h-4 text-slate-500" />
-            <span>.TXT</span>
-          </button>
         </div>
       </div>
+
+      {/* Export Error Banner */}
+      {exportError && (
+        <div className="bg-rose-50 dark:bg-rose-950/70 border border-rose-300 dark:border-rose-800 rounded-2xl p-3.5 px-5 flex items-center justify-between gap-3 text-xs text-rose-900 dark:text-rose-200 animate-fade-in shadow-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1.5 bg-rose-600 text-white rounded-xl shrink-0">
+              <ShieldAlert className="w-4 h-4" />
+            </div>
+            <span className="font-medium truncate">{exportError}</span>
+          </div>
+          {onClearExportError && (
+            <button
+              type="button"
+              onClick={onClearExportError}
+              className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-slate-700 text-rose-700 dark:text-rose-300 font-bold rounded-lg transition-colors cursor-pointer shrink-0 border border-rose-200 dark:border-rose-900"
+            >
+              Закрыть
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Google Docs Export Success Banner */}
       {googleDocsSuccessUrl && (

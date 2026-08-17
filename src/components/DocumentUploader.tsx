@@ -37,13 +37,14 @@ import {
   parseDocumentFile, 
   parseFileOrArchive, 
   ParsedDocument, 
+  DocumentCategory,
   formatFileSize,
   smartClassifyDocument 
 } from '../utils/documentParser';
 import { detectLawTypeFromContent, LawDetectionResult } from '../utils/lawDetector';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { TokenPriceEstimator } from './TokenPriceEstimator';
-import { Camera } from 'lucide-react';
+import { Camera, BookOpen, Info, ShieldCheck } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 interface DocumentUploaderProps {
@@ -58,7 +59,13 @@ interface DocumentUploaderProps {
   onOpenAISettings?: () => void;
 }
 
-const ALLOWED_EXTENSIONS = ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'pdf', 'docx', 'doc', 'rtf', 'xlsx', 'xls', 'csv', 'txt', 'json', 'md'];
+const ALLOWED_EXTENSIONS = [
+  'zip', 'rar', '7z', 'tar', 'gz', 'tgz', 
+  'pdf', 'docx', 'doc', 'rtf', 'odt', 
+  'xlsx', 'xls', 'xlsm', 'csv', 'tsv', 'ods', 
+  'xml', 'txt', 'json', 'md', 
+  'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'webp'
+];
 
 export const DocumentUploader: React.FC<DocumentUploaderProps> = ({ 
   onAnalyze, 
@@ -318,7 +325,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     }
   };
 
-  const handleCategoryChange = (fileId: string, newCategory: ParsedDocument['category']) => {
+  const handleCategoryChange = (fileId: string, newCategory: DocumentCategory) => {
     setParsedFiles(prev =>
       prev.map(f => (f.id === fileId ? { ...f, category: newCategory } : f))
     );
@@ -349,7 +356,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     setAutoDetectedInfo(null);
   };
 
-  // Compile all loaded documents and text into the unified AnalysisInput
+  // Compile all loaded documents and text into the unified AnalysisInput with rich legal markers
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -357,19 +364,51 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     const contractDocs = parsedFiles.filter(f => f.category === 'contract');
     const noticeDocs = parsedFiles.filter(f => f.category === 'docs');
     const tzDocs = parsedFiles.filter(f => f.category === 'tz' || f.category === 'table');
+    const natRegimeDocs = parsedFiles.filter(f => f.category === 'national_regime');
+    const rfpDocs = parsedFiles.filter(f => f.category === 'commercial_rfp');
+    const formDocs = parsedFiles.filter(f => f.category === 'forms');
+    const qualDocs = parsedFiles.filter(f => f.category === 'qualification');
     const unassignedDocs = parsedFiles.filter(f => f.category === 'auto');
 
     let compiledContractText = contractDocs
-      .map(f => `=== [ФАЙЛ: ${f.fileName}] ===\n${f.content}`)
+      .map(f => `=== [ПРОЕКТ ДОГОВОРА / КОНТРАКТА: ${f.fileName}] ===\n${f.content}`)
       .join('\n\n');
 
     let compiledDocsText = noticeDocs
-      .map(f => `=== [ФАЙЛ: ${f.fileName}] ===\n${f.content}`)
+      .map(f => `=== [ИЗВЕЩЕНИЕ / РЕГЛАМЕНТ ЗАКУПКИ: ${f.fileName}] ===\n${f.content}`)
       .join('\n\n');
 
     let compiledTzText = tzDocs
-      .map(f => `=== [ФАЙЛ: ${f.fileName}] ===\n${f.content}`)
+      .map(f => `=== [ТЕХНИЧЕСКОЕ ЗАДАНИЕ / СПЕЦИФИКАЦИЯ / СМЕТА: ${f.fileName}] ===\n${f.content}`)
       .join('\n\n');
+
+    if (natRegimeDocs.length > 0) {
+      const natText = natRegimeDocs
+        .map(f => `=== [НАЦИОНАЛЬНЫЙ РЕЖИМ (ГИСП / РЭП / ПП 1875 / ПП 616 / ПП 878): ${f.fileName}] ===\n${f.content}`)
+        .join('\n\n');
+      compiledDocsText = compiledDocsText ? `${compiledDocsText}\n\n${natText}` : natText;
+    }
+
+    if (rfpDocs.length > 0) {
+      const rfpText = rfpDocs
+        .map(f => `=== [ЗАПРОС ПРЕДЛОЖЕНИЙ (RFP/RFQ) / МАТРИЦА ЦЕН КП: ${f.fileName}] ===\n${f.content}`)
+        .join('\n\n');
+      compiledTzText = compiledTzText ? `${compiledTzText}\n\n${rfpText}` : rfpText;
+    }
+
+    if (formDocs.length > 0) {
+      const formText = formDocs
+        .map(f => `=== [ФОРМЫ ЗАЯВОК И ДЕКЛАРАЦИИ УЧАСТНИКА: ${f.fileName}] ===\n${f.content}`)
+        .join('\n\n');
+      compiledDocsText = compiledDocsText ? `${compiledDocsText}\n\n${formText}` : formText;
+    }
+
+    if (qualDocs.length > 0) {
+      const qualText = qualDocs
+        .map(f => `=== [ДОКУМЕНТЫ КВАЛИФИКАЦИИ / КАРТОЧКА / NDA: ${f.fileName}] ===\n${f.content}`)
+        .join('\n\n');
+      compiledDocsText = compiledDocsText ? `${compiledDocsText}\n\n${qualText}` : qualText;
+    }
 
     // Add unassigned or pasted text
     if (unassignedDocs.length > 0) {
@@ -401,13 +440,15 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const totalChars = parsedFiles.reduce((acc, f) => acc + f.charCount, 0) + pastedText.length;
   const hasContent = parsedFiles.length > 0 || pastedText.trim().length > 0;
 
+  const [showDocTypesGuide, setShowDocTypesGuide] = useState(false);
+
   const getFileBadge = (type: ParsedDocument['fileType']) => {
     switch (type) {
       case 'excel':
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-md">
             <Table className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-            Excel / Таблица
+            Excel / Смета
           </span>
         );
       case 'word':
@@ -424,6 +465,27 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             PDF Doc
           </span>
         );
+      case 'xml':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md">
+            <Globe className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+            ЕИС XML
+          </span>
+        );
+      case 'image':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 px-2 py-0.5 rounded-md">
+            <Camera className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+            Скан / Фото
+          </span>
+        );
+      case 'archive':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-md">
+            <FileArchive className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+            Архив
+          </span>
+        );
       default:
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-extrabold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-md">
@@ -432,6 +494,49 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           </span>
         );
     }
+  };
+
+  // Helper to render category options tailored to the selected law type
+  const renderCategoryOptions = () => {
+    if (lawType === '44_FZ') {
+      return (
+        <>
+          <option value="contract">📄 Проект контракта (ПГК)</option>
+          <option value="tz">⚙️ ТЗ / Описание объекта (КТРУ)</option>
+          <option value="table">📊 Обоснование НМЦК / Смета</option>
+          <option value="docs">📋 Извещение / Требования ст. 31, 48</option>
+          <option value="national_regime">🇷🇺 Нацрежим (ГИСП / РЭП / ПП 1875)</option>
+          <option value="forms">📝 Форма согласия / Декларации</option>
+          <option value="auto">📁 Общий документ</option>
+        </>
+      );
+    }
+    if (lawType === 'COMMERCIAL') {
+      return (
+        <>
+          <option value="contract">📄 Рамочный договор / NDA</option>
+          <option value="commercial_rfp">💼 Запрос предложений (RFP/RFQ)</option>
+          <option value="table">📊 Форма КП / Прайс-лист в Excel</option>
+          <option value="tz">⚙️ Спецификация поставки / ТЗ</option>
+          <option value="docs">📋 Регламент и условия тендера</option>
+          <option value="qualification">🏛️ Карточка / Баланс / EAC</option>
+          <option value="auto">📁 Общий документ</option>
+        </>
+      );
+    }
+    // 223_FZ
+    return (
+      <>
+        <option value="contract">📄 Проект договора по Положению</option>
+        <option value="tz">⚙️ ТЗ / Опросные листы</option>
+        <option value="table">📊 Смета / Ведомость объемов (ВОР)</option>
+        <option value="docs">📋 Извещение и Документация</option>
+        <option value="forms">📝 Формы заявок (Форма 1-5 / Оферта)</option>
+        <option value="national_regime">🇷🇺 Нацрежим (ПП 1875 / Реестры РФ)</option>
+        <option value="qualification">🏛️ Квалификация / Опыт / Ресурсы</option>
+        <option value="auto">📁 Общий документ</option>
+      </>
+    );
   };
 
   const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
@@ -620,10 +725,106 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".zip,.rar,.7z,.tar,.gz,.tgz,.pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.rtf,.json,.md"
+          accept=".zip,.rar,.7z,.tar,.gz,.tgz,.pdf,.docx,.doc,.rtf,.odt,.xlsx,.xls,.xlsm,.csv,.tsv,.ods,.xml,.txt,.json,.md,.png,.jpg,.jpeg,.tiff,.bmp"
           className="hidden"
           onChange={(e) => e.target.files && handleFilesAdded(e.target.files)}
         />
+
+        {/* INTERACTIVE GUIDE: DIFFERENCES IN DOCUMENT TYPES AND FORMATS ACROSS 44-FZ, 223-FZ, AND COMMERCIAL TENDERS */}
+        <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/70 rounded-2xl p-3 sm:p-3.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                Специфика видов документов и форматов ({lawType === '44_FZ' ? '44-ФЗ Госзакупки' : lawType === '223_FZ' ? '223-ФЗ Госкорпорации' : 'Коммерческие B2B тендеры'})
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDocTypesGuide(!showDocTypesGuide)}
+              className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <span>{showDocTypesGuide ? 'Скрыть справку' : 'Подробнее о форматах'}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showDocTypesGuide ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          {showDocTypesGuide && (
+            <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/60 text-xs text-slate-600 dark:text-slate-300 space-y-2.5 animate-fade-in">
+              {lawType === '44_FZ' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
+                      🏛️ Обязательный состав пакета 44-ФЗ:
+                    </span>
+                    <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-300">
+                      <li><strong>Проект госконтракта (ПГК)</strong> — строгие условия по ПП №1042 (штрафы) и ПП №783 (списание неустоек), электронное актирование.</li>
+                      <li><strong>Описание объекта закупки (ООЗ / ТЗ)</strong> — ст. 33 44-ФЗ, обязательное использование каталога КТРУ и ОКПД2.</li>
+                      <li><strong>Обоснование НМЦК</strong> — расчет методом сопоставимых рыночных цен (не менее 3 КП) или сметный расчет.</li>
+                      <li><strong>Национальный режим</strong> — выписки ГИСП/РЭП, запреты/ограничения (ПП №1875, №616, №878).</li>
+                    </ul>
+                  </div>
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
+                      📁 Поддерживаемые форматы:
+                    </span>
+                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                      Файлы <strong>.docx, .xlsx, .pdf, .xml (структурированный пакет из ЕИС), .zip/.rar</strong>. Система автоматически распознает реестровые номера, КТРУ и выписки из реестров Минпромторга.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {lawType === '223_FZ' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
+                      🏢 Специфика пакета по 223-ФЗ:
+                    </span>
+                    <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-300">
+                      <li><strong>Положение о закупке</strong> — индивидуальные правила заказчика, критерии отбора и скрытые основания отклонения.</li>
+                      <li><strong>Формы заявок (Формы 1–5)</strong> — шаблоны согласия, оферты, технического и ценового предложений.</li>
+                      <li><strong>Квалификационные требования</strong> — опыт, персонал, материальные ресурсы и подтверждающие акты.</li>
+                      <li><strong>Обеспечение и штрафы</strong> — заказчик может устанавливать несимметричные пени и удержания.</li>
+                    </ul>
+                  </div>
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
+                      📁 Поддерживаемые форматы:
+                    </span>
+                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                      Многостраничные регламенты в <strong>.docx / .pdf</strong>, таблицы форм заявок и смет в <strong>.xlsx / .xls</strong>, многотомные архивы <strong>.zip / .7z</strong>.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {lawType === 'COMMERCIAL' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
+                      💼 Специфика коммерческих закупок (B2B):
+                    </span>
+                    <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-300">
+                      <li><strong>Запрос предложений (RFP / RFQ)</strong> — гибкие регламенты и матрица цен для расчета коммерческого предложения.</li>
+                      <li><strong>Рамочный договор поставки / услуг</strong> — риски одностороннего отказа заказчика, отсрочки платежа до 90–120 дней.</li>
+                      <li><strong>Соглашение о неразглашении (NDA)</strong> — коммерческая тайна и жесткая ответственность за утечку.</li>
+                      <li><strong>Due Diligence (проверка благонадежности)</strong> — карточка предприятия, бухгалтерский баланс, сертификаты EAC/ГОСТ.</li>
+                    </ul>
+                  </div>
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
+                      📁 Поддерживаемые форматы:
+                    </span>
+                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                      Прайс-листы и расчетные матрицы <strong>.xlsx / .csv</strong>, оферты и контракты <strong>.docx / .pdf</strong>, сканированные сертификаты и паспорта качества <strong>.jpg / .png / .pdf</strong>.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* AUTO-DETECTION NOTICE BANNER */}
         {autoDetectedInfo && (
@@ -765,8 +966,23 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                     <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                       ТЗ/Спец: {parsedFiles.filter(f => f.category === 'tz' || f.category === 'table').length}
                     </span>
+                    {parsedFiles.some(f => f.category === 'national_regime') && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        Нацрежим: {parsedFiles.filter(f => f.category === 'national_regime').length}
+                      </span>
+                    )}
+                    {parsedFiles.some(f => f.category === 'commercial_rfp') && (
+                      <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                        RFP/КП: {parsedFiles.filter(f => f.category === 'commercial_rfp').length}
+                      </span>
+                    )}
+                    {parsedFiles.some(f => f.category === 'forms') && (
+                      <span className="px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                        Формы: {parsedFiles.filter(f => f.category === 'forms').length}
+                      </span>
+                    )}
                     <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                      Извещение: {parsedFiles.filter(f => f.category === 'docs').length}
+                      Документация: {parsedFiles.filter(f => f.category === 'docs' || f.category === 'auto').length}
                     </span>
                   </div>
                 </div>
@@ -794,12 +1010,12 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                     key={file.id}
                     className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-3 space-y-2 transition-all shadow-2xs hover:border-slate-300 dark:hover:border-slate-600"
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         {getFileBadge(file.fileType)}
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate block">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate block max-w-[220px] sm:max-w-[340px] lg:max-w-[460px]" title={file.fileName}>
                               {file.fileName}
                             </span>
                             {file.isFromArchive && (
@@ -816,24 +1032,20 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                       </div>
 
                       {/* Controls: Category & Preview & Remove */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap justify-between sm:justify-end w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-slate-200/60 dark:border-slate-700/60">
                         <select
                           value={file.category}
-                          onChange={(e) => handleCategoryChange(file.id, e.target.value as ParsedDocument['category'])}
-                          className="text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 shadow-2xs cursor-pointer"
+                          onChange={(e) => handleCategoryChange(file.id, e.target.value as DocumentCategory)}
+                          className="text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 shadow-2xs cursor-pointer max-w-[200px] truncate"
                         >
-                          <option value="contract">📄 Проект договора</option>
-                          <option value="docs">📋 Извещение / Правила</option>
-                          <option value="tz">⚙️ ТЗ / Спецификация</option>
-                          <option value="table">📊 Таблица / Смета</option>
-                          <option value="auto">📁 Общий документ</option>
+                          {renderCategoryOptions()}
                         </select>
 
                         <Tooltip content="Открыть полноэкранный ридер текста и таблиц" position="top">
                           <button
                             type="button"
                             onClick={() => setModalDocument(file)}
-                            className="px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 flex items-center gap-1 shadow-2xs"
+                            className="px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 flex items-center gap-1 shadow-2xs shrink-0"
                           >
                             <Eye className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                             <span>Просмотр</span>
@@ -844,7 +1056,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                           <button
                             type="button"
                             onClick={() => handleRemoveFile(file.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
+                            className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer shrink-0"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

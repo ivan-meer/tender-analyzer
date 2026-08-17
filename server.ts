@@ -317,7 +317,7 @@ async function generateContentWithRetry(
 ) {
   const {
     model,
-    fallbackModels = ["gemini-2.5-flash", "gemini-1.5-flash"],
+    fallbackModels = ["gemini-2.5-flash", "gemini-3.7-flash", "gemini-flash-latest"],
     contents,
     config,
     maxRetriesPerModel = 2
@@ -1486,23 +1486,25 @@ function extractHighPriorityDocumentSections(text: string, maxChars: number = 24
 // Main Procurement Analyzer API
 app.post("/api/analyze", async (req, res) => {
   try {
-    const { procedureType, contractText, documentationText, tzText, additionalNotes, llmConfig } = req.body;
+    const { procedureType, contractText, documentationText, tzText, additionalNotes, llmConfig, bypassCache } = req.body;
 
     if (!contractText && !documentationText && !tzText) {
       res.status(400).json({ error: "Не передано ни одного документа для анализа." });
       return;
     }
 
-    // 1. Generate Content Hash for In-Memory Caching
-    const hashInput = `${procedureType || ''}_${contractText || ''}_${documentationText || ''}_${tzText || ''}_${additionalNotes || ''}_${llmConfig?.model || 'default'}`;
+    // 1. Generate Content Hash for In-Memory Caching (unless bypass requested)
+    const hashInput = `${procedureType || ''}_${contractText || ''}_${documentationText || ''}_${tzText || ''}_${additionalNotes || ''}_${llmConfig?.modelName || 'default'}`;
     const cacheKey = crypto.createHash('sha256').update(hashInput).digest('hex');
 
-    const cachedResult = getAnalysisFromCache(cacheKey);
-    if (cachedResult) {
-      console.log(`[Cache Hit] Serving analysis instantly from cache (${cacheKey.slice(0, 8)})`);
-      res.setHeader('X-Cache-Status', 'HIT');
-      res.json({ ...cachedResult, _cached: true, _cacheHitTime: new Date().toISOString() });
-      return;
+    if (!bypassCache) {
+      const cachedResult = getAnalysisFromCache(cacheKey);
+      if (cachedResult && cachedResult.summary?.procurementTitle && cachedResult._aiAnalysisStatus === 'LLM_AI_VERIFIED') {
+        console.log(`[Cache Hit] Serving verified analysis from cache (${cacheKey.slice(0, 8)})`);
+        res.setHeader('X-Cache-Status', 'HIT');
+        res.json({ ...cachedResult, _cached: true, _cacheHitTime: new Date().toISOString() });
+        return;
+      }
     }
 
     const systemInstruction = `Ты — эксперт тендерного отдела и юрист по закупкам в РФ (специализация: 44-ФЗ, 223-ФЗ и коммерческие торги).
@@ -1566,25 +1568,25 @@ ${safeDoc}
 --- ТЕКСТ ТЕХНИЧЕСКОГО ЗАДАНИЯ И ТАБЛИЦ ---
 ${safeTz}
 
-ОБЯЗАТЕЛЬНО ВЕРНИ ТАКОЙ JSON ОБЪЕКТ В СТРОГОМ СООТВЕТСТВИИ С СТРУКТУРОЙ:
+ОБЯЗАТЕЛЬНО ВЕРНИ ТАКОЙ JSON ОБЪЕКТ В СТРОГОМ СООТВЕТСТВИИ С СТРУКТУРОЙ (извлекая реальные факты из предоставленных выше документов):
 {
   "summary": {
-    "procurementTitle": "наименование закупки",
-    "projectName": "название проекта",
-    "customerName": "заказчик",
-    "procurementSum": "сумма или НМЦК",
+    "procurementTitle": "реальное наименование закупки из документов",
+    "projectName": "название проекта или номер закупки",
+    "customerName": "реальный заказчик",
+    "procurementSum": "реальная сумма или НМЦК (например, 1 500 000,00 ₽)",
     "auctionDate": "дата и время подачи/аукциона",
     "overallRiskScore": 45,
     "riskLevel": "MEDIUM",
-    "keyTakeaway": "краткое резюме",
+    "keyTakeaway": "краткое резюме по рискам и срокам",
     "is223FZ": true
   },
   "deliveryInfo": {
-    "deliveryPeriod": "срок поставки",
-    "deliveryScheduleNotice": "порядок графиков",
-    "deliveryAddresses": ["адрес 1"],
-    "unloadingAndAccessConditions": "условия разгрузки",
-    "consigneeDetails": "получатель",
+    "deliveryPeriod": "точный срок поставки из текста",
+    "deliveryScheduleNotice": "порядок графиков и заявок",
+    "deliveryAddresses": ["точный адрес объекта/склада 1"],
+    "unloadingAndAccessConditions": "условия разгрузки и доступа",
+    "consigneeDetails": "грузополучатель",
     "riskWarning": "риски по поставке"
   },
   "contractRisks": [
@@ -1592,7 +1594,7 @@ ${safeTz}
       "id": "risk-1",
       "category": "PENALTIES",
       "clauseNumber": "п. 7.2",
-      "clauseQuote": "цитата из договора",
+      "clauseQuote": "точная цитата пункта из договора",
       "severity": "CRITICAL",
       "title": "заголовок риска",
       "explanation": "разъяснение опасности",
@@ -1620,12 +1622,12 @@ ${safeTz}
   "productList": [
     {
       "id": "prod-1",
-      "name": "товар 1",
-      "quantity": "100 шт",
+      "name": "реальное наименование товара 1 из ТЗ",
+      "quantity": "количество из документов",
       "dimensions": "габариты",
       "specification": "спецификация",
       "parameters": [{"name": "параметр", "value": "значение"}],
-      "okpd2OrGvin": "код ОКПД2",
+      "okpd2OrGvin": "код ОКПД2 / КТРУ",
       "pp1875Status": "NOT_APPLICABLE",
       "registryNumberNote": "запись в реестре"
     }
@@ -1650,6 +1652,8 @@ ${safeTz}
     });
 
     const analysisData = extractJsonFromLLMResponse(llmResult.text);
+    analysisData._aiAnalysisStatus = 'LLM_AI_VERIFIED';
+    analysisData._modelUsed = llmResult.modelUsed || llmConfig?.modelName || 'gemini';
     
     // Store in cache for ultra-fast repeats
     setAnalysisInCache(cacheKey, analysisData);
@@ -1657,270 +1661,315 @@ ${safeTz}
     res.setHeader('X-Cache-Status', 'MISS');
     res.json(analysisData);
   } catch (error: any) {
-    console.warn("LLM API error in /api/analyze, returning intelligent fallback analysis:", error?.message);
-    const { contractText, tzText, procedureType } = req.body || {};
-    const fallbackData = generateFallbackAnalysisResult(contractText, tzText, procedureType);
-    res.json(fallbackData);
+    console.warn("LLM API error in /api/analyze, generating dynamic heuristic analysis from uploaded text:", error?.message);
+    const { contractText, tzText, documentationText, procedureType } = req.body || {};
+    const dynamicData = generateDynamicDocumentAnalysis(contractText, tzText, documentationText, procedureType);
+    res.json(dynamicData);
   }
 });
 
-// Helper function to build structured fallback analysis when Gemini API quota or rate limit is reached
-function generateFallbackAnalysisResult(contractText?: string, tzText?: string, procedureType?: string) {
-  const hasText = Boolean(contractText || tzText);
-  const is44FZ = Boolean(procedureType && procedureType.startsWith('44_FZ'));
-  
-  if (is44FZ) {
-    return {
-      summary: {
-        procurementTitle: hasText
-          ? 'Анализ закупки по документации 44-ФЗ (Экспертный нормативный расчет)'
-          : 'Электронный аукцион по 44-ФЗ: Поставка оборудования и товаров для государственных нужд',
-        projectName: 'Государственный контракт по 44-ФЗ (ЕИС Закупки)',
-        customerName: 'ГКУ / ГБУЗ "Государственное бюджетное учреждение" (Заказчик по 44-ФЗ)',
-        procurementSum: '9 450 000,00 ₽',
-        auctionDate: '15.08.2026 (10:00 МСК)',
-        overallRiskScore: 54,
-        riskLevel: 'MEDIUM',
-        keyTakeaway: 'Закупка регламентирована нормами 44-ФЗ. Ответственность рассчитывается по ПП РФ № 1042 с правом списания начисленных штрафов/пеней по ПП РФ № 783. Оплата — 7 рабочих дней в ЕИС.',
-        is223FZ: false,
-      },
-      deliveryInfo: {
-        deliveryPeriod: 'В течение 15 рабочих дней с даты заключения Государственного контракта.',
-        deliveryScheduleNotice: 'Поставка осуществляется единовременно или отдельными партиями по заявкам Заказчика.',
-        deliveryAddresses: [
-          '101000, г. Москва, ул. Тверская, д. 14, центральный склад Заказчика',
-          '141000, Московская область, складской логистический комплекс'
-        ],
-        unloadingAndAccessConditions: 'Разгрузка товара осуществляется силами и за счет Поставщика. Оформление пропусков в день поставки.',
-        consigneeDetails: 'ГКУ / ГБУЗ (Грузополучатель: материальный отдел)',
-        riskWarning: 'Соблюдайте срок поставки: при просрочке начисляются пени в размере 1/300 ключевой ставки ЦБ РФ (ПП РФ № 1042).',
-      },
-      contractRisks: [
-        {
-          id: 'risk-44fz-1',
-          category: 'PENALTIES',
-          clauseNumber: 'Раздел "Ответственность сторон" (ст. 34 44-ФЗ)',
-          clauseQuote: 'Штрафы начисляются в порядке, установленном Правилами ПП РФ № 1042. Пени начисляются за каждый день просрочки в размере 1/300 ключевой ставки ЦБ РФ.',
-          severity: 'MEDIUM',
-          title: 'Штрафные санкции и пени по Постановлению Правительства РФ № 1042',
-          explanation: 'В контракте 44-ФЗ штрафы строго регламентированы законодательством РФ. В отличие от 223-ФЗ, Заказчик не имеет права устанавливать произвольные штрафы 3%.',
-          recommendation: 'Помните о праве на ОБЯЗАТЕЛЬНОЕ списание неустоек Заказчиком по ПП РФ № 783, если размер штрафов не превышает 5% от цены контракта.'
-        },
-        {
-          id: 'risk-44fz-2',
-          category: 'PAYMENT_TERMS',
-          clauseNumber: 'ч. 13.1 ст. 34 ФЗ № 44',
-          clauseQuote: 'Оплата поставленного Товара осуществляется Заказчиком не позднее 7 (семи) рабочих дней с даты подписания документа о приемке в ЕИС.',
-          severity: 'LOW',
-          title: 'Гарантированный срок оплаты: 7 рабочих дней через ЕИС',
-          explanation: 'Законом № 44-ФЗ установлен строгий предельный срок оплаты 7 рабочих дней после подписания электронного УПД. Просрочка оплаты заказчиком влечет штраф по КоАП РФ.',
-          recommendation: 'Формируйте и подписывайте электронный документ о приемке (электронный УПД) строго в личном кабинете ЕИС сразу после фактической поставки.'
-        },
-        {
-          id: 'risk-44fz-3',
-          category: 'NATIONAL_REGIME',
-          clauseNumber: 'ст. 14 44-ФЗ, ПП РФ № 1875, ПП № 616 / 617',
-          clauseQuote: 'Применяются требования национального режима в соответствии с нормативными правовыми актами Правительства РФ.',
-          severity: 'HIGH',
-          title: 'Национальный режим и подтверждение страны происхождения в реестре ГИСП / РЭП',
-          explanation: 'Для подтверждения соответствия требованиям Заказчика необходимо предоставить действующие номера реестровых записей из реестра российской промышленной продукции (ГИСП/РЭП).',
-          recommendation: 'Заранее проверьте выписки из реестра ГИСП/РЭП и укажите точные реестровые номера и совокупное количество баллов в составе заявки.'
-        }
-      ],
-      submissionRulesCheck: {
-        procedureType: 'Электронный аукцион / Запрос котировок по 44-ФЗ (ЕИС)',
-        requestInTableRequired: true,
-        etpAccreditationNotice: 'Регистрация в ЕРУЗ ЕИС обязательна. Обеспечение заявки блокируется на спецсчете автоматически.',
-        requiredFilesStructure: [
-          '1. Заявка на ЭТП (ЕИС): Согласие с условиями контракта и конкретные показатели товара по ТЗ (без наименования участника)',
-          '2. Документы по национальному режиму: номера реестровых записей ГИСП/РЭП Минпромторга (ПП РФ 1875, 616, 617)',
-          '3. Декларация о соответствии требованиям ст. 31 44-ФЗ (формируется автоматически на ЭТП)',
-          '4. Решение об одобрении крупной сделки (из ЕИС)'
-        ],
-        formsRequirement: 'Заявка подается исключительно через электронный интерфейс оператора ЭТП (ЕИС).',
-        pp1875Applies: true,
-        pp1875Details: 'Применяется Постановление Правительства № 1875 / ПП № 616 / 617. Необходимы реестровые номера Минпромторга РФ.',
-        accountingInfoNeeded: false,
-        accountingItems: ['Справка об отсутствии задолженности (сверка ФНС через ЕИС)', 'Выписка ЕГРЮЛ (подтягивается из ЕРУЗ автоматически)']
-      },
-      postAwardWorkflow: {
-        deliveryNotifications: 'Уведомление Заказчика через личный кабинет ЕИС или электронную почту за 24 часа до прибытия машины.',
-        primaryDocFormatConfirmation: 'Электронное актирование: Оформление электронного УПД (документа о приемке) строго в личном кабинете ЕИС.',
-        accompanyingDocs: [
-          'Электронный УПД в ЕИС Закупки',
-          'Бумажная транспортная накладная / экспедиторская расписка',
-          'Паспорт качества и руководство по эксплуатации',
-          'Выписка из реестра российской продукции ГИСП'
-        ],
-        acceptanceDocsStrategy: 'Приемка осуществляется Заказчиком в срок до 20 рабочих дней. Приемка завершается подписанием электронного УПД в ЕИС.',
-        motivatedRefusalGuide: 'В случае замечаний Заказчик размещает мотивированный отказ в ЕИС. Поставщик устраняет замечания или формирует корректировочный документ.'
-      },
-      productList: [
-        {
-          id: 'prod-44fz-1',
-          name: 'Оборудование и комплектующие по Техническому заданию 44-ФЗ',
-          quantity: 'Комплект',
-          dimensions: 'Согласно параметрам ТЗ',
-          specification: 'Товар отечественного производства, соответствующий требованиям ГОСТ Р и КТРУ/ОКПД2.',
-          parameters: [
-            { name: 'Соответствие ГОСТ', value: 'ГОСТ Р' },
-            { name: 'Страна происхождения', value: 'Российская Федерация' },
-            { name: 'Реестр Минпромторга', value: 'Включено в ГИСП / РЭП' },
-            { name: 'Гарантийный срок', value: '12-36 месяцев' }
-          ],
-          okpd2OrGvin: '26.20.15 / 31.01.12',
-          pp1875Status: 'RUSSIAN_REQUIRED',
-          registryNumberNote: 'Реестровая запись ГИСП Минпромторга РФ (ПП 1875 / ПП 616)'
-        }
-      ],
-      generatedTemplates: {
-        acceptanceDocsRequest: `Руководству Заказчика по Контракту 44-ФЗ
-От Поставщика
+/**
+ * Intelligent Dynamic Document Analyzer for fallback / offline parsing.
+ * Analyzes the ACTUAL uploaded texts (Contract, Specifications, Notice) via regex & heuristic extraction.
+ */
+function generateDynamicDocumentAnalysis(
+  contractText: string = "",
+  tzText: string = "",
+  documentationText: string = "",
+  procedureType: string = "223_FZ_QUOTATION"
+) {
+  const fullCorpus = `${contractText}\n\n${documentationText}\n\n${tzText}`;
+  const is44FZ = Boolean(procedureType && procedureType.startsWith('44_FZ')) || /44-фз|сорок четверт/i.test(fullCorpus);
 
-УВЕДОМЛЕНИЕ О ПОСТАВКЕ И ЭЛЕКТРОННОМ АКТИРОВАНИИ
-Уведомляем о завершении поставки товара по Государственному контракту. Проект документа о приемке (электронный УПД) сформирован и подписан усиленной ЭЦП в ЕИС. Просим рассмотреть документ и осуществить оплату в течение 7 рабочих дней в соответствии с ч. 13.1 ст. 34 Закона № 44-ФЗ.`,
-        motivatedRefusalDemand: `В контрактную службу Заказчика
-
-ЗАПРОС О РАЗЪЯСНЕНИИ ПРИЧИН НЕПОДПИСАНИЯ АКТА ПРИЕМКИ
-На основании ч. 13 ст. 94 Федерального закона № 44-ФЗ просим предоставить официальный мотивированный отказ от приемки товаров в ЕИС с указанием несоответствия конкретным пунктам контракта.`,
-        etpFundsRequest: `Оператору электронной торговой площадки
-
-ЗАЯВЛЕНИЕ
-о подтверждении разблокирования обеспечения заявки в связи с надлежащим заключением контракта по 44-ФЗ.`,
-        accountingDataRequest: `В бухгалтерию
-
-СЛУЖЕБНАЯ ЗАПИСКА
-Просьба подготовить независимую гарантию из реестра ЕИС в размере обеспечения исполнения государственного контракта.`,
-        yougileTaskSummary: `🎯 [44-ФЗ ЗАДАЧА YOUGILE/БИТРИКС24]:
-1. Проверить проект контракта на ЭТП и обеспечение (независимая гарантия из ЕИС).
-2. Подписать контракт на ЭТП в течение 5 дней.
-3. Отгрузить товар и разместить электронный УПД в ЕИС.
-4. Проконтролировать оплату в течение 7 рабочих дней (ч. 13.1 ст. 34 44-ФЗ).`,
-        claimResponseTemplate: `Заказчику по Государственному контракту 44-ФЗ
-
-ОТВЕТ НА ПРЕТЕНЗИЮ И ЗАЯВЛЕНИЕ О СПИСАНИИ НЕУСТОЙКИ ПО ПП РФ № 783
-В ответ на требование об уплате неустойки сообщаем, что обязательства по контракту исполнены в полном объеме. Сумма начисленных санкций составляет менее 5% от цены контракта, в связи с чем на основании Правил, утвержденных Постановлением Правительства РФ от 04.07.2018 № 783, Заказчик ОБЯЗАН списать начисленную и неуплаченную сумму неустоек (штрафов, пеней) в полном объеме.`
-      }
-    };
+  // 1. EXTRACT PROCUREMENT TITLE
+  let extractedTitle = "";
+  const titlePatterns = [
+    /(?:предмет контракта|предмет договора|наименование закупки|объект закупки|на поставку|на оказание услуг|на выполнение работ)[\s:—–«"\-]+([^\n\r.;]{10,220})/i,
+    /(?:извещение о проведении|открытый аукцион на|запрос котировок на|конкурс на)[\s:—–«"\-]+([^\n\r.;]{10,220})/i,
+    /=== \[(?:ПРОЕКТ ДОГОВОРА|ИЗВЕЩЕНИЕ|ТЕХНИЧЕСКОЕ ЗАДАНИЕ)[^:]*: ([^\]]+)\] ===/i
+  ];
+  for (const regex of titlePatterns) {
+    const match = fullCorpus.match(regex);
+    if (match && match[1] && match[1].trim().length > 8) {
+      extractedTitle = match[1].replace(/^[«"'\s]+|[»"'\s]+$/g, '').trim();
+      break;
+    }
+  }
+  if (!extractedTitle) {
+    extractedTitle = is44FZ
+      ? "Государственная закупка по 44-ФЗ (по данным загруженной документации)"
+      : "Тендерная закупка по 223-ФЗ / Коммерческим торгам (по данным загруженных документов)";
   }
 
+  // 2. EXTRACT CUSTOMER NAME
+  let extractedCustomer = "";
+  const customerPatterns = [
+    /(?:заказчик|покупатель|клиент|получатель)[\s:—–«"\-]+([^\n\r,.;]{4,120})/i,
+    /(?:ГКУ|ГБУ|ГБУЗ|МАОУ|МБОУ|ФГБУ|ФКУ|ГУП|МУП|ФГУП|ПАО|АО|ООО)\s+[«"][^»"]+[»"]/i,
+    /(?:ГКУ|ГБУ|ГБУЗ|МАОУ|МБОУ|ФГБУ|ФКУ|ГУП|МУП|ФГУП)\s+[А-Яа-яA-Za-z0-9№\s"«»\-]+(?=\s*[,.\n])/i
+  ];
+  for (const regex of customerPatterns) {
+    const match = fullCorpus.match(regex);
+    if (match) {
+      const candidate = (match[1] || match[0]).trim();
+      if (candidate.length >= 3 && !candidate.toLowerCase().includes("поставщик") && !candidate.toLowerCase().includes("подрядчик")) {
+        extractedCustomer = candidate;
+        break;
+      }
+    }
+  }
+  if (!extractedCustomer) {
+    extractedCustomer = is44FZ ? 'Государственный заказчик (44-ФЗ)' : 'Заказчик закупки';
+  }
+
+  // 3. EXTRACT CONTRACT / PROCUREMENT SUM
+  let extractedSum = "";
+  const sumPatterns = [
+    /(?:цена контракта|цена договора|начальная\s*(?:\(максимальная\))?\s*цена|нмцк|стоимость договора|сумма контракта)[\s:—–\-]*([\d\s,.]+)\s*(?:руб|рублей|₽)/i,
+    /([\d]{1,3}(?:[ \xA0]\d{3})+(?:[.,]\d{2})?)\s*(?:руб|рублей|₽)/i,
+    /([\d]{4,10}(?:[.,]\d{2})?)\s*(?:руб|рублей|₽)/i
+  ];
+  for (const regex of sumPatterns) {
+    const match = fullCorpus.match(regex);
+    if (match && match[1]) {
+      const cleanNum = match[1].replace(/\s+/g, ' ').trim();
+      if (cleanNum.length >= 3) {
+        extractedSum = `${cleanNum} ₽`;
+        break;
+      }
+    }
+  }
+  if (!extractedSum) {
+    extractedSum = "По спецификации / Расчетная цена";
+  }
+
+  // 4. EXTRACT DELIVERY DATES AND ADDRESSES
+  let deliveryPeriod = "";
+  const deliveryPeriodPatterns = [
+    /(?:срок поставки|поставка осуществляется|период поставки|товар поставляется)[\s:—–\-]+([^\n\r.;]{10,200})/i,
+    /в течение\s+(\d+\s*(?:рабочих|календарных|банковских)?\s*дней[^\n\r.;]{0,80})/i
+  ];
+  for (const regex of deliveryPeriodPatterns) {
+    const match = fullCorpus.match(regex);
+    if (match && match[1]) {
+      deliveryPeriod = match[1].trim();
+      break;
+    }
+  }
+  if (!deliveryPeriod) {
+    deliveryPeriod = is44FZ
+      ? "В течение предусмотренного контрактом срока с даты заключения (электронное актирование в ЕИС)."
+      : "В соответствии с графиком и условиями договора по заявкам Заказчика.";
+  }
+
+  const deliveryAddresses: string[] = [];
+  const addressRegex = /(?:\d{6},?\s*(?:г\.|город|обл\.|область|пос\.|р-н|ул\.|улица|просп\.|проспект)[^;\n]{5,150}|(?:адрес\s*поставки|место\s*поставки|место\s*разгрузки)[\s:—–\-]+([^;\n\r]{10,180}))/gi;
+  let addrMatch;
+  while ((addrMatch = addressRegex.exec(fullCorpus)) !== null && deliveryAddresses.length < 3) {
+    const addr = (addrMatch[1] || addrMatch[0]).replace(/^(?:адрес\s*поставки|место\s*поставки)[\s:—–\-]+/i, '').trim();
+    if (addr.length > 8 && !deliveryAddresses.includes(addr)) {
+      deliveryAddresses.push(addr);
+    }
+  }
+  if (deliveryAddresses.length === 0) {
+    deliveryAddresses.push("Согласно разделу «Место и условия поставки» документации закупки");
+  }
+
+  // 5. EXTRACT REAL PRODUCTS FROM TZ / TABLES / CONTRACT
+  const productList: any[] = [];
+  const lines = `${tzText}\n${contractText}`.split(/\r?\n/);
+  
+  // Look for lines containing items with numbers, units or specifications
+  const itemRowRegex = /^(?:\d+[\s.)]|\s*[-*•])\s*([А-Яа-яA-Za-z0-9\s«"'_/-]{4,90})\s*[,;:]?\s*(\d+[\s.,]*\d*)\s*(шт|компл|ед|м|пог\.м|кг|т|упак|пар|набор|л|усл|порц|кв\.м)/i;
+  
+  for (const line of lines) {
+    if (productList.length >= 8) break;
+    const trimmed = line.trim();
+    if (trimmed.length < 6 || trimmed.length > 250) continue;
+    
+    const rowMatch = trimmed.match(itemRowRegex);
+    if (rowMatch) {
+      const prodName = rowMatch[1].trim();
+      const qty = `${rowMatch[2]} ${rowMatch[3]}`.trim();
+      if (prodName.length > 3 && !productList.some(p => p.name === prodName)) {
+        productList.push({
+          id: `prod-dyn-${productList.length + 1}`,
+          name: prodName,
+          quantity: qty,
+          dimensions: "По техническому заданию",
+          specification: trimmed,
+          parameters: [
+            { name: "Наименование", value: prodName },
+            { name: "Количество", value: qty }
+          ],
+          okpd2OrGvin: is44FZ ? "По КТРУ/ОКПД2" : "По классификатору",
+          pp1875Status: is44FZ ? "RUSSIAN_REQUIRED" : "NOT_APPLICABLE",
+          registryNumberNote: is44FZ ? "Требуется проверка по реестру ГИСП / РЭП (ПП 1875)" : "Согласно требованиям документации"
+        });
+      }
+    }
+  }
+
+  // If no tabular products were detected, parse significant noun phrases from TZ text
+  if (productList.length === 0) {
+    const tzSample = tzText || contractText;
+    const tzSnippet = tzSample.slice(0, 1500);
+    const tzWords = tzSnippet.split(/[;.\n]/).filter(s => s.trim().length > 15 && s.trim().length < 100);
+    if (tzWords.length > 0) {
+      productList.push({
+        id: 'prod-dyn-1',
+        name: tzWords[0].replace(/^[^А-Яа-яA-Za-z0-9]+/, '').trim(),
+        quantity: 'По спецификации',
+        dimensions: 'Согласно параметрам ТЗ',
+        specification: tzWords.slice(0, 2).join('; '),
+        parameters: [{ name: 'Объект поставки', value: extractedTitle }],
+        okpd2OrGvin: is44FZ ? 'КТРУ / ОКПД2' : 'По номенклатуре',
+        pp1875Status: is44FZ ? 'RUSSIAN_REQUIRED' : 'NOT_APPLICABLE',
+        registryNumberNote: 'Проверка реестровых номеров согласно правилам закупки'
+      });
+    } else {
+      productList.push({
+        id: 'prod-dyn-1',
+        name: extractedTitle,
+        quantity: '1 комплект',
+        dimensions: 'Согласно приложению к договору',
+        specification: 'Поставка товаров / выполнение работ в строгом соответствии со спецификацией Заказчика.',
+        parameters: [{ name: 'Предмет', value: extractedTitle }],
+        okpd2OrGvin: 'По номенклатуре',
+        pp1875Status: is44FZ ? 'RUSSIAN_REQUIRED' : 'NOT_APPLICABLE',
+        registryNumberNote: 'Проверка по реестру Минпромторга при наличии требований нацрежима'
+      });
+    }
+  }
+
+  // 6. EXTRACT REAL CONTRACT RISKS FROM CONTRACT TEXT
+  const contractRisks: any[] = [];
+  
+  // A) Penalties / Fines (3%, 1/300, etc.)
+  const penaltyMatch = contractText.match(/(?:штраф|пени|неустойк)[^\n.]{0,100}(?:3\s*%|1\/300|0[,.]\d+\s*%|1042|размере)[^\n.]{0,180}\./i);
+  if (penaltyMatch) {
+    contractRisks.push({
+      id: 'risk-dyn-1',
+      category: 'PENALTIES',
+      clauseNumber: 'Раздел «Ответственность Сторон»',
+      clauseQuote: penaltyMatch[0].trim(),
+      severity: is44FZ ? 'MEDIUM' : 'CRITICAL',
+      title: is44FZ ? 'Штрафы и пени по Постановлению Правительства РФ № 1042' : 'Штрафные санкции и пени по договору (223-ФЗ/B2B)',
+      explanation: is44FZ
+        ? 'По 44-ФЗ штрафы регламентированы ПП № 1042. При сумме начисленных неустоек до 5% они подлежат обязательному списанию по ПП № 783.'
+        : 'По 223-ФЗ и коммерческим договорам начисленные неустойки НЕ списываются в силу закона и могут быть удержаны из суммы оплаты.',
+      recommendation: is44FZ
+        ? 'Следите за сроками исполнения и при начислении штрафов подавайте заявление на списание по ПП РФ № 783.'
+        : 'Направьте протокол разногласий с предложением снизить процент штрафа или установить лимит ответственности.'
+    });
+  } else {
+    contractRisks.push({
+      id: 'risk-dyn-1',
+      category: 'PENALTIES',
+      clauseNumber: 'Раздел ответственности',
+      clauseQuote: is44FZ ? 'Ответственность сторон определяется нормами ФЗ № 44 и ПП РФ № 1042.' : 'За нарушение сроков начисляется неустойка в установленном договором размере.',
+      severity: 'HIGH',
+      title: 'Риск финансовых санкций за просрочку поставки',
+      explanation: 'Несоблюдение сроков или условий поставки влечет начисление пеней за каждый день просрочки.',
+      recommendation: 'Зафиксируйте контрольные даты логистики и поставки в CRM/таск-трекере.'
+    });
+  }
+
+  // B) Third-Party Purchase Risk (223-FZ)
+  const thirdPartyMatch = contractText.match(/(?:приобрести|закупить)[^\n.]{0,80}(?:третьих лиц|3-х лиц|других лиц)[^\n.]{0,150}\./i);
+  if (thirdPartyMatch) {
+    contractRisks.push({
+      id: 'risk-dyn-2',
+      category: 'THIRD_PARTY_PURCHASE',
+      clauseNumber: 'Раздел исполнения договора',
+      clauseQuote: thirdPartyMatch[0].trim(),
+      severity: 'CRITICAL',
+      title: 'Право Заказчика докупать товар у третьих лиц за счет Поставщика',
+      explanation: 'При задержке поставки Заказчик вправе самостоятельно купить товар на рынке и взыскать всю разницу в ценах с вас.',
+      recommendation: 'Исключить данный пункт протоколом разногласий либо установить обязательное предварительное согласование цены закупки.'
+    });
+  }
+
+  // C) Payment Terms / Electronic Acceptance
+  const paymentMatch = contractText.match(/(?:оплата|расчет)[^\n.]{0,80}(?:7 рабочих дней|10 рабочих дней|30 дней|банковских дней|еис|упд)[^\n.]{0,150}\./i);
+  contractRisks.push({
+    id: 'risk-dyn-3',
+    category: 'PAYMENT_TERMS',
+    clauseNumber: 'Раздел «Порядок расчетов»',
+    clauseQuote: paymentMatch ? paymentMatch[0].trim() : (is44FZ ? 'Оплата осуществляется в срок не более 7 рабочих дней со дня подписания документа о приемке в ЕИС.' : 'Оплата производится по безналичному расчету после подписания закрывающих документов.'),
+    severity: is44FZ ? 'LOW' : 'MEDIUM',
+    title: is44FZ ? 'Регламентный срок оплаты: 7 рабочих дней через ЕИС' : 'Условия оплаты и подписание закрывающих документов',
+    explanation: is44FZ
+      ? 'По ч. 13.1 ст. 34 ФЗ № 44 срок оплаты строго ограничен 7 рабочими днями с даты подписания электронного УПД.'
+      : 'Контролируйте дату фактического получения закрывающих документов Заказчиком во избежание затягивания оплаты.',
+    recommendation: 'Оформляйте закрывающие документы (электронный УПД / акт) строго в день фактической передачи товара.'
+  });
+
+  const overallRiskScore = contractRisks.some(r => r.severity === 'CRITICAL') ? 76 : is44FZ ? 48 : 62;
+
   return {
+    _aiAnalysisStatus: 'HEURISTIC_PARSED',
     summary: {
-      procurementTitle: hasText
-        ? 'Анализ закупки по документации 223-ФЗ (Экспертный расчет)'
-        : 'Поставка офисного оборудования и мебели для ГУП (Флагманский 223-ФЗ)',
-      projectName: 'Проект №223-894: Поставка офисной мебели и кресел',
-      customerName: 'ГУП "Мосгортранс" / АО "Мослифт"',
-      procurementSum: '12 450 000,00 ₽',
-      auctionDate: '15.08.2026 (10:00 МСК)',
-      overallRiskScore: 78,
-      riskLevel: 'CRITICAL',
-      keyTakeaway: 'Договор содержит кабальный штраф 3% от всей стоимости за формальные нарушения, право Заказчика докупать товар у 3-х лиц за ваш счёт, поставку по заявкам за 5 дней и требования нацрежима ПП РФ № 1875.',
-      is223FZ: true,
+      procurementTitle: extractedTitle,
+      projectName: `Закупка: ${extractedTitle.slice(0, 60)}...`,
+      customerName: extractedCustomer,
+      procurementSum: extractedSum,
+      auctionDate: "По извещению закупки",
+      overallRiskScore,
+      riskLevel: overallRiskScore > 70 ? "CRITICAL" : overallRiskScore > 40 ? "MEDIUM" : "LOW",
+      keyTakeaway: is44FZ
+        ? `Закупка по 44-ФЗ для "${extractedCustomer}". Контроль сроков оплаты (7 р.д. в ЕИС), расчет штрафов по ПП № 1042 и право списания неустоек по ПП № 783.`
+        : `Закупка по 223-ФЗ/B2B для "${extractedCustomer}". Неустойки по договору не подлежат обязательному списанию, требуется контроль условий поставки и закрывающих документов.`,
+      is223FZ: !is44FZ,
     },
     deliveryInfo: {
-      deliveryPeriod: 'В течение 15 рабочих дней с даты заключения Договора по письменным заявкам Заказчика.',
-      deliveryScheduleNotice: 'Поставка осуществляется строго по заявкам Заказчика. Уведомление за 5 рабочих дней.',
-      deliveryAddresses: [
-        '141000, Московская область, г. Мытищи, ул. Промышленная, д. 12, склад № 4',
-        '127000, г. Москва, Дмитровское шоссе, д. 85, корпус 2'
-      ],
-      unloadingAndAccessConditions: 'Разгрузка Товара и подъем на 3-й этаж осуществляются силами и за счет Поставщика. Автопропуск за 24 часа.',
-      consigneeDetails: 'Центральный склад материально-технического обеспечения (Грузополучатель: склад №4)',
-      riskWarning: 'Критический риск просрочки из-за короткого интервала (5 дней) и требований подъема габаритных грузов на 3-й этаж.',
+      deliveryPeriod,
+      deliveryScheduleNotice: "Поставка осуществляется в соответствии с согласованным графиком или заявками Заказчика.",
+      deliveryAddresses,
+      unloadingAndAccessConditions: "Разгрузка и оформление пропусков осуществляются согласно регламенту Заказчика.",
+      consigneeDetails: extractedCustomer,
+      riskWarning: "Соблюдайте согласованные сроки поставки для предотвращения претензионной работы и начисления пеней.",
     },
-    contractRisks: [
-      {
-        id: 'risk-fb-1',
-        category: 'PENALTIES',
-        clauseNumber: 'п. 7.6',
-        clauseQuote: 'Поставщик несет перед Покупателем ответственность в виде штрафа в размере 3 (три) процента от цены Договора за каждый случай нарушения (упаковка, маркировка, первичка).',
-        severity: 'CRITICAL',
-        title: 'Кабальный штраф 3% от ВСЕЙ стоимости договора за любое мелкое нарушение',
-        explanation: 'Вместо фиксированного штрафа установлен несоразмерный штраф 3% за любые технические недочеты (маркировка, коробка, просрочка представления первички).',
-        recommendation: 'Направить протокол разногласий: уменьшить размер штрафа до фиксированной суммы (1 000 - 5 000 руб.) либо ограничить 5% от этапа.'
-      },
-      {
-        id: 'risk-fb-2',
-        category: 'THIRD_PARTY_PURCHASE',
-        clauseNumber: 'п. 7.2',
-        clauseQuote: 'Покупатель вправе приобрести непоставленный товар у третьих лиц с отнесением на Поставщика всех необходимых расходов.',
-        severity: 'CRITICAL',
-        title: 'Право Заказчика докупать товар у третьих лиц по любой цене за ваш счет',
-        explanation: 'Заказчик при несоблюдении короткого срока (5 дней) может приобрести аналоги на розничном рынке по завышенным ценам и взыскать разницу с вас.',
-        recommendation: 'Исключить данный пункт или внести условие о предварительном письменном согласовании предельной цены замены.'
-      },
-      {
-        id: 'risk-fb-3',
-        category: 'DELIVERY_TERMS',
-        clauseNumber: 'п. 4.3',
-        clauseQuote: 'Поставка осуществляется партиями по письменным заявкам Заказчика в течение 5 рабочих дней.',
-        severity: 'HIGH',
-        title: 'Сжатый срок поставки по заявке (5 дней) с подъемом на этажи',
-        explanation: 'Срок 5 рабочих дней недостаточен при отсутствии готового товара на складе в РФ.',
-        recommendation: 'Увеличить интервал исполнения заявки до 10-15 рабочих дней.'
-      }
-    ],
+    contractRisks,
     submissionRulesCheck: {
-      procedureType: 'Запрос котировок / конкурсы по 223-ФЗ',
+      procedureType: procedureType || (is44FZ ? "44_FZ_AUCTION" : "223_FZ_QUOTATION"),
       requestInTableRequired: true,
-      etpAccreditationNotice: 'Проверить баланс ЭТП и аккредитацию за 48 часов до окончания подачи заявок.',
-      requiredFilesStructure: [
-        'Первая часть: Согласие, конкретные характеристики товаров без указания фирменного наименования участника',
-        'Вторая часть: Выписка ЕГРЮЛ, решения об одобрении сделки, декларации соответствия ПП РФ № 1875',
-        'Ценовое предложение на ЭТП'
-      ],
-      formsRequirement: 'Заполнить все установленные формы Заказчика. Опись вложений заполнять не обязательно.',
-      pp1875Applies: true,
-      pp1875Details: 'Требуются реестровые номера ГИСП Минпромторга РФ для подтверждения минимальной доли отечественных товаров.',
-      accountingInfoNeeded: true,
-      accountingItems: ['Справка об отсутствии задолженности по налогам и сборам', 'Бухгалтерский баланс (Форма №1, №2) за прошлый период']
+      etpAccreditationNotice: is44FZ ? "Аккредитация в ЕРУЗ ЕИС и спецсчет для обеспечения заявки обязательны." : "Проверить регистрацию и баланс на ЭТП за 48 часов до окончания подачи.",
+      requiredFilesStructure: is44FZ
+        ? [
+            "1. Заявка на участие с конкретными показателями товара (без указания наименования участника)",
+            "2. Документы подтверждения страны происхождения товара (реестровые номера ГИСП / РЭП при нацрежиме)",
+            "3. Декларация соответствия единым требованиям ст. 31 44-ФЗ"
+          ]
+        : [
+            "1. Заявка участника по установленной форме Заказчика (Форма №1, Согласие)",
+            "2. Техническое предложение с конкретными характеристиками товара",
+            "3. Уставные документы, выписка ЕГРЮЛ и одобрение крупной сделки",
+            "4. Ценовое предложение на ЭТП"
+          ],
+      formsRequirement: is44FZ ? "Подача через функционал ЭТП в структурированном виде." : "Строгое заполнение установленных форм Заказчика.",
+      pp1875Applies: is44FZ,
+      pp1875Details: is44FZ ? "Применяются правила нацрежима (ПП № 1875 / ПП № 616 / ПП № 878)." : "Требования устанавливаются Положением о закупке Заказчика.",
+      accountingInfoNeeded: !is44FZ,
+      accountingItems: is44FZ
+        ? ["Справка об отсутствии задолженности (сверка ФНС через ЕИС)", "Выписка ЕГРЮЛ из ЕРУЗ"]
+        : ["Бухгалтерский баланс (Форма №1, №2)", "Справка об отсутствии задолженности по налогам"]
     },
     postAwardWorkflow: {
-      deliveryNotifications: 'Направить официальное уведомление о готовности к отгрузке за 2 рабочих дня до выезда транспорта.',
-      primaryDocFormatConfirmation: 'Уточнить формат первички (УПД со статусом 1 по ЭДО) и зафиксировать задачу в Юджайл.',
-      accompanyingDocs: ['УПД / ТОРГ-12', 'Паспорт качества и технический паспорт', 'Сертификаты соответствия ТР ТС'],
-      acceptanceDocsStrategy: 'Требовать подписи, печати и обязательную точную ДАТУ приемки на всех копиях накладных.',
-      motivatedRefusalGuide: 'При устном отказе в приемке требовать мотивированный письменный отказ с указанием конкретных пунктов ТЗ в течение 3 дней.'
+      deliveryNotifications: "Уведомление Заказчика о готовности к отгрузке за 24-48 часов до прибытия транспорта.",
+      primaryDocFormatConfirmation: is44FZ ? "Электронное актирование: формирование документа о приемке (электронный УПД) в ЕИС Закупки." : "Формирование УПД (статус 1) через систему ЭДО или на бумажном носителе.",
+      accompanyingDocs: is44FZ ? ["Электронный УПД в ЕИС", "Транспортная накладная", "Паспорт качества / сертификат соответствия"] : ["УПД / ТОРГ-12", "Сертификат соответствия / декларация", "Паспорт изделия"],
+      acceptanceDocsStrategy: "Обязательная фиксация даты и подписи уполномоченного лица Заказчика в акте/накладной.",
+      motivatedRefusalGuide: "При отказе в приемке требовать письменный мотивированный отказ с указанием конкретных пунктов несоответствия."
     },
-    productList: [
-      {
-        id: 'prod-fb-1',
-        name: 'Стол рабочий эргономичный с тумбой',
-        quantity: '25 шт.',
-        dimensions: '1400х750х760 мм',
-        specification: 'Столешница ЛДСП 25 мм, кромка ПВХ 2 мм, цвет "Орех темный", стальной каркас.',
-        parameters: [
-          { name: 'Габариты (ДхШхВ)', value: '1400х750х760 мм' },
-          { name: 'Материал', value: 'ЛДСП 25 мм (кромка ПВХ 2мм)' },
-          { name: 'Каркас', value: 'Стальной металлокаркас, черный' }
-        ],
-        okpd2OrGvin: '31.01.12.110',
-        pp1875Status: 'RUSSIAN_REQUIRED',
-        registryNumberNote: 'Реестр Минпромторга РФ № 104829'
-      },
-      {
-        id: 'prod-fb-2',
-        name: 'Системный блок ПК "Российский Сервер Про"',
-        quantity: '15 шт.',
-        dimensions: '420х180х410 мм',
-        specification: '8 ядер, 16 ГБ DDR4, SSD 512 ГБ NVMe, БП 500W Bronze. Гарантия 36 месяцев.',
-        parameters: [
-          { name: 'Процессор', value: '8 ядер' },
-          { name: 'Память & Накопитель', value: '16 ГБ DDR4, 512 ГБ NVMe' }
-        ],
-        okpd2OrGvin: '26.20.15.000',
-        pp1875Status: 'RUSSIAN_REQUIRED',
-        registryNumberNote: 'Запись в реестре РЭП № 10398/1/2024'
-      }
-    ],
+    productList,
     generatedTemplates: {
-      acceptanceDocsRequest: 'Настоящим просим в соответствии с п. 5.2 Договора подписать закрывающие документы (УПД) либо направить мотивированный письменный отказ в течение 3 (трех) рабочих дней.',
-      motivatedRefusalDemand: 'На полученный устный отказ в приемке просим предоставить официальный мотивированный письменный отказ с перечнем конкретных пунктов ТЗ, которым не соответствует Товар.',
-      etpFundsRequest: 'В отдел бухгалтерии: Просьба перечислить денежные средства для обеспечения заявки на счет ЭТП в размере 50 000 руб.',
-      accountingDataRequest: 'Просим предоставить свежую выписку ЕГРЮЛ и справку об отсутствии налоговой задолженности для участия в закупке 223-ФЗ.',
-      yougileTaskSummary: '[ЮДЖАЙЛ ЗАДАЧА] Исполнение контракта 223-ФЗ. Ответственный: Тендерный отдел. Контроль приемки УПД с датой.',
-      claimResponseTemplate: 'В ответ на претензию сообщаем, что обязательства по отгрузке выполнены в полном объеме согласно спецификации. Неустойку считаем несоразмерной (ст. 333 ГК РФ).'
+      acceptanceDocsRequest: `Руководству Заказчика (${extractedCustomer})\nОт Поставщика\n\nУВЕДОМЛЕНИЕ О ПОСТАВКЕ И ПОДПИСАНИИ ЗАКРЫВАЮЩИХ ДОКУМЕНТОВ\n\nУведомляем о завершении отгрузки по закупке «${extractedTitle}». Товар доставлен в полном объеме. Просим рассмотреть и подписать закрывающие документы в установленный договором срок.`,
+      motivatedRefusalDemand: `В адрес Заказчика (${extractedCustomer})\n\nТРЕБОВАНИЕ О ПРЕДОСТАВЛЕНИИ МОТИВИРОВАННОГО ОТКАЗА\n\nВ связи с устными замечаниями просим предоставить официальный письменный мотивированный отказ от приемки с указанием конкретных пунктов технического задания, которым не соответствует поставленный товар.`,
+      etpFundsRequest: `Оператору ЭТП / В финансовую службу\n\nЗАЯВЛЕНИЕ\nО разблокировании обеспечения заявки по закупке «${extractedTitle}» в связи с надлежащим завершением процедуры.`,
+      accountingDataRequest: `В отдел бухгалтерии\n\nСЛУЖЕБНАЯ ЗАПИСКА\nПросьба подготовить пакет финансовых документов для участия в закупке для Заказчика ${extractedCustomer}.`,
+      yougileTaskSummary: `🎯 [ЗАДАЧА YOUGILE/БИТРИКС24]: Исполнение контракта «${extractedTitle}» (${extractedCustomer}). Контроль логистики, сдачи товара и подписания закрывающих документов.`,
+      claimResponseTemplate: `Заказчику (${extractedCustomer})\n\nОТВЕТ НА ПРЕТЕНЗИЮ\nСообщаем, что обязательства по отгрузке выполнены в строгом соответствии со спецификацией. Начисленные неустойки просим пересмотреть с учетом фактических обстоятельств исполнения.`
     }
   };
 }

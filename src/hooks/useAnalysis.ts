@@ -80,13 +80,13 @@ export function useAnalysis() {
     localStorage.setItem('selected_procedure_type', input.procedureType);
     localStorage.setItem('selected_law_type', lawCategory);
 
-    // Client-side safety timeout: 45 seconds max
+    // Client-side safety timeout: 120 seconds max for large documents
     const timeoutId = setTimeout(() => {
       if (abortControllerRef.current === controller) {
-        console.warn("Analysis timeout reached, generating instant fallback...");
+        console.warn("Analysis timeout reached (120s)");
         controller.abort();
       }
-    }, 45000);
+    }, 120000);
 
     try {
       // Load saved law-specific regulations and guidelines from localStorage
@@ -129,6 +129,7 @@ export function useAnalysis() {
           combinedGuidelines ? `\n[Официальный Регламент Проверки]:\n${combinedGuidelines}` : ''
         }`.trim(),
         llmConfig: getStoredLLMConfig(),
+        bypassCache: true, // Force fresh real analysis of the user's specific files
       };
 
       const response = await fetch('/api/analyze', {
@@ -173,12 +174,7 @@ export function useAnalysis() {
     } catch (err: any) {
       clearTimeout(timeoutId);
       if (err.name === 'AbortError') {
-        console.warn('Analysis fetch aborted or timed out, applying instant smart audit result...');
-        const is44 = Boolean(input?.procedureType?.startsWith('44_FZ'));
-        const fallbackPreset = getPresetAnalysisResult(is44 ? 'sample-medical-44fz' : 'sample-furniture-223fz');
-        setAnalysisResult(fallbackPreset);
-        setActiveTab('all');
-        setError(null);
+        setError('Превышено время ожидания ответа ИИ или запрос был отменен. Пожалуйста, проверьте подключение или выберите другую модель ИИ в настройках.');
       } else {
         console.error('Analysis error:', err);
         setError(err?.message || 'Не удалось выполнить анализ закупки');

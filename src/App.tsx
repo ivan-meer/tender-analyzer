@@ -60,6 +60,7 @@ export default function App() {
     googleDocsSuccessUrl,
     googleSheetsSuccessUrl,
     exportError,
+    setExportError,
     handleExportPdf,
     handleExportGoogleDocs,
     handleExportGoogleSheets,
@@ -245,6 +246,8 @@ export default function App() {
             isExportingGoogleSheets={isExportingGoogleSheets}
             googleDocsSuccessUrl={googleDocsSuccessUrl}
             googleSheetsSuccessUrl={googleSheetsSuccessUrl}
+            exportError={exportError}
+            onClearExportError={() => setExportError(null)}
             onExportGoogleDocs={handleExportGoogleDocs}
             onExportGoogleSheets={handleExportGoogleSheets}
             onExportTxt={handleExportTxt}
