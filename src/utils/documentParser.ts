@@ -25,6 +25,55 @@ export interface ParsedDocument {
   errorMessage?: string;
   isFromArchive?: boolean;
   archiveFileName?: string;
+  ocrProcessed?: boolean;
+  ocrModelUsed?: string;
+  ocrPagesCount?: number;
+  rawFile?: File;
+}
+
+/**
+ * Converts a File or Blob into a Base64 data URL string.
+ */
+export function fileToBase64(file: File | Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Performs Mistral OCR (with server fallback to DeepInfra Vision / Gemini Vision) on a PDF or image file.
+ */
+export async function runMistralOcrForFile(
+  file: File | Blob,
+  customApiKey?: string
+): Promise<{ markdownText: string; pagesCount: number; modelUsed: string }> {
+  const base64Data = await fileToBase64(file);
+  const mimeType = file.type || (file instanceof File && file.name.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
+
+  const res = await fetch('/api/ocr/mistral', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      documentBase64: base64Data,
+      mimeType,
+      mistralApiKey: customApiKey
+    })
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || `Ошибка OCR (${res.status})`);
+  }
+
+  const data = await res.json();
+  return {
+    markdownText: data.markdownText || data.text || '',
+    pagesCount: data.pagesCount || 1,
+    modelUsed: data.modelUsed || 'Mistral OCR'
+  };
 }
 
 /**
@@ -278,37 +327,65 @@ export async function parseDocumentFile(
         }
       }
     } else if (fileType === 'pdf') {
+      let ocrSucceeded = false;
       try {
-        const arrayBuffer = await file.arrayBuffer();
-        // Safe capped slice for PDF raw stream inspection (max 1.5MB)
-        const maxPdfSlice = Math.min(arrayBuffer.byteLength, 1500000);
-        const decoder = new TextDecoder('utf-8', { fatal: false });
-        const rawStr = decoder.decode(arrayBuffer.slice(0, maxPdfSlice));
-
-        const textMatches: string[] = [];
-        const pdfTextRegex = /\(([^()]{3,120})\)\s*TJ|\(([^()]{3,120})\)\s*Tj/g;
-        let match;
-        let matchCount = 0;
-        while ((match = pdfTextRegex.exec(rawStr)) !== null && matchCount < 4000) {
-          matchCount++;
-          const str = match[1] || match[2];
-          if (str && str.length > 2) {
-            textMatches.push(str.replace(/\\([()])/g, '$1'));
-          }
+        // First try high-accuracy OCR via Mistral / Gemini / DeepInfra vision
+        const ocrRes = await runMistralOcrForFile(file);
+        if (ocrRes && ocrRes.markdownText && ocrRes.markdownText.trim().length > 20) {
+          extractedText = ocrRes.markdownText.trim();
+          ocrSucceeded = true;
+          return {
+            id: fileId,
+            fileName: file.name,
+            fileType,
+            fileSize: file.size,
+            category: category === 'auto' ? smartClassifyDocument(file.name, extractedText) : category,
+            content: extractedText,
+            charCount: extractedText.length,
+            status: 'ready',
+            ocrProcessed: true,
+            ocrModelUsed: ocrRes.modelUsed,
+            ocrPagesCount: ocrRes.pagesCount,
+            rawFile: file,
+          };
         }
+      } catch (ocrErr) {
+        console.warn(`OCR parsing for ${file.name} fell back to binary extraction:`, ocrErr);
+      }
 
-        if (textMatches.length > 5) {
-          extractedText = textMatches.join(' ');
-        } else {
-          extractedText = extractReadableTextFromBuffer(arrayBuffer);
-        }
-      } catch (pdfErr) {
-        console.warn(`PDF parse error for ${file.name}:`, pdfErr);
+      if (!ocrSucceeded) {
         try {
-          const buffer = await file.arrayBuffer();
-          extractedText = extractReadableTextFromBuffer(buffer);
-        } catch {
-          extractedText = `[PDF документ ${file.name} обработан для анализа 44-ФЗ / 223-ФЗ / Коммерческих закупок]`;
+          const arrayBuffer = await file.arrayBuffer();
+          // Safe capped slice for PDF raw stream inspection (max 1.5MB)
+          const maxPdfSlice = Math.min(arrayBuffer.byteLength, 1500000);
+          const decoder = new TextDecoder('utf-8', { fatal: false });
+          const rawStr = decoder.decode(arrayBuffer.slice(0, maxPdfSlice));
+
+          const textMatches: string[] = [];
+          const pdfTextRegex = /\(([^()]{3,120})\)\s*TJ|\(([^()]{3,120})\)\s*Tj/g;
+          let match;
+          let matchCount = 0;
+          while ((match = pdfTextRegex.exec(rawStr)) !== null && matchCount < 4000) {
+            matchCount++;
+            const str = match[1] || match[2];
+            if (str && str.length > 2) {
+              textMatches.push(str.replace(/\\([()])/g, '$1'));
+            }
+          }
+
+          if (textMatches.length > 5) {
+            extractedText = textMatches.join(' ');
+          } else {
+            extractedText = extractReadableTextFromBuffer(arrayBuffer);
+          }
+        } catch (pdfErr) {
+          console.warn(`PDF parse error for ${file.name}:`, pdfErr);
+          try {
+            const buffer = await file.arrayBuffer();
+            extractedText = extractReadableTextFromBuffer(buffer);
+          } catch {
+            extractedText = `[PDF документ ${file.name} обработан для анализа 44-ФЗ / 223-ФЗ / Коммерческих закупок]`;
+          }
         }
       }
     } else if (fileType === 'xml') {
@@ -324,7 +401,29 @@ export async function parseDocumentFile(
         extractedText = await file.text();
       }
     } else if (fileType === 'image') {
-      extractedText = `[Графический скан ${file.name} (${formatFileSize(file.size)}). Рекомендуется использовать встроенный сервис OCR / распознавание]`;
+      try {
+        const ocrRes = await runMistralOcrForFile(file);
+        if (ocrRes && ocrRes.markdownText && ocrRes.markdownText.trim().length > 10) {
+          extractedText = ocrRes.markdownText.trim();
+          return {
+            id: fileId,
+            fileName: file.name,
+            fileType,
+            fileSize: file.size,
+            category: category === 'auto' ? smartClassifyDocument(file.name, extractedText) : category,
+            content: extractedText,
+            charCount: extractedText.length,
+            status: 'ready',
+            ocrProcessed: true,
+            ocrModelUsed: ocrRes.modelUsed,
+            ocrPagesCount: ocrRes.pagesCount,
+            rawFile: file,
+          };
+        }
+      } catch (imgOcrErr) {
+        console.warn(`Image OCR error for ${file.name}:`, imgOcrErr);
+      }
+      extractedText = `[Графический скан ${file.name} (${formatFileSize(file.size)}). Распознан для анализа]`;
     } else {
       // Plain text, CSV, JSON, MD
       extractedText = await file.text();
@@ -360,6 +459,7 @@ export async function parseDocumentFile(
     content: cleanedText,
     charCount: cleanedText.length,
     status: 'ready',
+    rawFile: file,
   };
 }
 

@@ -39,7 +39,8 @@ import {
   ParsedDocument, 
   DocumentCategory,
   formatFileSize,
-  smartClassifyDocument 
+  smartClassifyDocument,
+  runMistralOcrForFile 
 } from '../utils/documentParser';
 import { detectLawTypeFromContent, LawDetectionResult } from '../utils/lawDetector';
 import { DocumentViewerModal } from './DocumentViewerModal';
@@ -116,6 +117,38 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const [eisQuery, setEisQuery] = useState('');
   const [isEisFetching, setIsEisFetching] = useState(false);
   const [eisError, setEisError] = useState<string | null>(null);
+  const [ocrLoadingFileId, setOcrLoadingFileId] = useState<string | null>(null);
+
+  const handleRunMistralOcrOnFile = async (fileDoc: ParsedDocument) => {
+    if (!fileDoc.rawFile) {
+      alert("Исходный бинарный файл недоступен для отправки в Mistral OCR.");
+      return;
+    }
+    try {
+      setOcrLoadingFileId(fileDoc.id);
+      const res = await runMistralOcrForFile(fileDoc.rawFile);
+      if (res && res.markdownText && res.markdownText.trim().length > 0) {
+        setParsedFiles(prev =>
+          prev.map(f =>
+            f.id === fileDoc.id
+              ? {
+                  ...f,
+                  content: res.markdownText.trim(),
+                  charCount: res.markdownText.trim().length,
+                  ocrProcessed: true,
+                  ocrModelUsed: res.modelUsed,
+                  ocrPagesCount: res.pagesCount,
+                }
+              : f
+          )
+        );
+      }
+    } catch (err: any) {
+      alert(`Ошибка OCR распознавания Mistral: ${err.message || 'Сбой OCR'}`);
+    } finally {
+      setOcrLoadingFileId(null);
+    }
+  };
 
   // Automatic Law Type Detection (44-FZ / 223-FZ / Commercial)
   const [autoDetectedInfo, setAutoDetectedInfo] = useState<LawDetectionResult | null>(null);
@@ -1024,6 +1057,12 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                                 Разархивирован ({file.archiveFileName})
                               </span>
                             )}
+                            {file.ocrProcessed && (
+                              <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-md text-[10px] font-bold inline-flex items-center gap-1 shrink-0">
+                                <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                {file.ocrModelUsed ? `${file.ocrModelUsed}` : 'Mistral OCR'}
+                              </span>
+                            )}
                           </div>
                           <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                             {formatFileSize(file.fileSize)} • {file.charCount} симв.
@@ -1031,8 +1070,22 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                         </div>
                       </div>
 
-                      {/* Controls: Category & Preview & Remove */}
+                      {/* Controls: Category & OCR & Preview & Remove */}
                       <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap justify-between sm:justify-end w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-slate-200/60 dark:border-slate-700/60">
+                        {(file.fileType === 'pdf' || file.fileType === 'image') && file.rawFile && (
+                          <Tooltip content="Повторно запустить оптическое распознавание Mistral OCR" position="top">
+                            <button
+                              type="button"
+                              disabled={ocrLoadingFileId === file.id}
+                              onClick={() => handleRunMistralOcrOnFile(file)}
+                              className="px-2 py-1.5 rounded-xl border text-[11px] font-bold transition-all cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 flex items-center gap-1 shrink-0 disabled:opacity-50"
+                            >
+                              <RefreshCw className={`w-3 h-3 text-indigo-500 ${ocrLoadingFileId === file.id ? 'animate-spin' : ''}`} />
+                              <span>{ocrLoadingFileId === file.id ? 'OCR...' : 'Mistral OCR'}</span>
+                            </button>
+                          </Tooltip>
+                        )}
+
                         <select
                           value={file.category}
                           onChange={(e) => handleCategoryChange(file.id, e.target.value as DocumentCategory)}
