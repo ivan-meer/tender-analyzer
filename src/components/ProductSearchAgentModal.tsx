@@ -81,7 +81,14 @@ export const ProductSearchAgentModal: React.FC<ProductSearchAgentModalProps> = (
     agentVersion: string;
     executionTimeMs: number;
     results: AgentItemResult[];
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('tender_agent_search_cache_v2');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const [activeItemIndex, setActiveItemIndex] = useState(0);
   const [copiedPromptKey, setCopiedPromptKey] = useState<string | null>(null);
@@ -110,7 +117,6 @@ export const ProductSearchAgentModal: React.FC<ProductSearchAgentModalProps> = (
 
   const runAgentSearch = async (mode: 'single' | 'all') => {
     setLoading(true);
-    setAgentOutput(null);
 
     let payloadItems: any[] = [];
 
@@ -162,6 +168,11 @@ export const ProductSearchAgentModal: React.FC<ProductSearchAgentModalProps> = (
       const data = await res.json();
       setAgentOutput(data);
       setActiveItemIndex(0);
+      try {
+        localStorage.setItem('tender_agent_search_cache_v2', JSON.stringify(data));
+      } catch (e) {
+        console.warn('Could not save agent search to localStorage', e);
+      }
     } catch (err) {
       console.error('Error in agent search:', err);
       alert('Произошла ошибка при выполнении поискового агента.');

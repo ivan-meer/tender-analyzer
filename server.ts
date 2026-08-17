@@ -422,6 +422,268 @@ function extractJsonFromLLMResponse(text: string): any {
 }
 
 // Universal multi-provider LLM helper (Gemini, Mistral, OpenAI, Claude, DeepSeek, DeepInfra, Ollama)
+// Universal Multi-Provider LLM Call Dispatcher with Cascading Fallback (Gemini -> DeepInfra -> Mistral -> OpenAI)
+async function executeDeepInfraCall(
+  cfg: UniversalLLMConfig,
+  options: {
+    prompt: string | any[];
+    systemInstruction?: string;
+    imageParts?: Array<{ inlineData: { mimeType: string; data: string } }>;
+    responseJsonFormat?: boolean;
+    temperature?: number;
+  },
+  overrideModel?: string
+): Promise<{ text: string; modelUsed: string }> {
+  const apiKey = cfg.apiKey || process.env.DEEPINFRA_API_KEY || process.env.ZIPINFRA_API_KEY;
+  if (!apiKey) {
+    throw new Error("API ключ DeepInfra отсутствует в конфигурации сервера.");
+  }
+  const baseUrl = (cfg.baseUrl || process.env.DEFAULT_LLM_BASE_URL || 'https://api.deepinfra.com/v1/openai').replace(/\/$/, '');
+  const model = overrideModel || cfg.modelName || process.env.DEFAULT_LLM_MODEL || 'meta-llama/Llama-3.3-70B-Instruct';
+  const temperature = options.temperature ?? cfg.temperature ?? 0.2;
+
+  const messages: any[] = [];
+  let sysInstruction = options.systemInstruction || '';
+  if (options.responseJsonFormat) {
+    const jsonRequirement = "IMPORTANT: You MUST respond strictly in valid JSON matching the schema. Do not output reasoning text or commentary outside the JSON.";
+    sysInstruction = sysInstruction ? `${sysInstruction}\n\n${jsonRequirement}` : jsonRequirement;
+  }
+  if (sysInstruction) {
+    messages.push({ role: 'system', content: sysInstruction });
+  }
+
+  let userContent: any = options.prompt;
+  if (typeof options.prompt === 'string') {
+    userContent = options.prompt;
+  } else if (Array.isArray(options.prompt)) {
+    userContent = options.prompt.map(p => typeof p === 'string' ? p : (p.text || '')).join('\n');
+  }
+  messages.push({ role: 'user', content: userContent });
+
+  const requestBody: any = {
+    model,
+    messages,
+    temperature,
+  };
+
+  const isReasonerModel = /reasoner|r1|o1|o3/i.test(model);
+  if (options.responseJsonFormat && !isReasonerModel) {
+    requestBody.response_format = { type: 'json_object' };
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`
+  };
+
+  let res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!res.ok && requestBody.response_format) {
+    delete requestBody.response_format;
+    res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+  }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`DeepInfra API Error (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  let reply = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || data.choices?.[0]?.text || '';
+  if (reply && typeof reply === 'string') {
+    reply = reply.replace(/<\s*(think|thought)\s*>[\s\S]*?<\s*\/\s*(think|thought)\s*>/gi, "").trim();
+  }
+  return { text: reply, modelUsed: `DeepInfra (${model})` };
+}
+
+async function executeGeminiCall(
+  cfg: UniversalLLMConfig,
+  options: {
+    prompt: string | any[];
+    systemInstruction?: string;
+    imageParts?: Array<{ inlineData: { mimeType: string; data: string } }>;
+    responseJsonFormat?: boolean;
+    temperature?: number;
+  },
+  overrideModel?: string
+): Promise<{ text: string; modelUsed: string }> {
+  const geminiKey = cfg.apiKey || process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
+    throw new Error("API ключ Gemini отсутствует в конфигурации сервера.");
+  }
+
+  const ai = new GoogleGenAI({
+    apiKey: geminiKey,
+    httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+  });
+
+  const model = overrideModel || (cfg.provider === 'gemini' && cfg.modelName ? cfg.modelName : "gemini-2.5-flash");
+  const temperature = options.temperature ?? cfg.temperature ?? 0.2;
+
+  let contents: any = options.prompt;
+  if (options.imageParts && options.imageParts.length > 0) {
+    contents = [
+      ...options.imageParts,
+      ...(typeof options.prompt === 'string' ? [{ text: options.prompt }] : options.prompt)
+    ];
+  }
+
+  const reqConfig: any = {
+    temperature,
+  };
+
+  if (options.systemInstruction) {
+    reqConfig.systemInstruction = options.systemInstruction;
+  }
+
+  if (options.responseJsonFormat) {
+    reqConfig.responseMimeType = "application/json";
+  }
+
+  const response = await generateContentWithRetry(ai, {
+    model,
+    fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
+    contents,
+    config: reqConfig,
+  });
+
+  return { text: response.text || "", modelUsed: `Gemini (${model})` };
+}
+
+async function executeMistralCall(
+  cfg: UniversalLLMConfig,
+  options: {
+    prompt: string | any[];
+    systemInstruction?: string;
+    responseJsonFormat?: boolean;
+    temperature?: number;
+  },
+  overrideModel?: string
+): Promise<{ text: string; modelUsed: string }> {
+  const apiKey = cfg.apiKey || process.env.MISTRAL_API_KEY;
+  if (!apiKey) {
+    throw new Error("API ключ Mistral отсутствует в конфигурации сервера.");
+  }
+  const model = overrideModel || cfg.modelName || 'mistral-large-latest';
+  const baseUrl = (cfg.baseUrl || 'https://api.mistral.ai/v1').replace(/\/$/, '');
+  const temperature = options.temperature ?? cfg.temperature ?? 0.2;
+
+  const messages: any[] = [];
+  if (options.systemInstruction) {
+    messages.push({ role: 'system', content: options.systemInstruction });
+  }
+
+  let userContent: any = options.prompt;
+  if (typeof options.prompt === 'string') {
+    userContent = options.prompt;
+  } else if (Array.isArray(options.prompt)) {
+    userContent = options.prompt.map(p => typeof p === 'string' ? p : (p.text || '')).join('\n');
+  }
+  messages.push({ role: 'user', content: userContent });
+
+  const requestBody: any = {
+    model,
+    messages,
+    temperature,
+  };
+
+  if (options.responseJsonFormat) {
+    requestBody.response_format = { type: 'json_object' };
+  }
+
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Mistral API Error (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  const reply = data.choices?.[0]?.message?.content || '';
+  return { text: reply, modelUsed: `Mistral (${model})` };
+}
+
+async function executeOpenAICall(
+  cfg: UniversalLLMConfig,
+  options: {
+    prompt: string | any[];
+    systemInstruction?: string;
+    responseJsonFormat?: boolean;
+    temperature?: number;
+  },
+  overrideModel?: string
+): Promise<{ text: string; modelUsed: string }> {
+  const apiKey = cfg.apiKey || process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("API ключ OpenAI отсутствует в конфигурации сервера.");
+  }
+  const baseUrl = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+  const model = overrideModel || cfg.modelName || 'gpt-4o';
+  const temperature = options.temperature ?? cfg.temperature ?? 0.2;
+
+  const messages: any[] = [];
+  let sysInstruction = options.systemInstruction || '';
+  if (options.responseJsonFormat) {
+    const jsonRequirement = "IMPORTANT: You MUST respond strictly in valid JSON matching the schema. Do not output reasoning text or commentary outside the JSON.";
+    sysInstruction = sysInstruction ? `${sysInstruction}\n\n${jsonRequirement}` : jsonRequirement;
+  }
+  if (sysInstruction) {
+    messages.push({ role: 'system', content: sysInstruction });
+  }
+
+  let userContent: any = options.prompt;
+  if (typeof options.prompt === 'string') {
+    userContent = options.prompt;
+  } else if (Array.isArray(options.prompt)) {
+    userContent = options.prompt.map(p => typeof p === 'string' ? p : (p.text || '')).join('\n');
+  }
+  messages.push({ role: 'user', content: userContent });
+
+  const requestBody: any = {
+    model,
+    messages,
+    temperature,
+  };
+
+  const isReasonerModel = /o1|o3/i.test(model);
+  if (options.responseJsonFormat && !isReasonerModel) {
+    requestBody.response_format = { type: 'json_object' };
+  }
+
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`OpenAI API Error (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  const reply = data.choices?.[0]?.message?.content || '';
+  return { text: reply, modelUsed: `OpenAI (${model})` };
+}
+
 async function callUniversalLLM(options: {
   llmConfig?: UniversalLLMConfig;
   prompt: string | any[];
@@ -431,283 +693,257 @@ async function callUniversalLLM(options: {
   temperature?: number;
 }): Promise<{ text: string; modelUsed: string }> {
   const cfg = options.llmConfig || {};
-  const provider = (cfg.provider || 'gemini').toLowerCase();
-  const temperature = options.temperature ?? cfg.temperature ?? 0.2;
+  // Default provider is Gemini, with fallback to DeepInfra
+  const provider = (cfg.provider || process.env.DEFAULT_LLM_PROVIDER || 'gemini').toLowerCase();
 
-  // 1. MISTRAL AI PROVIDER
-  if (provider === 'mistral') {
-    const apiKey = cfg.apiKey || process.env.MISTRAL_API_KEY;
-    if (!apiKey) {
-      console.warn("[Universal LLM] Mistral API Key missing, falling back to Gemini.");
-    } else {
-      const model = cfg.modelName || 'mistral-large-latest';
-      const baseUrl = (cfg.baseUrl || 'https://api.mistral.ai/v1').replace(/\/$/, '');
-      const messages: any[] = [];
-      if (options.systemInstruction) {
-        messages.push({ role: 'system', content: options.systemInstruction });
-      }
+  // 1. PRIMARY: GEMINI (Default)
+  if (provider === 'gemini') {
+    try {
+      return await executeGeminiCall(cfg, options);
+    } catch (geminiErr: any) {
+      console.warn(`[Universal LLM] Gemini call failed (${geminiErr?.message}). Seamlessly executing fallback to DeepInfra (Llama-3.3-70B-Instruct)...`);
       
-      let userContent: any = options.prompt;
-      if (typeof options.prompt === 'string') {
-        userContent = options.prompt;
-      } else if (Array.isArray(options.prompt)) {
-        userContent = options.prompt.map(p => typeof p === 'string' ? p : (p.text || '')).join('\n');
+      // Fallback 1: DeepInfra
+      try {
+        const fallbackRes = await executeDeepInfraCall(cfg, options, 'meta-llama/Llama-3.3-70B-Instruct');
+        return { text: fallbackRes.text, modelUsed: `${fallbackRes.modelUsed} [Gemini Fallback]` };
+      } catch (deepinfraErr: any) {
+        console.warn(`[Universal LLM] DeepInfra fallback failed: ${deepinfraErr?.message}. Trying Mistral...`);
       }
 
-      messages.push({ role: 'user', content: userContent });
-
-      const requestBody: any = {
-        model,
-        messages,
-        temperature,
-      };
-
-      if (options.responseJsonFormat) {
-        requestBody.response_format = { type: 'json_object' };
+      // Fallback 2: Mistral
+      try {
+        const mistralRes = await executeMistralCall(cfg, options, 'mistral-large-latest');
+        return { text: mistralRes.text, modelUsed: `${mistralRes.modelUsed} [Gemini Fallback]` };
+      } catch (mistralErr: any) {
+        console.warn(`[Universal LLM] Mistral fallback failed: ${mistralErr?.message}`);
       }
 
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Mistral API Error (${res.status}): ${errText}`);
+      // Fallback 3: OpenAI
+      try {
+        const openaiRes = await executeOpenAICall(cfg, options, 'gpt-4o');
+        return { text: openaiRes.text, modelUsed: `${openaiRes.modelUsed} [Gemini Fallback]` };
+      } catch (openaiErr: any) {
+        console.warn(`[Universal LLM] OpenAI fallback failed: ${openaiErr?.message}`);
       }
 
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content || '';
-      return { text: reply, modelUsed: model };
+      throw geminiErr;
     }
   }
 
-  // 2. OPENAI / DEEPSEEK / DEEPINFRA / ZIPINFRA / OLLAMA / CUSTOM PROVIDER
-  if (['openai', 'deepseek', 'deepinfra', 'zipinfra', 'ollama', 'custom'].includes(provider)) {
-    const defaultBaseUrl = 
-      provider === 'openai' ? 'https://api.openai.com/v1' :
-      provider === 'deepseek' ? 'https://api.deepseek.com/v1' :
-      (provider === 'deepinfra' || provider === 'zipinfra') ? 'https://api.deepinfra.com/v1/openai' :
-      provider === 'ollama' ? 'http://localhost:11434/v1' :
-      'https://api.openai.com/v1';
-
-    const baseUrl = (cfg.baseUrl || defaultBaseUrl).replace(/\/$/, '');
-    const apiKey = cfg.apiKey || process.env.DEEPINFRA_API_KEY || process.env.ZIPINFRA_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || 'no-key';
-    const model = cfg.modelName || (
-      (provider === 'deepinfra' || provider === 'zipinfra') ? 'meta-llama/Llama-3.3-70B-Instruct' :
-      provider === 'deepseek' ? 'deepseek-chat' : 
-      provider === 'ollama' ? 'llama3' : 
-      'gpt-4o'
-    );
-
-    const messages: any[] = [];
-    let sysInstruction = options.systemInstruction || '';
-    if (options.responseJsonFormat) {
-      const jsonRequirement = "IMPORTANT: You MUST respond strictly in valid JSON matching the schema. Do not output reasoning text or commentary outside the JSON.";
-      sysInstruction = sysInstruction ? `${sysInstruction}\n\n${jsonRequirement}` : jsonRequirement;
-    }
-
-    if (sysInstruction) {
-      messages.push({ role: 'system', content: sysInstruction });
-    }
-
-    let userContent: any = options.prompt;
-    if (typeof options.prompt === 'string') {
-      userContent = options.prompt;
-    } else if (Array.isArray(options.prompt)) {
-      userContent = options.prompt.map(p => typeof p === 'string' ? p : (p.text || '')).join('\n');
-    }
-
-    messages.push({ role: 'user', content: userContent });
-
-    const requestBody: any = {
-      model,
-      messages,
-      temperature,
-    };
-
-    const isReasonerModel = /reasoner|r1|o1|o3/i.test(model);
-
-    if (options.responseJsonFormat && !isReasonerModel) {
-      requestBody.response_format = { type: 'json_object' };
-    }
-
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (apiKey && apiKey !== 'no-key') {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    }
-
-    let res = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!res.ok && requestBody.response_format) {
-      // Retry without response_format if provider returns error on json_object
-      delete requestBody.response_format;
-      res = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody),
-      });
-    }
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
-    }
-
-    const data = await res.json();
-    let reply = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || data.choices?.[0]?.text || '';
-
-    // Strip reasoning <think> blocks if present
-    if (reply && typeof reply === 'string') {
-      reply = reply.replace(/<\s*(think|thought)\s*>[\s\S]*?<\s*\/\s*(think|thought)\s*>/gi, "").trim();
-    }
-
-    return { text: reply, modelUsed: model };
-  }
-
-  // 3. ANTHROPIC CLAUDE PROVIDER
-  if (provider === 'anthropic') {
-    const apiKey = cfg.apiKey || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      console.warn("[Universal LLM] Anthropic API Key missing, falling back to Gemini.");
-    } else {
-      const model = cfg.modelName || 'claude-3-5-sonnet-20241022';
-      let userContent = typeof options.prompt === 'string' ? options.prompt : JSON.stringify(options.prompt);
-
-      const requestBody: any = {
-        model,
-        max_tokens: 4096,
-        temperature,
-        system: options.systemInstruction || undefined,
-        messages: [{ role: 'user', content: userContent }],
-      };
-
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Anthropic API Error (${res.status}): ${errText}`);
+  // 2. DEEPINFRA PROVIDER
+  if (provider === 'deepinfra' || provider === 'zipinfra') {
+    try {
+      return await executeDeepInfraCall(cfg, options);
+    } catch (deepinfraErr: any) {
+      console.warn(`[Universal LLM] DeepInfra call failed (${deepinfraErr?.message}). Seamlessly executing fallback to Gemini...`);
+      try {
+        const geminiRes = await executeGeminiCall(cfg, options, 'gemini-2.5-flash');
+        return { text: geminiRes.text, modelUsed: `${geminiRes.modelUsed} [DeepInfra Fallback]` };
+      } catch (geminiErr: any) {
+        console.warn(`[Universal LLM] Gemini fallback failed: ${geminiErr?.message}`);
       }
-
-      const data = await res.json();
-      const reply = data.content?.[0]?.text || '';
-      return { text: reply, modelUsed: model };
+      throw deepinfraErr;
     }
   }
 
-  // 4. DEFAULT: GOOGLE GEMINI
-  const geminiKey = cfg.apiKey || process.env.GEMINI_API_KEY;
-  if (!geminiKey) {
-    throw new Error("GEMINI_API_KEY отсутствует в секретах сервера.");
+  // 3. MISTRAL PROVIDER
+  if (provider === 'mistral') {
+    try {
+      return await executeMistralCall(cfg, options);
+    } catch (mistralErr: any) {
+      console.warn(`[Universal LLM] Mistral call failed (${mistralErr?.message}). Seamlessly executing fallback to Gemini / DeepInfra...`);
+      try {
+        const geminiRes = await executeGeminiCall(cfg, options, 'gemini-2.5-flash');
+        return { text: geminiRes.text, modelUsed: `${geminiRes.modelUsed} [Mistral Fallback]` };
+      } catch {
+        const deepinfraRes = await executeDeepInfraCall(cfg, options, 'meta-llama/Llama-3.3-70B-Instruct');
+        return { text: deepinfraRes.text, modelUsed: `${deepinfraRes.modelUsed} [Mistral Fallback]` };
+      }
+    }
   }
 
-  const ai = new GoogleGenAI({
-    apiKey: geminiKey,
-    httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-  });
-
-  const model = cfg.modelName || "gemini-2.5-flash";
-  let contents: any = options.prompt;
-
-  if (options.imageParts && options.imageParts.length > 0) {
-    contents = [
-      ...options.imageParts,
-      ...(typeof options.prompt === 'string' ? [{ text: options.prompt }] : options.prompt)
-    ];
+  // 4. OPENAI PROVIDER
+  if (provider === 'openai') {
+    try {
+      return await executeOpenAICall(cfg, options);
+    } catch (openaiErr: any) {
+      console.warn(`[Universal LLM] OpenAI call failed (${openaiErr?.message}). Seamlessly executing fallback to Gemini / DeepInfra...`);
+      try {
+        const geminiRes = await executeGeminiCall(cfg, options, 'gemini-2.5-flash');
+        return { text: geminiRes.text, modelUsed: `${geminiRes.modelUsed} [OpenAI Fallback]` };
+      } catch {
+        const deepinfraRes = await executeDeepInfraCall(cfg, options, 'meta-llama/Llama-3.3-70B-Instruct');
+        return { text: deepinfraRes.text, modelUsed: `${deepinfraRes.modelUsed} [OpenAI Fallback]` };
+      }
+    }
   }
 
-  const config: any = {
-    temperature,
-  };
-
-  if (options.systemInstruction) {
-    config.systemInstruction = options.systemInstruction;
-  }
-
-  if (options.responseJsonFormat) {
-    config.responseMimeType = "application/json";
-  }
-
-  const response = await generateContentWithRetry(ai, {
-    model,
-    fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
-    contents,
-    config,
-  });
-
-  return { text: response.text || "", modelUsed: model };
+  // Final fallback to Gemini
+  return await executeGeminiCall(cfg, options);
 }
 
-// Mistral OCR Document Parser Helper
+// Mistral OCR Document Parser with Cascading Fallback to DeepInfra Vision / Gemini Vision
 async function runMistralOcr(options: {
   documentBase64?: string;
   documentUrl?: string;
   mimeType?: string;
   apiKey?: string;
 }): Promise<{ markdownText: string; pagesCount: number; pages?: any[]; modelUsed: string }> {
-  const apiKey = options.apiKey || process.env.MISTRAL_API_KEY;
-  if (!apiKey) {
-    throw new Error("Ключ Mistral API отсутствует. Задайте его в настройках ИИ или переменной MISTRAL_API_KEY.");
+  const mistralApiKey = options.apiKey || process.env.MISTRAL_API_KEY;
+
+  // 1. PRIMARY: Try Mistral OCR API (mistral-ocr-latest)
+  if (mistralApiKey) {
+    try {
+      let docPayload: any;
+      if (options.documentUrl) {
+        docPayload = { type: "document_url", document_url: options.documentUrl };
+      } else if (options.documentBase64) {
+        const rawData = options.documentBase64.replace(/^data:[^;]+;base64,/, "");
+        const mime = options.mimeType || "application/pdf";
+        docPayload = {
+          type: mime.includes("pdf") ? "document_url" : "image_url",
+          [mime.includes("pdf") ? "document_url" : "image_url"]: `data:${mime};base64,${rawData}`
+        };
+      }
+
+      if (docPayload) {
+        const res = await fetch("https://api.mistral.ai/v1/ocr", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${mistralApiKey}`
+          },
+          body: JSON.stringify({
+            model: "mistral-ocr-latest",
+            document: docPayload,
+            include_image_base64: false
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const pages = data.pages || [];
+          const markdownText = pages.map((p: any, idx: number) => `### Страница ${idx + 1}\n\n${p.markdown || ''}`).join("\n\n---\n\n");
+
+          return {
+            markdownText: markdownText || data.text || "Текст извлечен успешно.",
+            pagesCount: pages.length || 1,
+            pages: pages.map((p: any) => ({ index: p.index, markdown: p.markdown, images: p.images })),
+            modelUsed: "Mistral OCR (mistral-ocr-latest)"
+          };
+        } else {
+          const errText = await res.text();
+          console.warn(`[OCR] Mistral OCR API responded with status ${res.status}: ${errText}. Initiating OCR fallback to DeepInfra / Gemini...`);
+        }
+      }
+    } catch (mistralOcrErr: any) {
+      console.warn(`[OCR] Mistral OCR request failed (${mistralOcrErr?.message}). Initiating OCR fallback to DeepInfra / Gemini...`);
+    }
   }
 
-  let docPayload: any;
-  if (options.documentUrl) {
-    docPayload = { type: "document_url", document_url: options.documentUrl };
-  } else if (options.documentBase64) {
-    const rawData = options.documentBase64.replace(/^data:[^;]+;base64,/, "");
-    const mime = options.mimeType || "application/pdf";
-    docPayload = {
-      type: mime.includes("pdf") ? "document_url" : "image_url",
-      [mime.includes("pdf") ? "document_url" : "image_url"]: `data:${mime};base64,${rawData}`
-    };
-  } else {
-    throw new Error("Не передано содержимое документа или изображение для Mistral OCR.");
+  // 2. FALLBACK 1: DeepInfra Vision / Multimodal OCR
+  const deepinfraKey = process.env.DEEPINFRA_API_KEY || process.env.ZIPINFRA_API_KEY;
+  if (deepinfraKey && options.documentBase64) {
+    try {
+      const rawData = options.documentBase64.replace(/^data:[^;]+;base64,/, "");
+      const mime = options.mimeType || "image/png";
+      const deepinfraBaseUrl = (process.env.DEFAULT_LLM_BASE_URL || 'https://api.deepinfra.com/v1/openai').replace(/\/$/, '');
+
+      const visionRequestBody = {
+        model: "meta-llama/Llama-3.2-11B-Vision-Instruct",
+        messages: [
+          {
+            role: "system",
+            content: "Ты — высокоточный OCR-аналитик нормативной и тендерной документации. Твоя задача: детально и без пропусков распознать весь текст, пункты, параграфы, заголовки и таблицы из переданного изображения/документа. Выведи результат строго в чистом Markdown-формате с таблицами."
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Распознай весь текст и таблицы документа в формате Markdown:" },
+              { type: "image_url", image_url: { url: `data:${mime};base64,${rawData}` } }
+            ]
+          }
+        ],
+        temperature: 0.1
+      };
+
+      const visionRes = await fetch(`${deepinfraBaseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${deepinfraKey}`
+        },
+        body: JSON.stringify(visionRequestBody)
+      });
+
+      if (visionRes.ok) {
+        const visionData = await visionRes.json();
+        const extractedText = visionData.choices?.[0]?.message?.content || "";
+        if (extractedText && extractedText.trim().length > 10) {
+          return {
+            markdownText: extractedText.trim(),
+            pagesCount: 1,
+            pages: [{ index: 1, markdown: extractedText.trim() }],
+            modelUsed: "DeepInfra Vision OCR (Llama-3.2-11B-Vision) [Mistral Fallback]"
+          };
+        }
+      } else {
+        const visionErrText = await visionRes.text();
+        console.warn(`[OCR] DeepInfra Vision fallback responded with ${visionRes.status}: ${visionErrText}`);
+      }
+    } catch (deepinfraVisionErr: any) {
+      console.warn(`[OCR] DeepInfra Vision fallback error:`, deepinfraVisionErr?.message);
+    }
   }
 
-  const res = await fetch("https://api.mistral.ai/v1/ocr", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: "mistral-ocr-latest",
-      document: docPayload,
-      include_image_base64: false
-    })
-  });
+  // 3. FALLBACK 2: Gemini Multimodal Vision OCR
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey && options.documentBase64) {
+    try {
+      const rawData = options.documentBase64.replace(/^data:[^;]+;base64,/, "");
+      const mime = options.mimeType || (options.documentBase64.includes("pdf") ? "application/pdf" : "image/png");
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Mistral OCR API Error (${res.status}): ${errText}`);
+      const ai = new GoogleGenAI({
+        apiKey: geminiKey,
+        httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+      });
+
+      const response = await generateContentWithRetry(ai, {
+        model: "gemini-2.5-flash",
+        fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
+        contents: [
+          {
+            inlineData: {
+              mimeType: mime,
+              data: rawData
+            }
+          },
+          {
+            text: "Внимательно распознай и извлеки весь текст, пункты, параграфы и таблицы из этого документа/скана. Сохрани все цифры, штрафы, сроки и условия. Выведи результат в структурированном виде в формате Markdown."
+          }
+        ],
+        config: {
+          temperature: 0.1,
+          systemInstruction: "Ты — высокоточный OCR модуль распознавания юридических и закупочных документов (223-ФЗ, 44-ФЗ, ГК РФ). Восстанови структуру и текст с максимальной точностью."
+        }
+      });
+
+      const text = response.text || "";
+      if (text.trim()) {
+        return {
+          markdownText: text.trim(),
+          pagesCount: 1,
+          pages: [{ index: 1, markdown: text.trim() }],
+          modelUsed: "Gemini Vision OCR (gemini-2.5-flash) [Mistral Fallback]"
+        };
+      }
+    } catch (geminiVisionErr: any) {
+      console.warn(`[OCR] Gemini Vision fallback error:`, geminiVisionErr?.message);
+    }
   }
 
-  const data = await res.json();
-  const pages = data.pages || [];
-  const markdownText = pages.map((p: any, idx: number) => `### Страница ${idx + 1}\n\n${p.markdown || ''}`).join("\n\n---\n\n");
-
-  return {
-    markdownText: markdownText || data.text || "Текст не удалось извлечь.",
-    pagesCount: pages.length || 1,
-    pages: pages.map((p: any) => ({ index: p.index, markdown: p.markdown, images: p.images })),
-    modelUsed: "mistral-ocr-latest"
-  };
+  throw new Error("Не удалось выполнить OCR распознавание: сервисы Mistral OCR, DeepInfra Vision и Gemini Vision временно недоступны.");
 }
 
 // Health endpoint
@@ -715,106 +951,237 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Server LLM Configuration Status Endpoint (Application-level)
+app.get(["/api/llm/server-status", "/api/llm/config"], (req, res) => {
+  const deepinfraKey = process.env.DEEPINFRA_API_KEY || process.env.ZIPINFRA_API_KEY;
+  const mistralKey = process.env.MISTRAL_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  const defaultProvider = process.env.DEFAULT_LLM_PROVIDER || 'gemini';
+  const defaultModel = process.env.DEFAULT_LLM_MODEL || 'gemini-2.5-flash';
+
+  res.json({
+    success: true,
+    defaultProvider,
+    defaultModel,
+    defaultBaseUrl: process.env.DEFAULT_LLM_BASE_URL || 'https://api.deepinfra.com/v1/openai',
+    hasGemini: Boolean(geminiKey),
+    hasDeepinfra: Boolean(deepinfraKey),
+    hasMistral: Boolean(mistralKey),
+    hasMistralOcr: Boolean(mistralKey),
+    hasOpenai: Boolean(openaiKey),
+    hasDeepseek: Boolean(deepseekKey),
+    hasAnthropic: Boolean(anthropicKey),
+    serverConfigured: true,
+    routingScheme: {
+      defaultLLM: "Google Gemini 2.5 Flash",
+      llmFallback: "DeepInfra (Llama 3.3 70B Instruct / DeepSeek)",
+      defaultOCR: "Mistral OCR (mistral-ocr-latest)",
+      ocrFallback: "DeepInfra Vision (Llama-3.2-11B-Vision) & Gemini Vision"
+    },
+    note: "По умолчанию: Gemini с авто-фоллбэком на DeepInfra; OCR через Mistral с авто-фоллбэком на DeepInfra."
+  });
+});
+
 // Helper to fetch live models directly from provider API
 async function fetchProviderModels(cfg: UniversalLLMConfig): Promise<Array<{ id: string; name: string; desc?: string }>> {
-  const provider = (cfg.provider || 'gemini').toLowerCase();
+  const provider = (cfg.provider || 'deepinfra').toLowerCase();
 
-  // 1. MISTRAL
+  // 1. DEEPINFRA / ZIPINFRA
+  if (provider === 'deepinfra' || provider === 'zipinfra') {
+    const apiKey = cfg.apiKey || process.env.DEEPINFRA_API_KEY || process.env.ZIPINFRA_API_KEY;
+    const baseUrl = (cfg.baseUrl || process.env.DEFAULT_LLM_BASE_URL || 'https://api.deepinfra.com/v1/openai').replace(/\/$/, '');
+
+    const curatedDeepInfraModels = [
+      { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct (Top Speed & Quality)', desc: 'Флагманская открытая модель Meta с контекстом 128k, идеальна для ТЗ' },
+      { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek R1 (High Reasoning / CoT)', desc: 'Мощная модель с пошаговыми логическими рассуждениями для аудита рисков' },
+      { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3 (Fast Chat & Analysis)', desc: 'Быстрая многозадачная архитектура 671B параметров MoE' },
+      { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B Instruct', desc: 'Специализирована на структурированных данных, JSON и SQL' },
+      { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen 2.5 72B Instruct', desc: 'Универсальная модель с глубоким пониманием русского языка' },
+      { id: 'mistralai/Mistral-Small-24B-Instruct-2501', name: 'Mistral Small 24B (2501)', desc: 'Компактная и сверхбыстрая модель Mistral AI' },
+      { id: 'mistralai/Mixtral-8x22B-Instruct-v0.1', name: 'Mixtral 8x22B MoE', desc: 'Высокопроизводительная экспертная сеть MoE' },
+      { id: 'microsoft/WizardLM-2-8x22B', name: 'WizardLM-2 8x22B', desc: 'Сложный анализ комплексных документов и договоров' }
+    ];
+
+    if (!apiKey) {
+      return curatedDeepInfraModels;
+    }
+
+    try {
+      const res = await fetch(`${baseUrl}/models`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.data || data.models || [];
+        if (Array.isArray(list) && list.length > 0) {
+          return list.map((m: any) => ({
+            id: m.id || m.name,
+            name: m.id || m.name,
+            desc: m.owned_by ? `Провайдер: ${m.owned_by}` : (m.context_length ? `Контекст: ${m.context_length}` : undefined)
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn("DeepInfra live models fetch failed, using curated list:", e);
+    }
+    return curatedDeepInfraModels;
+  }
+
+  // 2. MISTRAL
   if (provider === 'mistral') {
     const apiKey = cfg.apiKey || process.env.MISTRAL_API_KEY;
-    if (!apiKey) throw new Error("API ключ Mistral не указан в настройках.");
-    const baseUrl = (cfg.baseUrl || 'https://api.mistral.ai/v1').replace(/\/$/, '');
-    const res = await fetch(`${baseUrl}/models`, {
-      headers: { 'Authorization': `Bearer ${apiKey}` }
-    });
-    if (!res.ok) throw new Error(`Mistral API (${res.status}): ${await res.text()}`);
-    const data = await res.json();
-    const list = data.data || data.models || [];
-    return list.map((m: any) => ({
-      id: m.id,
-      name: m.id,
-      desc: m.description || (m.owned_by ? `Владелец: ${m.owned_by}` : undefined)
-    }));
-  }
+    const curatedMistral = [
+      { id: 'mistral-large-latest', name: 'Mistral Large Latest', desc: 'Флагманская модель Mistral AI для комплексных юридических задач' },
+      { id: 'mistral-medium-latest', name: 'Mistral Medium Latest', desc: 'Сбалансированная модель для быстрой обработки' },
+      { id: 'mistral-small-latest', name: 'Mistral Small Latest', desc: 'Высокая скорость и низкая задержка' },
+      { id: 'codestral-latest', name: 'Codestral Latest', desc: 'Для работы со структурированными схемами и SQL' }
+    ];
+    if (!apiKey) return curatedMistral;
 
-  // 2. ANTHROPIC
-  if (provider === 'anthropic') {
-    const apiKey = cfg.apiKey || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error("API ключ Anthropic не указан в настройках.");
-    const res = await fetch('https://api.anthropic.com/v1/models', {
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      }
-    });
-    if (!res.ok) throw new Error(`Anthropic API (${res.status}): ${await res.text()}`);
-    const data = await res.json();
-    const list = data.data || [];
-    return list.map((m: any) => ({
-      id: m.id,
-      name: m.display_name || m.id,
-      desc: m.type ? `Тип: ${m.type}` : undefined
-    }));
-  }
-
-  // 3. GEMINI
-  if (provider === 'gemini') {
-    const apiKey = cfg.apiKey || process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("API ключ Gemini не указан в настройках.");
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-    if (!res.ok) throw new Error(`Gemini API (${res.status}): ${await res.text()}`);
-    const data = await res.json();
-    const list = data.models || [];
-    return list
-      .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-      .map((m: any) => {
-        const cleanId = m.name?.replace(/^models\//, '') || m.name;
-        return {
-          id: cleanId,
-          name: m.displayName || cleanId,
-          desc: m.description || `Контекст: ${m.inputTokenLimit || 'н/д'}`
-        };
+    try {
+      const baseUrl = (cfg.baseUrl || 'https://api.mistral.ai/v1').replace(/\/$/, '');
+      const res = await fetch(`${baseUrl}/models`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` }
       });
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.data || data.models || [];
+        if (Array.isArray(list) && list.length > 0) {
+          return list.map((m: any) => ({
+            id: m.id,
+            name: m.id,
+            desc: m.description || (m.owned_by ? `Владелец: ${m.owned_by}` : undefined)
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn("Mistral live models fetch failed, using curated list:", e);
+    }
+    return curatedMistral;
   }
 
-  // 4. OPENAI / DEEPSEEK / DEEPINFRA / ZIPINFRA / OLLAMA / CUSTOM
+  // 3. ANTHROPIC
+  if (provider === 'anthropic') {
+    const curatedAnthropic = [
+      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet (Latest)', desc: 'Превосходное качество анализа нормативной документации и ТЗ' },
+      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', desc: 'Сверхбыстрый аудит и генерация резюме' },
+      { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', desc: 'Максимальная глубина рассуждений' }
+    ];
+    const apiKey = cfg.apiKey || process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return curatedAnthropic;
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01'
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.data || [];
+        if (Array.isArray(list) && list.length > 0) {
+          return list.map((m: any) => ({
+            id: m.id,
+            name: m.display_name || m.id,
+            desc: m.type ? `Тип: ${m.type}` : undefined
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn("Anthropic live models fetch failed, using curated list:", e);
+    }
+    return curatedAnthropic;
+  }
+
+  // 4. GEMINI
+  if (provider === 'gemini') {
+    const curatedGemini = [
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Молниеносный мультимодальный аудит с поддержкой Google Search' },
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Углубленный юридический анализ и режим High Thinking' },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Экономичный режим с большим окном контекста' }
+    ];
+    const apiKey = cfg.apiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) return curatedGemini;
+
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.models || [];
+        if (Array.isArray(list) && list.length > 0) {
+          return list
+            .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+            .map((m: any) => {
+              const cleanId = m.name?.replace(/^models\//, '') || m.name;
+              return {
+                id: cleanId,
+                name: m.displayName || cleanId,
+                desc: m.description || `Контекст: ${m.inputTokenLimit || 'н/д'}`
+              };
+            });
+        }
+      }
+    } catch (e) {
+      console.warn("Gemini live models fetch failed, using curated list:", e);
+    }
+    return curatedGemini;
+  }
+
+  // 5. OPENAI / DEEPSEEK / OLLAMA / CUSTOM
   const defaultBaseUrl = 
     provider === 'openai' ? 'https://api.openai.com/v1' :
     provider === 'deepseek' ? 'https://api.deepseek.com/v1' :
-    (provider === 'deepinfra' || provider === 'zipinfra') ? 'https://api.deepinfra.com/v1/openai' :
     provider === 'ollama' ? 'http://localhost:11434/v1' :
     'https://api.openai.com/v1';
 
   const baseUrl = (cfg.baseUrl || defaultBaseUrl).replace(/\/$/, '');
-  const apiKey = cfg.apiKey || process.env.DEEPINFRA_API_KEY || process.env.ZIPINFRA_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || '';
+  const apiKey = cfg.apiKey || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || '';
 
   const headers: Record<string, string> = {};
   if (apiKey && apiKey !== 'no-key') {
     headers['Authorization'] = `Bearer ${apiKey}`;
   }
 
-  let res = await fetch(`${baseUrl}/models`, { headers });
-  
-  if (!res.ok && provider === 'ollama') {
-    const ollamaNativeUrl = (cfg.baseUrl || 'http://localhost:11434').replace(/\/v1\/?$/, '').replace(/\/$/, '');
-    res = await fetch(`${ollamaNativeUrl}/api/tags`);
+  try {
+    let res = await fetch(`${baseUrl}/models`, { headers });
+    
+    if (!res.ok && provider === 'ollama') {
+      const ollamaNativeUrl = (cfg.baseUrl || 'http://localhost:11434').replace(/\/v1\/?$/, '').replace(/\/$/, '');
+      res = await fetch(`${ollamaNativeUrl}/api/tags`);
+    }
+
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = data.data || data.models || data.models_list || [];
+      return rawList.map((m: any) => {
+        const modelId = typeof m === 'string' ? m : (m.id || m.name || m.model);
+        return {
+          id: modelId,
+          name: m.displayName || m.name || modelId,
+          desc: m.owned_by ? `Провайдер: ${m.owned_by}` : (m.context_length ? `Контекст: ${m.context_length}` : undefined)
+        };
+      });
+    }
+  } catch (e) {
+    console.warn(`${provider} live models fetch failed:`, e);
   }
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Провайдер ${provider.toUpperCase()} (${res.status}): ${errText}`);
+  if (provider === 'deepseek') {
+    return [
+      { id: 'deepseek-chat', name: 'DeepSeek V3 (deepseek-chat)', desc: 'Официальный API DeepSeek для быстрого структурированного анализа' },
+      { id: 'deepseek-reasoner', name: 'DeepSeek R1 (deepseek-reasoner)', desc: 'Глубокий CoT анализ условий контракта и рисков' }
+    ];
   }
 
-  const data = await res.json();
-  const rawList = data.data || data.models || data.models_list || [];
-  return rawList.map((m: any) => {
-    const modelId = typeof m === 'string' ? m : (m.id || m.name || m.model);
-    return {
-      id: modelId,
-      name: m.displayName || m.name || modelId,
-      desc: m.owned_by ? `Провайдер: ${m.owned_by}` : (m.context_length ? `Контекст: ${m.context_length}` : undefined)
-    };
-  });
+  return [
+    { id: 'gpt-4o', name: 'GPT-4o (Omni)', desc: 'Флагманская мультимодальная модель OpenAI' },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', desc: 'Быстрая и экономичная модель' }
+  ];
 }
 
 // Fetch Live Models Endpoint
@@ -838,7 +1205,7 @@ app.post("/api/llm/models", async (req, res) => {
 app.post("/api/llm/test", async (req, res) => {
   try {
     const { llmConfig } = req.body;
-    const testPrompt = "Подтверди, что ты готов анализировать документацию закупок 223-ФЗ и 44-ФЗ. Ответь ровно в одном коротком предложении.";
+    const testPrompt = "Подтверди готовность анализировать документацию закупок по 223-ФЗ и 44-ФЗ. Ответь ровно в одном предложении.";
     const result = await callUniversalLLM({
       llmConfig,
       prompt: testPrompt,
@@ -1444,43 +1811,46 @@ function setAnalysisInCache(cacheKey: string, data: any) {
 /**
  * Intelligent section extractor that ensures critical penal, delivery,
  * acceptance, and specification clauses are preserved for AI analysis.
+ * Supports up to 180,000 characters to leverage large context windows.
  */
-function extractHighPriorityDocumentSections(text: string, maxChars: number = 24000): string {
+function extractHighPriorityDocumentSections(text: string, maxChars: number = 180000): string {
   if (!text || text.length <= maxChars) return text || "";
 
   const HIGH_PRIORITY_KEYWORDS = [
     /штраф/i, /пени/i, /неустойк/i, /ответственност/i, /3\s*%/i, /1\/300/i, /1042/i, /783/i,
     /третьих лиц/i, /3-х лиц/i, /расторжен/i, /односторонн/i, /отказ от исполнен/i,
-    /срок поставк/i, /график/i, /по заявк/i, /адрес/i, /разгрузк/i, /подъем на этаж/i,
-    /приемк/i, /упд/i, /акт/i, /мотивированн/i, /экспертиз/i,
-    /1875/i, /616/i, /617/i, /национальн/i, /реестр/i, /окпд/i, /ктру/i,
-    /спецификаци/i, /наименовани/i, /габарит/i, /характеристик/i,
-    /44-фз/i, /223-фз/i, /еруз/i, /еис/i, /электронн/i, /7 рабочих/i, /гаранти/i
+    /срок поставк/i, /период поставк/i, /график/i, /по заявк/i, /адрес/i, /место поставк/i, /место доставки/i,
+    /склад/i, /разгрузк/i, /подъем на этаж/i, /грузополучател/i, /дата и время/i, /окончани/i, /подач/i,
+    /приемк/i, /упд/i, /акт/i, /мотивированн/i, /экспертиз/i, /оплат/i, /расчет/i,
+    /1875/i, /616/i, /617/i, /878/i, /национальн/i, /реестр/i, /окпд/i, /ктру/i, /гисп/i,
+    /спецификаци/i, /наименовани/i, /габарит/i, /характеристик/i, /параметр/i, /гост/i,
+    /44-фз/i, /223-фз/i, /еруз/i, /еис/i, /электронн/i, /7 рабочих/i, /гаранти/i, /обеспечени/i,
+    /инн/i, /кпп/i, /огрн/i, /заказчик/i, /покупател/i
   ];
 
-  // Keep opening (parties, subject, header)
-  const headerSlice = text.slice(0, 3500);
+  // Keep generous opening (parties, subject, header, dates, NMCC)
+  const headerSlice = text.slice(0, 25000);
   
-  // Search paragraphs for priority keywords (split on single or double newline)
+  // Search paragraphs for priority keywords
   const paragraphs = text.split(/(?:\r?\n)+/);
   const prioritizedSnippets: string[] = [];
   let currentChars = headerSlice.length;
 
   for (const para of paragraphs) {
-    if (currentChars >= maxChars - 3000) break;
+    if (currentChars >= maxChars - 15000) break;
     const trimmed = para.trim();
-    if (trimmed.length < 20) continue;
+    if (trimmed.length < 15) continue;
     const isPriority = HIGH_PRIORITY_KEYWORDS.some(regex => regex.test(trimmed));
-    if (isPriority && !headerSlice.includes(trimmed.slice(0, 80))) {
+    if (isPriority && !headerSlice.includes(trimmed.slice(0, 100))) {
       prioritizedSnippets.push(trimmed);
       currentChars += trimmed.length + 4;
     }
   }
 
-  // Keep tail (signatures, annexes, bank details)
-  const tailSlice = text.slice(-2500);
+  // Keep generous tail (signatures, annexes, bank details, delivery addresses)
+  const tailSlice = text.slice(-15000);
 
-  return `${headerSlice}\n\n[...Фрагменты текста сфокусированы на риск-секторах и спецификации...]\n\n${prioritizedSnippets.join("\n\n")}\n\n[...Заключительные положения и реквизиты...]\n\n${tailSlice}`;
+  return `${headerSlice}\n\n[...Ключевые разделы документа: Сроки, Адреса, Ответственность, Спецификация...]\n\n${prioritizedSnippets.join("\n\n")}\n\n[...Заключительные положения, адреса и реквизиты...]\n\n${tailSlice}`;
 }
 
 // Main Procurement Analyzer API
@@ -1507,138 +1877,140 @@ app.post("/api/analyze", async (req, res) => {
       }
     }
 
-    const systemInstruction = `Ты — эксперт тендерного отдела и юрист по закупкам в РФ (специализация: 44-ФЗ, 223-ФЗ и коммерческие торги).
-Твоя задача — тщательно проанализировать загруженные документы закупки (Проект договора, Документацию закупки, Техническое задание) согласно внутреннему регламенту компании и требованиям законодательства РФ.
+    const systemInstruction = `Ты — ведущий эксперт тендерного отдела, юрист высшей квалификации и логист по закупкам в РФ (специализация: 44-ФЗ, 223-ФЗ и коммерческие торги).
+Твоя задача — провести глубокий, безошибочный анализ загруженных документов закупки (Проект договора/контракта, Документация/Извещение, Техническое задание/Спецификация) и извлечь ВСЕ фактические данные.
 
-ОПРЕДЕЛЕНИЕ СПЕЦИФИКИ ЗАКОНОДАТЕЛЬСТВА:
-- Если тип процедуры относится к 44-ФЗ (44_FZ_AUCTION, 44_FZ_QUOTATION, 44_FZ_TENDER) или в документах упомянут ФЗ № 44:
-  1. **Расчет неустоек по Постановлению Правительства РФ № 1042:** Фиксированные штрафы за ненадлежащее исполнение и пени (1/300 ключевой ставки ЦБ РФ за каждый день просрочки от стоимости неисполненных обязательств).
-  2. **Законный механизм списания неустоек (ПП РФ № 783):** Указывай Участнику, что по 44-ФЗ начисленные штрафы и пени подлежат обязательному списанию Заказчиком, если их размер не превышает 5% от цены контракта (при исполнении контракта), либо при уплате 50% (если от 5% до 20%). Это ключевое отличие от 223-ФЗ!
-  3. **Контроль регламентных сроков по 44-ФЗ:**
-     - Срок оплаты Заказчиком: не более 7 рабочих дней с даты подписания электронного документа о приемке в ЕИС (ч. 13.1 ст. 34 ФЗ № 44).
-     - Срок подписания контракта победителем на ЭТП: не ранее чем через 10 дней с даты размещения итогового протокола (аукцион/конкурс) и не более 5 дней на размещение подписанного проекта контракта и обеспечения.
-     - Протокол разногласий: допускается только 1 раз в течение 5 дней с даты размещения проекта контракта.
-     - Сроки предоставления обеспечения исполнения контракта (независимая гарантия из реестра ЕИС или денежные средства) до подписания контракта.
-     - Сроки рассмотрения и приемки товара Заказчиком (не более 20 рабочих дней с оформлением мотивированного отказа в ЕИС).
-  4. **Национальный режим (ПП РФ № 616, ПП РФ № 617 и ПП РФ № 1875):**
-     - **ПП РФ № 616 (Запрет):** Проверяй наличие установленного запрета на закупку товаров иностранного происхождения. Требуется номер реестровой записи ГИСП/Минпромторг.
-     - **ПП РФ № 617 (Ограничение "Третий лишний"):** Проверяй правило отклонения заявок с иностранным товаром при наличии 2 и более заявок с российской продукцией из реестра.
-     - **ПП РФ № 1875 (Минимальная доля):** Проверяй выполнение норматива минимальной доли закупок товаров российского происхождения и подтверждение реестровыми номерами и баллами.
-  5. **ЕРУЗ ЕИС и Электронное актирование:** Проверяй требования аккредитации в ЕРУЗ, предоставления независимой гарантии из реестра ЕИС и приемки через личный кабинет ЕИС (электронный УПД).
-  6. **Односторонний отказ по 44-ФЗ:** Оценивай риски размещения решения об одностороннем отказе в ЕИС и внесения в РНП на 2 года.
+ПРАВИЛА ИЗВЛЕЧЕНИЯ КЛЮЧЕВЫХ ДАННЫХ:
 
-- Если тип процедуры относится к 223-ФЗ (223_FZ_QUOTATION, 223_FZ_AUCTION, 223_FZ_TENDER) или коммерческим торгам:
-  1. **Штрафы и пени по 223-ФЗ НЕ СПИСЫВАЮТСЯ!** Начисленные штрафы/пени оплачиваются Поставщиком либо удерживаются из оплаты. Оценивай риски как максимальные!
-  2. **Анализ раздела "Ответственность сторон":**
-     - Выявляй условия о закупке у 3-х лиц за счет Поставщика при недопоставке/браке.
-     - Выявляй возмещение разницы в ценах при расторжении договора.
-     - Односторонний отказ Заказчика при просрочке более чем на 5 рабочих дней.
-     - Расторжение договора при просрочке свыше 10 календарных дней.
-     - Штраф 3% от стоимости товара за нарушения (упаковка, маркировка, качество, сроки, конфиденциальность).
-  3. **Поставка "по заявке Заказчика":** Проверяй условия письменного уведомления (например, за 5 рабочих дней).
-  4. **Первичные документы и приемка:** Поставка с требованием акта/УПД, подписи, печати и мотивированного отказа.
+1. ДАТЫ И СРОКИ (ОБЯЗАТЕЛЬНО ИЗВЛЕЧЬ ИЗ ТЕКСТА):
+   - "auctionDate" (в объекте summary): точная дата и время окончания подачи заявок / проведения аукциона (например: "28.08.2025 в 10:00 МСК" или "По извещению: 15.09.2025"). Обязательно найди дату в извещении или документации!
+   - "deliveryPeriod" (в объекте deliveryInfo): точный срок поставки/выполнения работ (например: "В течение 15 рабочих дней с даты заключения контракта, но не позднее 30.11.2025" или "С даты заключения контракта по 25.12.2025 г.").
+   - Сроки оплаты: по 44-ФЗ строго проверь срок (не более 7 рабочих дней с даты подписания электронного УПД в ЕИС по ч. 13.1 ст. 34 44-ФЗ).
+   - Сроки подписания контракта и направления протокола разногласий (5 дней на подписание, 1 протокол разногласий).
 
-ОБЩИЕ ПРАВИЛА ИЗВЛЕЧЕНИЯ ДАННЫХ:
-1. **Извлечение спецификации и параметров товаров (productList):**
-   - Извлеки список поставляемых товаров/оборудования/услуг из ТЗ или проекта договора.
-   - Для каждого товара извлеки: наименование, количество, габариты/размеры, структурированные параметры (parameters), код ОКПД2/КТРУ, статус требования по ПП РФ 1875 ("RUSSIAN_REQUIRED", "RESTRICTED", "NOT_APPLICABLE", "UNKNOWN") и примечания по реестровым номерам.
-2. **Извлечение Сроков Поставки и Адресов Объектов (deliveryInfo):**
-   - Детально выпиши сроки поставки (deliveryPeriod), порядок подачи заявок (deliveryScheduleNotice), адреса складов (deliveryAddresses), условия разгрузки и грузополучателя.
-   - Найди Все точные адреса складов и объектов поставки (deliveryAddresses), включая почтовые индексы, города, улицы, номера строений и складов.
-   - Извлеки условия разгрузки, пропусков и подъема на этаж (unloadingAndAccessConditions) и грузополучателя (consigneeDetails).
+2. АДРЕСА И ЛОГИСТИКА (ОБЯЗАТЕЛЬНО ИЗВЛЕЧЬ ИЗ ТЕКСТА):
+   - "deliveryAddresses" (в объекте deliveryInfo): массив ВСЕХ точных адресов поставки/складов из текста с почтовым индексом, регионом, городом, улицей, домом, строением, номером склада/помещения (например: ["141000, Московская обл., г. Мытищи, ул. Промышленная, д. 12, склад № 4", "190000, г. Санкт-Петербург, Невский пр-кт, д. 1"]). Если в тексте есть точный адрес — он ОБЯЗАТЕЛЬНО должен быть в массиве!
+   - "deliveryScheduleNotice": порядок и график поставки (по заявкам Заказчика, срок направления заявки).
+   - "unloadingAndAccessConditions": разгрузка силами поставщика, подъем на этаж, оформление пропусков, режим работы склада.
+   - "consigneeDetails": грузополучатель, контактное лицо, телефон.
+   - "customerInn" (в summary): ИНН заказчика (10 или 12 цифр).
 
-Сформируй полнейший, объективный, структурированный юридический и операционный отчет в строго JSON формате.
-Автоматически сгенерируй ГОТОВЫЕ ТЕКСТЫ ДОКУМЕНТОВ и писем (Запрос закрывающих документов, Требование мотивированного отказа, Запрос денег на ЭТП, Запрос в бухгалтерию, Карточка задачи в Юджайл, Шаблон ответа на претензию).`;
+3. ШТРАФЫ, ПЕНИ И РИСКИ ДОГОВОРА ("contractRisks"):
+   - Обязательно сформируй полный список рисков договора.
+   - Если закупка по 44-ФЗ:
+     1. Пени за просрочку исполнения: 1/300 ключевой ставки ЦБ РФ от цены контракта, уменьшенной на сумму исполненных обязательств.
+     2. Фиксированные штрафы по Постановлению Правительства РФ № 1042 за ненадлежащее исполнение обязательств (1000 руб., 5000 руб., 10000 руб., 100 000 руб. в зависимости от НМЦК).
+     3. Законное право и обязательность списания начисленных штрафов/пеней по Постановлению Правительства РФ № 783 (до 5% списывается 100%, от 5% до 20% — при уплате 50%).
+     4. Односторонний отказ Заказчика от исполнения контракта с размещением в ЕИС и риск включения в РНП на 2 года.
+     5. Электронное актирование в ЕИС и сроки приемки (до 20 рабочих дней, мотивированный отказ).
+     6. Обеспечение исполнения контракта и гарантийных обязательств (независимая гарантия из реестра ЕИС).
+   - Если закупка по 223-ФЗ:
+     1. Неустойки и штрафы НЕ списываются в силу закона (оценивай как CRITICAL).
+     2. Риск закупки у третьих лиц за счет Поставщика при просрочке/недопоставке.
+     3. Удержание штрафов из суммы оплаты.
+     4. Односторонний отказ при просрочке свыше 5-10 дней.
 
-    // Smart priority section extraction for high-signal AI analysis
-    const safeContract = extractHighPriorityDocumentSections(contractText || "", 26000) || "Не предоставлен";
-    const safeDoc = extractHighPriorityDocumentSections(documentationText || "", 26000) || "Не предоставлен";
-    const safeTz = extractHighPriorityDocumentSections(tzText || "", 26000) || "Не предоставлен";
+4. СПЕЦИФИКАЦИЯ И СПИСОК ТОВАРОВ ("productList"):
+   - Извлеки каждый товар из ТЗ или спецификации с наименованием, количеством, единицами измерения, габаритами, техническими параметрами, кодом ОКПД2/КТРУ и статусом требований по нацрежиму (ПП РФ 1875 / ПП РФ 616 / ПП РФ 617 / ПП РФ 878: "RUSSIAN_REQUIRED", "RESTRICTED", "NOT_APPLICABLE", "UNKNOWN").
+
+5. ШАБЛОНЫ ДОКУМЕНТОВ ("generatedTemplates"):
+   - Автоматически сгенерируй полные, готовые к отправке тексты документов с подстановкой реальных названий закупки и заказчика.`;
+
+    const safeContract = extractHighPriorityDocumentSections(contractText || "", 180000) || "Не предоставлен";
+    const safeDoc = extractHighPriorityDocumentSections(documentationText || "", 180000) || "Не предоставлен";
+    const safeTz = extractHighPriorityDocumentSections(tzText || "", 180000) || "Не предоставлен";
 
     const promptText = `
 Тип процедуры: ${procedureType || "Не указан"}
 Дополнительные примечания: ${additionalNotes || "Отсутствуют"}
 
---- ТЕКСТ ПРОЕКТА ДОГОВОРА ---
+--- ТЕКСТ ПРОЕКТА ДОГОВОРА / КОНТРАКТА ---
 ${safeContract}
 
---- ТЕКСТ ДОКУМЕНТАЦИИ ЗАКУПКИ ---
+--- ТЕКСТ ДОКУМЕНТАЦИИ / ИЗВЕЩЕНИЯ ЗАКУПКИ ---
 ${safeDoc}
 
---- ТЕКСТ ТЕХНИЧЕСКОГО ЗАДАНИЯ И ТАБЛИЦ ---
+--- ТЕКСТ ТЕХНИЧЕСКОГО ЗАДАНИЯ, СПЕЦИФИКАЦИЙ И ТАБЛИЦ ---
 ${safeTz}
 
-ОБЯЗАТЕЛЬНО ВЕРНИ ТАКОЙ JSON ОБЪЕКТ В СТРОГОМ СООТВЕТСТВИИ С СТРУКТУРОЙ (извлекая реальные факты из предоставленных выше документов):
+ВНИМАНИЕ: Извлеки РЕАЛЬНЫЕ даты, РЕАЛЬНЫЕ адреса, РЕАЛЬНЫЕ суммы, ИНН, РЕАЛЬНЫЕ штрафы и товары из текста выше!
+ОБЯЗАТЕЛЬНО ВЕРНИ СТРОГИЙ JSON ОБЪЕКТ ПО СЛЕДУЮЩЕЙ СХЕМЕ:
 {
   "summary": {
-    "procurementTitle": "реальное наименование закупки из документов",
-    "projectName": "название проекта или номер закупки",
-    "customerName": "реальный заказчик",
-    "procurementSum": "реальная сумма или НМЦК (например, 1 500 000,00 ₽)",
-    "auctionDate": "дата и время подачи/аукциона",
+    "procurementTitle": "Реальное наименование закупки из документов",
+    "projectName": "Номер закупки или название проекта",
+    "customerName": "Реальное наименование Заказчика",
+    "customerInn": "ИНН заказчика (например 7707083893)",
+    "procurementSum": "Реальная НМЦК / сумма договора (например 1 450 000,00 ₽)",
+    "auctionDate": "Реальная дата и время окончания подачи заявок / проведения аукциона (например 25.08.2025 в 10:00 МСК)",
     "overallRiskScore": 45,
     "riskLevel": "MEDIUM",
-    "keyTakeaway": "краткое резюме по рискам и срокам",
-    "is223FZ": true
+    "keyTakeaway": "Развернутое юридическое резюме по рискам, срокам поставки и ответственности",
+    "is223FZ": false
   },
   "deliveryInfo": {
-    "deliveryPeriod": "точный срок поставки из текста",
-    "deliveryScheduleNotice": "порядок графиков и заявок",
-    "deliveryAddresses": ["точный адрес объекта/склада 1"],
-    "unloadingAndAccessConditions": "условия разгрузки и доступа",
-    "consigneeDetails": "грузополучатель",
-    "riskWarning": "риски по поставке"
+    "deliveryPeriod": "Точный срок поставки из договора/ТЗ (например: В течение 20 рабочих дней с даты заключения контракта)",
+    "deliveryScheduleNotice": "Порядок подачи заявок и уведомлений Заказчика",
+    "deliveryAddresses": [
+      "Точный адрес склада / места поставки 1 (с индексом, городом, улицей и домом)"
+    ],
+    "unloadingAndAccessConditions": "Условия разгрузки, подъем на этаж, пропускной режим, рабочие часы",
+    "consigneeDetails": "Грузополучатель, контакты и телефон",
+    "riskWarning": "Оценка логистических рисков"
   },
   "contractRisks": [
     {
       "id": "risk-1",
       "category": "PENALTIES",
       "clauseNumber": "п. 7.2",
-      "clauseQuote": "точная цитата пункта из договора",
-      "severity": "CRITICAL",
-      "title": "заголовок риска",
-      "explanation": "разъяснение опасности",
-      "recommendation": "как минимизировать риск"
+      "clauseQuote": "Точная цитата из текста договора о размере штрафа или пеней",
+      "severity": "HIGH",
+      "title": "Штрафы по ПП РФ № 1042 и пени 1/300 ставки ЦБ РФ",
+      "explanation": "Разъяснение риска и нормативное обоснование",
+      "recommendation": "Рекомендация поставщику (включая право списания по ПП РФ № 783)"
     }
   ],
   "submissionRulesCheck": {
-    "procedureType": "223_FZ_QUOTATION",
+    "procedureType": "${procedureType || '44_FZ_AUCTION'}",
     "requestInTableRequired": true,
-    "etpAccreditationNotice": "информация по ЭТП",
-    "requiredFilesStructure": ["файл 1", "файл 2"],
-    "formsRequirement": "требования к формам",
-    "pp1875Applies": false,
-    "pp1875Details": "детали ПП 1875",
-    "accountingInfoNeeded": true,
-    "accountingItems": ["сведения о бухучете"]
+    "etpAccreditationNotice": "Требования к регистрации в ЕРУЗ ЕИС / на ЭТП",
+    "requiredFilesStructure": [
+      "1. Заявка на участие с конкретными показателями товара",
+      "2. Документы подтверждения страны происхождения (реестровые номера ГИСП/РЭП при нацрежиме)"
+    ],
+    "formsRequirement": "Требования к оформлению документов и согласий",
+    "pp1875Applies": true,
+    "pp1875Details": "Требования нацрежима (ПП 1875 / ПП 616 / ПП 617 / ПП 878)",
+    "accountingInfoNeeded": false,
+    "accountingItems": ["Справка об отсутствии задолженности"]
   },
   "postAwardWorkflow": {
-    "deliveryNotifications": "уведомление заказчика",
-    "primaryDocFormatConfirmation": "форматы УПД/накладных",
-    "accompanyingDocs": ["паспорт качества", "сертификат"],
-    "acceptanceDocsStrategy": "стратегия приемки",
-    "motivatedRefusalGuide": "порядок при мотивированном отказе"
+    "deliveryNotifications": "Порядок уведомления Заказчика о готовности к отгрузке",
+    "primaryDocFormatConfirmation": "Электронный УПД в ЕИС / система ЭДО",
+    "accompanyingDocs": ["Электронный УПД", "Транспортная накладная", "Сертификат / паспорт качества"],
+    "acceptanceDocsStrategy": "Порядок и сроки приемки (до 20 рабочих дней в ЕИС)",
+    "motivatedRefusalGuide": "Действия при мотивированном отказе Заказчика"
   },
   "productList": [
     {
       "id": "prod-1",
-      "name": "реальное наименование товара 1 из ТЗ",
-      "quantity": "количество из документов",
-      "dimensions": "габариты",
-      "specification": "спецификация",
-      "parameters": [{"name": "параметр", "value": "значение"}],
-      "okpd2OrGvin": "код ОКПД2 / КТРУ",
-      "pp1875Status": "NOT_APPLICABLE",
-      "registryNumberNote": "запись в реестре"
+      "name": "Реальное наименование товара из ТЗ",
+      "quantity": "Количество и единицы (например: 10 шт.)",
+      "dimensions": "Габариты и размеры из ТЗ",
+      "specification": "Техническое описание из ТЗ",
+      "parameters": [{"name": "Параметр", "value": "Значение"}],
+      "okpd2OrGvin": "Код ОКПД2 / КТРУ",
+      "pp1875Status": "RUSSIAN_REQUIRED",
+      "registryNumberNote": "Требование номера записи реестра Минпромторга"
     }
   ],
   "generatedTemplates": {
-    "acceptanceDocsRequest": "шаблон запроса приемки",
-    "motivatedRefusalDemand": "шаблон мотивированного ответа",
-    "etpFundsRequest": "шаблон запроса средств ЭТП",
-    "accountingDataRequest": "шаблон запроса бухгалтерии",
-    "yougileTaskSummary": "задача для Yougile/Bitrix24",
-    "claimResponseTemplate": "ответ на претензию"
+    "acceptanceDocsRequest": "Полный текст уведомления о поставке и подписании электронного УПД",
+    "motivatedRefusalDemand": "Полный текст требования мотивированного отказа при претензиях",
+    "etpFundsRequest": "Заявление о возврате/разблокировании обеспечения",
+    "accountingDataRequest": "Служебная записка в бухгалтерию",
+    "yougileTaskSummary": "Карточка задачи для CRM/Yougile",
+    "claimResponseTemplate": "Шаблон ответа на претензию заказчика"
   }
 }
 `;
@@ -1670,22 +2042,22 @@ ${safeTz}
 
 /**
  * Intelligent Dynamic Document Analyzer for fallback / offline parsing.
- * Analyzes the ACTUAL uploaded texts (Contract, Specifications, Notice) via regex & heuristic extraction.
+ * Thoroughly analyzes uploaded texts via multi-pass regex & semantic extraction.
  */
 function generateDynamicDocumentAnalysis(
   contractText: string = "",
   tzText: string = "",
   documentationText: string = "",
-  procedureType: string = "223_FZ_QUOTATION"
+  procedureType: string = "44_FZ_AUCTION"
 ) {
   const fullCorpus = `${contractText}\n\n${documentationText}\n\n${tzText}`;
-  const is44FZ = Boolean(procedureType && procedureType.startsWith('44_FZ')) || /44-фз|сорок четверт/i.test(fullCorpus);
+  const is44FZ = Boolean(procedureType && procedureType.startsWith('44_FZ')) || /44-фз|сорок четверт|государственн[а-я\s]+контракт/i.test(fullCorpus);
 
   // 1. EXTRACT PROCUREMENT TITLE
   let extractedTitle = "";
   const titlePatterns = [
-    /(?:предмет контракта|предмет договора|наименование закупки|объект закупки|на поставку|на оказание услуг|на выполнение работ)[\s:—–«"\-]+([^\n\r.;]{10,220})/i,
-    /(?:извещение о проведении|открытый аукцион на|запрос котировок на|конкурс на)[\s:—–«"\-]+([^\n\r.;]{10,220})/i,
+    /(?:предмет контракта|предмет договора|наименование закупки|объект закупки|на поставку|на оказание услуг|на выполнение работ)[\s:—–«"\-]+([^\n\r.;]{10,240})/i,
+    /(?:извещение о проведении|открытый аукцион на|запрос котировок на|конкурс на)[\s:—–«"\-]+([^\n\r.;]{10,240})/i,
     /=== \[(?:ПРОЕКТ ДОГОВОРА|ИЗВЕЩЕНИЕ|ТЕХНИЧЕСКОЕ ЗАДАНИЕ)[^:]*: ([^\]]+)\] ===/i
   ];
   for (const regex of titlePatterns) {
@@ -1701,10 +2073,16 @@ function generateDynamicDocumentAnalysis(
       : "Тендерная закупка по 223-ФЗ / Коммерческим торгам (по данным загруженных документов)";
   }
 
-  // 2. EXTRACT CUSTOMER NAME
+  // 2. EXTRACT CUSTOMER NAME & INN
   let extractedCustomer = "";
+  let extractedInn = "";
+  const innMatch = fullCorpus.match(/(?:ИНН(?:\/КПП)?|ИНН\s*Заказчика)[\s:—–]+(\d{10}|\d{12})/i);
+  if (innMatch && innMatch[1]) {
+    extractedInn = innMatch[1];
+  }
+
   const customerPatterns = [
-    /(?:заказчик|покупатель|клиент|получатель)[\s:—–«"\-]+([^\n\r,.;]{4,120})/i,
+    /(?:заказчик|покупатель|получатель)[\s:—–«"\-]+([^\n\r,.;]{4,140})/i,
     /(?:ГКУ|ГБУ|ГБУЗ|МАОУ|МБОУ|ФГБУ|ФКУ|ГУП|МУП|ФГУП|ПАО|АО|ООО)\s+[«"][^»"]+[»"]/i,
     /(?:ГКУ|ГБУ|ГБУЗ|МАОУ|МБОУ|ФГБУ|ФКУ|ГУП|МУП|ФГУП)\s+[А-Яа-яA-Za-z0-9№\s"«»\-]+(?=\s*[,.\n])/i
   ];
@@ -1743,49 +2121,79 @@ function generateDynamicDocumentAnalysis(
     extractedSum = "По спецификации / Расчетная цена";
   }
 
-  // 4. EXTRACT DELIVERY DATES AND ADDRESSES
+  // 4. EXTRACT AUCTION & SUBMISSION DATES
+  let extractedAuctionDate = "";
+  const auctionDatePatterns = [
+    /(?:дата и время окончания срока подачи заявок|окончание подачи заявок|дата окончания приема заявок|срок подачи заявок до)[\s:—–\-]+([^\n\r.;]{6,120})/i,
+    /(?:дата проведения аукциона|дата подведения итогов|дата подведения итогов аукциона)[\s:—–\-]+([^\n\r.;]{6,120})/i,
+    /(?:до\s+\d{1,2}[:.]\d{2}\s+(?:МСК|\(МСК\))?\s+\d{2}[./]\d{2}[./]\d{4})/i,
+    /(\d{2}[./]\d{2}[./]\d{4}\s+(?:года|г\.)?\s*(?:в\s+\d{1,2}[:.]\d{2})?)/i
+  ];
+  for (const regex of auctionDatePatterns) {
+    const match = fullCorpus.match(regex);
+    if (match && match[1]) {
+      const d = match[1].trim();
+      if (d.length >= 5 && !d.toLowerCase().includes("контракт")) {
+        extractedAuctionDate = d;
+        break;
+      }
+    }
+  }
+  if (!extractedAuctionDate) {
+    extractedAuctionDate = "По извещению в ЕИС / на ЭТП";
+  }
+
+  // 5. EXTRACT DELIVERY DATES AND ADDRESSES
   let deliveryPeriod = "";
   const deliveryPeriodPatterns = [
-    /(?:срок поставки|поставка осуществляется|период поставки|товар поставляется)[\s:—–\-]+([^\n\r.;]{10,200})/i,
-    /в течение\s+(\d+\s*(?:рабочих|календарных|банковских)?\s*дней[^\n\r.;]{0,80})/i
+    /(?:срок поставки товара|срок поставки|период поставки|товар поставляется|поставка осуществляется)[\s:—–\-]+([^\n\r.;]{10,220})/i,
+    /(?:в течение\s+\d+\s*(?:рабочих|календарных|банковских)?\s*дней[^\n\r.;]{0,120})/i,
+    /(?:не позднее\s+«?\d{1,2}»?\s+[а-яА-Я]+\s+202\d\s*(?:года|г\.))/i,
+    /(?:до\s+«?\d{1,2}»?\s+[а-яА-Я]+\s+202\d\s*(?:года|г\.))/i
   ];
   for (const regex of deliveryPeriodPatterns) {
     const match = fullCorpus.match(regex);
-    if (match && match[1]) {
-      deliveryPeriod = match[1].trim();
-      break;
+    if (match) {
+      const cand = (match[1] || match[0]).trim();
+      if (cand.length > 8) {
+        deliveryPeriod = cand;
+        break;
+      }
     }
   }
   if (!deliveryPeriod) {
     deliveryPeriod = is44FZ
-      ? "В течение предусмотренного контрактом срока с даты заключения (электронное актирование в ЕИС)."
+      ? "В течение установленного контрактом срока с даты заключения (электронное актирование в ЕИС)."
       : "В соответствии с графиком и условиями договора по заявкам Заказчика.";
   }
 
   const deliveryAddresses: string[] = [];
-  const addressRegex = /(?:\d{6},?\s*(?:г\.|город|обл\.|область|пос\.|р-н|ул\.|улица|просп\.|проспект)[^;\n]{5,150}|(?:адрес\s*поставки|место\s*поставки|место\s*разгрузки)[\s:—–\-]+([^;\n\r]{10,180}))/gi;
-  let addrMatch;
-  while ((addrMatch = addressRegex.exec(fullCorpus)) !== null && deliveryAddresses.length < 3) {
-    const addr = (addrMatch[1] || addrMatch[0]).replace(/^(?:адрес\s*поставки|место\s*поставки)[\s:—–\-]+/i, '').trim();
-    if (addr.length > 8 && !deliveryAddresses.includes(addr)) {
-      deliveryAddresses.push(addr);
+  const addressRegexes = [
+    /(?:место поставки(?:\s*товара)?|адрес поставки(?:\s*товара)?|место доставки|место разгрузки|грузополучатель и его адрес)[\s:—–\-]+([^;\n\r]{10,240})/gi,
+    /(?:\b\d{6}\b,?\s*(?:Российская Федерация,?\s*)?(?:г\.|город|обл\.|область|пос\.|р-н|ул\.|улица|просп\.|проспект|наб\.|шоссе|пер\.|проезд)[^;\n]{8,180})/gi
+  ];
+  for (const regex of addressRegexes) {
+    let m;
+    while ((m = regex.exec(fullCorpus)) !== null && deliveryAddresses.length < 4) {
+      const rawAddr = (m[1] || m[0]).replace(/^(?:место поставки(?:\s*товара)?|адрес поставки)[\s:—–\-]+/i, '').trim();
+      if (rawAddr.length > 8 && !deliveryAddresses.includes(rawAddr) && !rawAddr.toLowerCase().includes("согласно приложению")) {
+        deliveryAddresses.push(rawAddr);
+      }
     }
   }
   if (deliveryAddresses.length === 0) {
-    deliveryAddresses.push("Согласно разделу «Место и условия поставки» документации закупки");
+    deliveryAddresses.push("По адресу Заказчика согласно разделу «Место поставки товара» документации");
   }
 
-  // 5. EXTRACT REAL PRODUCTS FROM TZ / TABLES / CONTRACT
+  // 6. EXTRACT PRODUCTS FROM SPECIFICATION
   const productList: any[] = [];
   const lines = `${tzText}\n${contractText}`.split(/\r?\n/);
-  
-  // Look for lines containing items with numbers, units or specifications
-  const itemRowRegex = /^(?:\d+[\s.)]|\s*[-*•])\s*([А-Яа-яA-Za-z0-9\s«"'_/-]{4,90})\s*[,;:]?\s*(\d+[\s.,]*\d*)\s*(шт|компл|ед|м|пог\.м|кг|т|упак|пар|набор|л|усл|порц|кв\.м)/i;
+  const itemRowRegex = /^(?:\d+[\s.)]|\s*[-*•])\s*([А-Яа-яA-Za-z0-9\s«"'_/-]{4,100})\s*[,;:]?\s*(\d+[\s.,]*\d*)\s*(шт|компл|ед|м|пог\.м|кг|т|упак|пар|набор|л|усл|порц|кв\.м)/i;
   
   for (const line of lines) {
-    if (productList.length >= 8) break;
+    if (productList.length >= 10) break;
     const trimmed = line.trim();
-    if (trimmed.length < 6 || trimmed.length > 250) continue;
+    if (trimmed.length < 6 || trimmed.length > 300) continue;
     
     const rowMatch = trimmed.match(itemRowRegex);
     if (rowMatch) {
@@ -1802,110 +2210,88 @@ function generateDynamicDocumentAnalysis(
             { name: "Наименование", value: prodName },
             { name: "Количество", value: qty }
           ],
-          okpd2OrGvin: is44FZ ? "По КТРУ/ОКПД2" : "По классификатору",
+          okpd2OrGvin: is44FZ ? "По КТРУ / ОКПД2" : "По классификатору",
           pp1875Status: is44FZ ? "RUSSIAN_REQUIRED" : "NOT_APPLICABLE",
-          registryNumberNote: is44FZ ? "Требуется проверка по реестру ГИСП / РЭП (ПП 1875)" : "Согласно требованиям документации"
+          registryNumberNote: is44FZ ? "Требуется проверка по реестру ГИСП / РЭП (ПП РФ № 1875)" : "Согласно требованиям документации"
         });
       }
     }
   }
 
-  // If no tabular products were detected, parse significant noun phrases from TZ text
   if (productList.length === 0) {
-    const tzSample = tzText || contractText;
-    const tzSnippet = tzSample.slice(0, 1500);
-    const tzWords = tzSnippet.split(/[;.\n]/).filter(s => s.trim().length > 15 && s.trim().length < 100);
-    if (tzWords.length > 0) {
-      productList.push({
-        id: 'prod-dyn-1',
-        name: tzWords[0].replace(/^[^А-Яа-яA-Za-z0-9]+/, '').trim(),
-        quantity: 'По спецификации',
-        dimensions: 'Согласно параметрам ТЗ',
-        specification: tzWords.slice(0, 2).join('; '),
-        parameters: [{ name: 'Объект поставки', value: extractedTitle }],
-        okpd2OrGvin: is44FZ ? 'КТРУ / ОКПД2' : 'По номенклатуре',
-        pp1875Status: is44FZ ? 'RUSSIAN_REQUIRED' : 'NOT_APPLICABLE',
-        registryNumberNote: 'Проверка реестровых номеров согласно правилам закупки'
-      });
-    } else {
-      productList.push({
-        id: 'prod-dyn-1',
-        name: extractedTitle,
-        quantity: '1 комплект',
-        dimensions: 'Согласно приложению к договору',
-        specification: 'Поставка товаров / выполнение работ в строгом соответствии со спецификацией Заказчика.',
-        parameters: [{ name: 'Предмет', value: extractedTitle }],
-        okpd2OrGvin: 'По номенклатуре',
-        pp1875Status: is44FZ ? 'RUSSIAN_REQUIRED' : 'NOT_APPLICABLE',
-        registryNumberNote: 'Проверка по реестру Минпромторга при наличии требований нацрежима'
-      });
-    }
+    productList.push({
+      id: 'prod-dyn-1',
+      name: extractedTitle,
+      quantity: '1 комплект / по спецификации',
+      dimensions: 'Согласно приложению к контракту',
+      specification: `Поставка продукции по предмету: ${extractedTitle}. Требования к качеству и ГОСТ по ТЗ.`,
+      parameters: [{ name: 'Объект закупки', value: extractedTitle }],
+      okpd2OrGvin: is44FZ ? 'КТРУ / ОКПД2' : 'По номенклатуре',
+      pp1875Status: is44FZ ? 'RUSSIAN_REQUIRED' : 'NOT_APPLICABLE',
+      registryNumberNote: 'Проверка реестровых номеров Минпромторга (ПП 1875 / ПП 616 / ПП 878)'
+    });
   }
 
-  // 6. EXTRACT REAL CONTRACT RISKS FROM CONTRACT TEXT
+  // 7. EXTRACT REAL CONTRACT RISKS & PENALTIES
   const contractRisks: any[] = [];
   
-  // A) Penalties / Fines (3%, 1/300, etc.)
-  const penaltyMatch = contractText.match(/(?:штраф|пени|неустойк)[^\n.]{0,100}(?:3\s*%|1\/300|0[,.]\d+\s*%|1042|размере)[^\n.]{0,180}\./i);
-  if (penaltyMatch) {
+  // A) Penalties (1042 / 1/300 / 3%)
+  const penaltyMatch = contractText.match(/(?:штраф|пени|неустойк)[^\n.]{0,120}(?:1042|1\/300|3\s*%|0[,.]\d+\s*%|размере)[^\n.]{0,220}\./i);
+  if (is44FZ) {
     contractRisks.push({
       id: 'risk-dyn-1',
       category: 'PENALTIES',
-      clauseNumber: 'Раздел «Ответственность Сторон»',
-      clauseQuote: penaltyMatch[0].trim(),
-      severity: is44FZ ? 'MEDIUM' : 'CRITICAL',
-      title: is44FZ ? 'Штрафы и пени по Постановлению Правительства РФ № 1042' : 'Штрафные санкции и пени по договору (223-ФЗ/B2B)',
-      explanation: is44FZ
-        ? 'По 44-ФЗ штрафы регламентированы ПП № 1042. При сумме начисленных неустоек до 5% они подлежат обязательному списанию по ПП № 783.'
-        : 'По 223-ФЗ и коммерческим договорам начисленные неустойки НЕ списываются в силу закона и могут быть удержаны из суммы оплаты.',
-      recommendation: is44FZ
-        ? 'Следите за сроками исполнения и при начислении штрафов подавайте заявление на списание по ПП РФ № 783.'
-        : 'Направьте протокол разногласий с предложением снизить процент штрафа или установить лимит ответственности.'
+      clauseNumber: 'Раздел «Ответственность Сторон» (ПП РФ № 1042)',
+      clauseQuote: penaltyMatch ? penaltyMatch[0].trim() : 'Штрафы начисляются в порядке Постановления Правительства РФ № 1042, пени — 1/300 ключевой ставки ЦБ РФ.',
+      severity: 'HIGH',
+      title: 'Расчет неустоек по ПП РФ № 1042 и законное списание по ПП РФ № 783',
+      explanation: 'Штрафы начисляются в фиксированном размере от цены контракта, пени — 1/300 ключевой ставки ЦБ РФ за каждый день просрочки. При сумме начисленных неустоек до 5% они подлежат обязательному списанию Заказчиком по ПП РФ № 783.',
+      recommendation: 'Контролируйте дату сдачи в ЕИС. В случае выставления штрафов направьте заявление о списании начисленной неустойки по ПП РФ № 783.'
     });
   } else {
     contractRisks.push({
       id: 'risk-dyn-1',
       category: 'PENALTIES',
-      clauseNumber: 'Раздел ответственности',
-      clauseQuote: is44FZ ? 'Ответственность сторон определяется нормами ФЗ № 44 и ПП РФ № 1042.' : 'За нарушение сроков начисляется неустойка в установленном договором размере.',
-      severity: 'HIGH',
-      title: 'Риск финансовых санкций за просрочку поставки',
-      explanation: 'Несоблюдение сроков или условий поставки влечет начисление пеней за каждый день просрочки.',
-      recommendation: 'Зафиксируйте контрольные даты логистики и поставки в CRM/таск-трекере.'
+      clauseNumber: 'Раздел «Ответственность Сторон»',
+      clauseQuote: penaltyMatch ? penaltyMatch[0].trim() : 'За нарушение сроков поставки начисляется неустойка в размере, предусмотренном договором.',
+      severity: 'CRITICAL',
+      title: 'Штрафные санкции и пени по договору (223-ФЗ / Коммерческие торги)',
+      explanation: 'По 223-ФЗ и коммерческим контрактам начисленные неустойки НЕ подлежат законному списанию и могут быть удержаны из суммы оплаты.',
+      recommendation: 'Направьте протокол разногласий с предложением ограничить совокупный размер ответственности или снизить процент пени.'
     });
   }
 
-  // B) Third-Party Purchase Risk (223-FZ)
-  const thirdPartyMatch = contractText.match(/(?:приобрести|закупить)[^\n.]{0,80}(?:третьих лиц|3-х лиц|других лиц)[^\n.]{0,150}\./i);
-  if (thirdPartyMatch) {
-    contractRisks.push({
-      id: 'risk-dyn-2',
-      category: 'THIRD_PARTY_PURCHASE',
-      clauseNumber: 'Раздел исполнения договора',
-      clauseQuote: thirdPartyMatch[0].trim(),
-      severity: 'CRITICAL',
-      title: 'Право Заказчика докупать товар у третьих лиц за счет Поставщика',
-      explanation: 'При задержке поставки Заказчик вправе самостоятельно купить товар на рынке и взыскать всю разницу в ценах с вас.',
-      recommendation: 'Исключить данный пункт протоколом разногласий либо установить обязательное предварительное согласование цены закупки.'
-    });
-  }
+  // B) Unilateral Termination / Refusal
+  const terminationMatch = contractText.match(/(?:односторонн[а-я\s]+отказ|расторжен[а-я\s]+договор|расторжен[а-я\s]+контракт)[^\n.]{0,180}\./i);
+  contractRisks.push({
+    id: 'risk-dyn-2',
+    category: 'TERMINATION',
+    clauseNumber: 'Раздел «Изменение и расторжение»',
+    clauseQuote: terminationMatch ? terminationMatch[0].trim() : (is44FZ ? 'Заказчик вправе принять решение об одностороннем отказе от исполнения контракта в соответствии со ст. 95 44-ФЗ.' : 'Заказчик вправе в одностороннем порядке расторгнуть договор при нарушении сроков поставки.'),
+    severity: is44FZ ? 'HIGH' : 'CRITICAL',
+    title: is44FZ ? 'Односторонний отказ Заказчика и риск включения в РНП (ч. 9-22 ст. 95 44-ФЗ)' : 'Одностороннее расторжение договора Заказчиком',
+    explanation: is44FZ
+      ? 'При одностороннем отказе Заказчика решение размещается в ЕИС. Неустранение нарушений в течение 10 дней влечет расторжение контракта и направление сведений в ФАС для включения в РНП на 2 года.'
+      : 'Односторонний отказ лишает поставщика оплаты и дает право Заказчику взыскать понесенные убытки.',
+    recommendation: 'При возникновении задержек направьте Заказчику официальное уведомление о форс-мажоре или задержке встречных обязательств.'
+  });
 
   // C) Payment Terms / Electronic Acceptance
-  const paymentMatch = contractText.match(/(?:оплата|расчет)[^\n.]{0,80}(?:7 рабочих дней|10 рабочих дней|30 дней|банковских дней|еис|упд)[^\n.]{0,150}\./i);
+  const paymentMatch = contractText.match(/(?:оплата|расчет)[^\n.]{0,100}(?:7 рабочих дней|10 рабочих дней|30 дней|банковских дней|еис|упд)[^\n.]{0,180}\./i);
   contractRisks.push({
     id: 'risk-dyn-3',
     category: 'PAYMENT_TERMS',
     clauseNumber: 'Раздел «Порядок расчетов»',
-    clauseQuote: paymentMatch ? paymentMatch[0].trim() : (is44FZ ? 'Оплата осуществляется в срок не более 7 рабочих дней со дня подписания документа о приемке в ЕИС.' : 'Оплата производится по безналичному расчету после подписания закрывающих документов.'),
+    clauseQuote: paymentMatch ? paymentMatch[0].trim() : (is44FZ ? 'Оплата осуществляется в срок не более 7 рабочих дней со дня подписания электронного документа о приемке в ЕИС.' : 'Оплата производится после приемки товара и подписания закрывающих документов.'),
     severity: is44FZ ? 'LOW' : 'MEDIUM',
-    title: is44FZ ? 'Регламентный срок оплаты: 7 рабочих дней через ЕИС' : 'Условия оплаты и подписание закрывающих документов',
+    title: is44FZ ? 'Регламентный срок оплаты Заказчиком: 7 рабочих дней через ЕИС' : 'Сроки оплаты и подписание закрывающих документов',
     explanation: is44FZ
-      ? 'По ч. 13.1 ст. 34 ФЗ № 44 срок оплаты строго ограничен 7 рабочими днями с даты подписания электронного УПД.'
+      ? 'По ч. 13.1 ст. 34 ФЗ № 44 срок оплаты строго ограничен 7 рабочими днями со дня подписания электронного УПД Заказчиком в ЕИС.'
       : 'Контролируйте дату фактического получения закрывающих документов Заказчиком во избежание затягивания оплаты.',
-    recommendation: 'Оформляйте закрывающие документы (электронный УПД / акт) строго в день фактической передачи товара.'
+    recommendation: 'Формируйте электронный УПД в личном кабинете ЕИС строго в день фактической доставки товара на склад Заказчика.'
   });
 
-  const overallRiskScore = contractRisks.some(r => r.severity === 'CRITICAL') ? 76 : is44FZ ? 48 : 62;
+  const overallRiskScore = contractRisks.some(r => r.severity === 'CRITICAL') ? 74 : is44FZ ? 45 : 60;
 
   return {
     _aiAnalysisStatus: 'HEURISTIC_PARSED',
@@ -1913,20 +2299,21 @@ function generateDynamicDocumentAnalysis(
       procurementTitle: extractedTitle,
       projectName: `Закупка: ${extractedTitle.slice(0, 60)}...`,
       customerName: extractedCustomer,
+      customerInn: extractedInn || undefined,
       procurementSum: extractedSum,
-      auctionDate: "По извещению закупки",
+      auctionDate: extractedAuctionDate,
       overallRiskScore,
       riskLevel: overallRiskScore > 70 ? "CRITICAL" : overallRiskScore > 40 ? "MEDIUM" : "LOW",
       keyTakeaway: is44FZ
-        ? `Закупка по 44-ФЗ для "${extractedCustomer}". Контроль сроков оплаты (7 р.д. в ЕИС), расчет штрафов по ПП № 1042 и право списания неустоек по ПП № 783.`
-        : `Закупка по 223-ФЗ/B2B для "${extractedCustomer}". Неустойки по договору не подлежат обязательному списанию, требуется контроль условий поставки и закрывающих документов.`,
+        ? `Закупка по 44-ФЗ для "${extractedCustomer}". Контроль сроков оплаты (7 р.д. в ЕИС), расчет штрафов по ПП № 1042 и законное право списания неустоек по ПП № 783.`
+        : `Закупка по 223-ФЗ/B2B для "${extractedCustomer}". Неустойки по договору не подлежат обязательному списанию, требуется строгий контроль условий поставки и закрывающих документов.`,
       is223FZ: !is44FZ,
     },
     deliveryInfo: {
       deliveryPeriod,
       deliveryScheduleNotice: "Поставка осуществляется в соответствии с согласованным графиком или заявками Заказчика.",
       deliveryAddresses,
-      unloadingAndAccessConditions: "Разгрузка и оформление пропусков осуществляются согласно регламенту Заказчика.",
+      unloadingAndAccessConditions: "Разгрузка, подъем на этаж и оформление пропусков осуществляются согласно регламенту Заказчика.",
       consigneeDetails: extractedCustomer,
       riskWarning: "Соблюдайте согласованные сроки поставки для предотвращения претензионной работы и начисления пеней.",
     },
@@ -1949,7 +2336,7 @@ function generateDynamicDocumentAnalysis(
           ],
       formsRequirement: is44FZ ? "Подача через функционал ЭТП в структурированном виде." : "Строгое заполнение установленных форм Заказчика.",
       pp1875Applies: is44FZ,
-      pp1875Details: is44FZ ? "Применяются правила нацрежима (ПП № 1875 / ПП № 616 / ПП № 878)." : "Требования устанавливаются Положением о закупке Заказчика.",
+      pp1875Details: is44FZ ? "Применяются правила нацрежима (ПП РФ № 1875 / ПП РФ № 616 / ПП РФ № 878)." : "Требования устанавливаются Положением о закупке Заказчика.",
       accountingInfoNeeded: !is44FZ,
       accountingItems: is44FZ
         ? ["Справка об отсутствии задолженности (сверка ФНС через ЕИС)", "Выписка ЕГРЮЛ из ЕРУЗ"]
@@ -1964,12 +2351,12 @@ function generateDynamicDocumentAnalysis(
     },
     productList,
     generatedTemplates: {
-      acceptanceDocsRequest: `Руководству Заказчика (${extractedCustomer})\nОт Поставщика\n\nУВЕДОМЛЕНИЕ О ПОСТАВКЕ И ПОДПИСАНИИ ЗАКРЫВАЮЩИХ ДОКУМЕНТОВ\n\nУведомляем о завершении отгрузки по закупке «${extractedTitle}». Товар доставлен в полном объеме. Просим рассмотреть и подписать закрывающие документы в установленный договором срок.`,
-      motivatedRefusalDemand: `В адрес Заказчика (${extractedCustomer})\n\nТРЕБОВАНИЕ О ПРЕДОСТАВЛЕНИИ МОТИВИРОВАННОГО ОТКАЗА\n\nВ связи с устными замечаниями просим предоставить официальный письменный мотивированный отказ от приемки с указанием конкретных пунктов технического задания, которым не соответствует поставленный товар.`,
+      acceptanceDocsRequest: `Руководству Заказчика (${extractedCustomer})\nОт Поставщика\n\nУВЕДОМЛЕНИЕ О ПОСТАВКЕ И ПОДПИСАНИИ ЭЛЕКТРОННОГО УПД В ЕИС\n\nУведомляем о завершении поставки по закупке «${extractedTitle}». Товар доставлен в полном объеме на склад Заказчика. Документ о приемке (электронный УПД) сформирован в ЕИС Закупки. Просим осуществить приемку и подписание в регламентный срок.`,
+      motivatedRefusalDemand: `В адрес Заказчика (${extractedCustomer})\n\nТРЕБОВАНИЕ О ПРЕДОСТАВЛЕНИИ МОТИВИРОВАННОГО ОТКАЗА В ЕИС\n\nВ связи с устными замечаниями просим сформировать в ЕИС мотивированный отказ от подписания документа о приемке с указанием конкретных пунктов технического задания, которым не соответствует поставленный товар.`,
       etpFundsRequest: `Оператору ЭТП / В финансовую службу\n\nЗАЯВЛЕНИЕ\nО разблокировании обеспечения заявки по закупке «${extractedTitle}» в связи с надлежащим завершением процедуры.`,
       accountingDataRequest: `В отдел бухгалтерии\n\nСЛУЖЕБНАЯ ЗАПИСКА\nПросьба подготовить пакет финансовых документов для участия в закупке для Заказчика ${extractedCustomer}.`,
-      yougileTaskSummary: `🎯 [ЗАДАЧА YOUGILE/БИТРИКС24]: Исполнение контракта «${extractedTitle}» (${extractedCustomer}). Контроль логистики, сдачи товара и подписания закрывающих документов.`,
-      claimResponseTemplate: `Заказчику (${extractedCustomer})\n\nОТВЕТ НА ПРЕТЕНЗИЮ\nСообщаем, что обязательства по отгрузке выполнены в строгом соответствии со спецификацией. Начисленные неустойки просим пересмотреть с учетом фактических обстоятельств исполнения.`
+      yougileTaskSummary: `🎯 [ЗАДАЧА YOUGILE/БИТРИКС24]: Исполнение контракта «${extractedTitle}» (${extractedCustomer}). Контроль логистики, сдачи товара и подписания электронного УПД в ЕИС.`,
+      claimResponseTemplate: `Заказчику (${extractedCustomer})\n\nОТВЕТ НА ПРЕТЕНЗИЮ / ХОДАТАЙСТВО О СПИСАНИИ НЕУСТОЙКИ\nСообщаем, что обязательства по отгрузке выполнены. На основании Постановления Правительства РФ № 783 просим произвести списание начисленных штрафов и пеней.`
     }
   };
 }
@@ -2954,7 +3341,7 @@ furniture.tender_req, а не subcat_t.
 // 1. Multi-turn AI Tender Chatbot Endpoint
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages, context } = req.body;
+    const { messages, context, llmConfig } = req.body;
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: "Массив сообщений не передан" });
       return;
@@ -2969,28 +3356,19 @@ app.post("/api/chat", async (req, res) => {
       directSqlMatch = trimmedMessage;
     }
 
-    const ai = getGeminiClient();
-
     const systemInstruction = `${FURNITURE_CATALOG_SYSTEM_PROMPT}
 
 ЮРИДИЧЕСКИЙ И ТЕНДЕРНЫЙ КОНТЕКСТ (223-ФЗ/44-ФЗ):
 Ты также консультируешь по законам 223-ФЗ, 44-ФЗ, Постановлению 1875, штрафам 3%, аккредитации и составлению Протоколов разногласий.
 ${context ? `ТЕКУЩИЙ КОНТЕКСТ АНАЛИЗИРУЕМОЙ ЗАКУПКИ:\n${context}` : ''}`;
 
-    // Convert message history for Gemini SDK
-    const formattedContents = messages.map((m: any) => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.text || m.content || '' }],
-    }));
+    const formattedPrompt = messages.map((m: any) => `${m.role === 'user' ? 'Пользователь' : 'Ассистент'}: ${m.text || m.content || ''}`).join('\n\n');
 
-    const response = await generateContentWithRetry(ai, {
-      model: "gemini-2.5-flash",
-      fallbackModels: ["gemini-1.5-flash", "gemini-2.5-pro"],
-      contents: formattedContents,
-      config: {
-        systemInstruction,
-        temperature: 0.2,
-      },
+    const response = await callUniversalLLM({
+      llmConfig,
+      prompt: formattedPrompt,
+      systemInstruction,
+      temperature: 0.2,
     });
 
     const replyText = response.text || "Запрос обработан.";
@@ -3019,6 +3397,7 @@ ${context ? `ТЕКУЩИЙ КОНТЕКСТ АНАЛИЗИРУЕМОЙ ЗАКУ
 
     res.json({
       reply: replyText,
+      modelUsed: response.modelUsed,
       sqlQuery: extractedSql || undefined,
       sqlTable: sqlTableResult || undefined
     });
@@ -3052,13 +3431,11 @@ ${context ? `ТЕКУЩИЙ КОНТЕКСТ АНАЛИЗИРУЕМОЙ ЗАКУ
 // 2. High Thinking Mode Deep Legal Audit Endpoint
 app.post("/api/deep-audit", async (req, res) => {
   try {
-    const { clauseText, procurementContext } = req.body;
+    const { clauseText, procurementContext, llmConfig } = req.body;
     if (!clauseText) {
       res.status(400).json({ error: "Не передан текст пункта договора для углубленного анализа" });
       return;
     }
-
-    const ai = getGeminiClient();
 
     const prompt = `Проведи САМЫЙ ГЛУБОКИЙ, МНОГОУРОВНЕВЫЙ ЮРИДИЧЕСКИЙ АУДИТ спорного пункта договора/документации закупки 223-ФЗ.
 
@@ -3075,18 +3452,14 @@ ${procurementContext ? `КОНТЕКСТ ЗАКУПКИ: ${procurementContext}` 
 
 Сформируй подробный структурированный ответ с визуальным разделением.`;
 
-    const response = await generateContentWithRetry(ai, {
-      model: "gemini-2.5-pro",
-      fallbackModels: ["gemini-2.5-flash", "gemini-1.5-pro"],
-      contents: prompt,
-      config: {
-        thinkingConfig: {
-          thinkingLevel: ThinkingLevel.HIGH,
-        },
-      },
+    const response = await callUniversalLLM({
+      llmConfig,
+      prompt,
+      systemInstruction: "Ты — ведущий судебный юрист и эксперт по 223-ФЗ и 44-ФЗ.",
+      temperature: 0.1,
     });
 
-    res.json({ auditResult: response.text || "Анализ не дал результатов." });
+    res.json({ auditResult: response.text || "Анализ не дал результатов.", modelUsed: response.modelUsed });
   } catch (error: any) {
     console.warn("Deep Audit API error (returning detailed fallback audit):", error?.message);
     const clause = req.body?.clauseText || "Спорное условие договора";

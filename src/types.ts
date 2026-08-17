@@ -1,13 +1,8 @@
 export type LLMProvider = 
-  | 'gemini' 
-  | 'mistral' 
-  | 'openai' 
-  | 'anthropic' 
-  | 'deepseek' 
+  | 'gemini'
   | 'deepinfra'
-  | 'zipinfra'
-  | 'ollama' 
-  | 'custom';
+  | 'mistral' 
+  | 'openai';
 
 export interface LLMConfig {
   provider: LLMProvider;

@@ -58,17 +58,7 @@ export const MODEL_PRICING_TABLE: Record<string, { input: number; output: number
  */
 export function getPricingForModel(config: LLMConfig): ModelPricing {
   const provider = config.provider;
-  const modelId = config.modelName || 'gemini-2.5-flash';
-
-  if (provider === 'ollama') {
-    return {
-      inputPer1MUsd: 0,
-      outputPer1MUsd: 0,
-      providerDisplayName: 'Ollama (Локальный)',
-      modelDisplayName: modelId,
-      isFreeOrLocal: true,
-    };
-  }
+  const modelId = config.modelName || 'meta-llama/Llama-3.3-70B-Instruct';
 
   // Look up known model in dictionary
   const exact = MODEL_PRICING_TABLE[modelId];
@@ -89,45 +79,31 @@ export function getPricingForModel(config: LLMConfig): ModelPricing {
         return { inputPer1MUsd: 1.25, outputPer1MUsd: 5.00, providerDisplayName: 'Google Gemini', modelDisplayName: modelId };
       }
       return { inputPer1MUsd: 0.075, outputPer1MUsd: 0.30, providerDisplayName: 'Google Gemini', modelDisplayName: modelId };
-    
+
     case 'openai':
       if (modelId.includes('mini')) {
         return { inputPer1MUsd: 0.15, outputPer1MUsd: 0.60, providerDisplayName: 'OpenAI', modelDisplayName: modelId };
       }
       return { inputPer1MUsd: 2.50, outputPer1MUsd: 10.00, providerDisplayName: 'OpenAI', modelDisplayName: modelId };
 
-    case 'anthropic':
-      if (modelId.includes('haiku')) {
-        return { inputPer1MUsd: 0.80, outputPer1MUsd: 4.00, providerDisplayName: 'Anthropic Claude', modelDisplayName: modelId };
-      }
-      return { inputPer1MUsd: 3.00, outputPer1MUsd: 15.00, providerDisplayName: 'Anthropic Claude', modelDisplayName: modelId };
-
-    case 'deepseek':
-      return { inputPer1MUsd: 0.20, outputPer1MUsd: 0.50, providerDisplayName: 'DeepSeek', modelDisplayName: modelId };
-
     case 'deepinfra':
-    case 'zipinfra':
-      return { inputPer1MUsd: 0.20, outputPer1MUsd: 0.50, providerDisplayName: 'DeepInfra', modelDisplayName: modelId };
+      return { inputPer1MUsd: 0.13, outputPer1MUsd: 0.40, providerDisplayName: 'DeepInfra', modelDisplayName: modelId };
 
     case 'mistral':
       return { inputPer1MUsd: 2.00, outputPer1MUsd: 6.00, providerDisplayName: 'Mistral AI', modelDisplayName: modelId };
 
     default:
-      return { inputPer1MUsd: 0.50, outputPer1MUsd: 1.50, providerDisplayName: 'Пользовательский API', modelDisplayName: modelId };
+      return { inputPer1MUsd: 0.10, outputPer1MUsd: 0.30, providerDisplayName: 'AI Provider', modelDisplayName: modelId };
   }
 }
 
 function getProviderNameSimple(provider: LLMProvider): string {
   switch (provider) {
     case 'gemini': return 'Google Gemini';
+    case 'deepinfra': return 'DeepInfra';
     case 'mistral': return 'Mistral AI';
     case 'openai': return 'OpenAI';
-    case 'anthropic': return 'Anthropic';
-    case 'deepseek': return 'DeepSeek';
-    case 'deepinfra': return 'DeepInfra';
-    case 'zipinfra': return 'Zipinfra';
-    case 'ollama': return 'Ollama';
-    default: return 'Custom';
+    default: return 'AI Provider';
   }
 }
 

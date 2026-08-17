@@ -11,18 +11,17 @@ import {
   FileSearch, 
   Zap, 
   Sliders, 
-  Database,
-  Bot,
-  ChevronDown,
-  ChevronUp,
-  Layers,
-  HelpCircle,
-  ShieldCheck,
-  Flame,
-  Info
+  Bot, 
+  ChevronDown, 
+  ChevronUp, 
+  HelpCircle, 
+  ShieldCheck, 
+  Server, 
+  Info,
+  Lock
 } from 'lucide-react';
 import { LLMConfig, LLMProvider } from '../types';
-import { getStoredLLMConfig, saveLLMConfig, getProviderDisplayName } from '../utils/aiConfig';
+import { getStoredLLMConfig, saveLLMConfig, getProviderDisplayName, fetchServerLLMStatus, ServerLLMStatus } from '../utils/aiConfig';
 import { Tooltip } from './Tooltip';
 
 interface AISettingsModalProps {
@@ -33,9 +32,17 @@ interface AISettingsModalProps {
 
 const PROVIDER_MODELS: Record<LLMProvider, { name: string; id: string; desc: string; isRecommended?: boolean }[]> = {
   gemini: [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Высокая скорость, оптимизирован для аналитики и 223-ФЗ/44-ФЗ', isRecommended: true },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Углубленный юридический анализ, аудит рисков и рассуждения' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Быстрый легковесный вариант' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Основная модель по умолчанию: высокая скорость, глубокий анализ 223/44-ФЗ и ТЗ', isRecommended: true },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Углубленный юридический аудит, анализ рисков и рассуждения High Thinking' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Быстрый легковесный режим с огромным контекстом' },
+  ],
+  deepinfra: [
+    { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct', desc: 'Основная фоллбэк-модель: флагман Meta со скоростным инференсом', isRecommended: true },
+    { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek-R1 (Reasoner)', desc: 'Глубокие логические рассуждения и анализ рисков договора' },
+    { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek-V3', desc: 'Сверхбыстрая MoE модель DeepSeek' },
+    { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B', desc: 'Специализированная модель для строгого JSON и спецификаций' },
+    { id: 'mistralai/Mistral-7B-Instruct-v0.3', name: 'Mistral 7B Instruct', desc: 'Легкий и быстрый инференс Mistral' },
+    { id: 'microsoft/WizardLM-2-8x22B', name: 'WizardLM-2 8x22B', desc: 'Мощный MoE от Microsoft для сложных документов' },
   ],
   mistral: [
     { id: 'mistral-large-latest', name: 'Mistral Large', desc: 'Флагманская модель Mistral для сложных юридических задач', isRecommended: true },
@@ -49,37 +56,6 @@ const PROVIDER_MODELS: Record<LLMProvider, { name: string; id: string; desc: str
     { id: 'o1', name: 'OpenAI o1', desc: 'Модель с глубокими пошаговыми цепями рассуждений' },
     { id: 'o3-mini', name: 'OpenAI o3-mini', desc: 'Компактная логическая модель' },
   ],
-  anthropic: [
-    { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', desc: 'Эталон качества для юриспруденции и логического анализа', isRecommended: true },
-    { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', desc: 'Сверхбыстрый и точный помощник' },
-    { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', desc: 'Максимальная глубина юридического аудита' },
-  ],
-  deepseek: [
-    { id: 'deepseek-chat', name: 'DeepSeek-V3 (Chat)', desc: 'Производительная китайская модель с открытым весом', isRecommended: true },
-    { id: 'deepseek-reasoner', name: 'DeepSeek-R1 (Reasoner)', desc: 'Модель глубоких логических рассуждений R1' },
-  ],
-  deepinfra: [
-    { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct', desc: 'Флагманская модель Meta на серверах DeepInfra', isRecommended: true },
-    { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek-R1 (Reasoner)', desc: 'Глубокие логические рассуждения и логика закупки' },
-    { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek-V3', desc: 'Быстрая производительная модель DeepSeek' },
-    { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B', desc: 'Специализированная модель для кода и строгого JSON' },
-    { id: 'mistralai/Mistral-7B-Instruct-v0.3', name: 'Mistral 7B Instruct', desc: 'Легкий и быстрый инференс Mistral' },
-    { id: 'microsoft/WizardLM-2-8x22B', name: 'WizardLM-2 8x22B', desc: 'Мощный MoE от Microsoft с высоким качеством' },
-  ],
-  zipinfra: [
-    { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct', desc: 'Флагманская модель Meta на серверах DeepInfra/Zipinfra', isRecommended: true },
-    { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek-R1 (Reasoner)', desc: 'Глубокие логические рассуждения и логика закупки' },
-    { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek-V3', desc: 'Быстрая производительная модель DeepSeek' },
-    { id: 'Qwen/Qwen2.5-Coder-32B-Instruct', name: 'Qwen 2.5 Coder 32B', desc: 'Специализированная модель для кода и строгого JSON' },
-  ],
-  ollama: [
-    { id: 'llama3', name: 'Llama 3 (Local)', desc: 'Локальная модель в вашей сети без интернета', isRecommended: true },
-    { id: 'qwen2.5', name: 'Qwen 2.5', desc: 'Локальная модель с отличной поддержкой русского языка' },
-    { id: 'deepseek-r1:8b', name: 'DeepSeek R1 Local', desc: 'Локальный Reasoner через Ollama' },
-  ],
-  custom: [
-    { id: 'custom-model', name: 'Пользовательская модель', desc: 'Укажите наименование любой модели совместимого REST API' },
-  ]
 };
 
 export const AISettingsModal: React.FC<AISettingsModalProps> = ({
@@ -88,6 +64,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   onConfigSaved
 }) => {
   const [config, setConfig] = useState<LLMConfig>(getStoredLLMConfig());
+  const [serverStatus, setServerStatus] = useState<ServerLLMStatus | null>(null);
   const [fetchedModels, setFetchedModels] = useState<Array<{ id: string; name: string; desc?: string }> | null>(null);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [fetchModelsError, setFetchModelsError] = useState<string | null>(null);
@@ -126,6 +103,19 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       setFetchModelsError(null);
       setModelSearchQuery('');
       setTestStatus({ testing: false });
+      
+      // Fetch server status
+      fetchServerLLMStatus().then(status => {
+        setServerStatus(status);
+        // If current config doesn't have provider set or user is on default, use server default
+        if (status.defaultProvider && !localStorage.getItem('tender_llm_config_v2')) {
+          setConfig(prev => ({
+            ...prev,
+            provider: status.defaultProvider,
+            modelName: PROVIDER_MODELS[status.defaultProvider]?.[0]?.id || prev.modelName
+          }));
+        }
+      });
     }
   }, [isOpen]);
 
@@ -208,6 +198,15 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   };
 
+  const isServerConfiguredFor = (provider: LLMProvider): boolean => {
+    if (!serverStatus) return false;
+    if (provider === 'gemini') return !!serverStatus.hasGemini;
+    if (provider === 'deepinfra') return !!serverStatus.hasDeepInfra;
+    if (provider === 'mistral') return !!serverStatus.hasMistral;
+    if (provider === 'openai') return !!serverStatus.hasOpenAI;
+    return false;
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fade-in text-slate-900 dark:text-white">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
@@ -220,13 +219,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
             <div>
               <h3 className="font-extrabold text-base sm:text-lg flex items-center gap-2">
-                <span>Параметры ИИ и провайдеров</span>
+                <span>Параметры ИИ и LLM-провайдеров</span>
                 <span className="text-[10px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800 font-bold">
                   {getProviderDisplayName(config.provider)}
                 </span>
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Гибкая конфигурация нейросетевых моделей, параметров аудита и внешних интеграций
+                Google Gemini (по умолчанию) → Фоллбэк на DeepInfra • Mistral OCR → Фоллбэк на DeepInfra
               </p>
             </div>
           </div>
@@ -238,6 +237,44 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               <X className="w-5 h-5" />
             </button>
           </Tooltip>
+        </div>
+
+        {/* Server Level Status Banner */}
+        <div className="px-6 py-2.5 bg-indigo-50/60 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-900/50 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 text-indigo-900 dark:text-indigo-200 font-medium">
+            <Server className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>Серверный статус ключей:</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+            <span className={`px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+              serverStatus?.hasGemini 
+                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold' 
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+            }`}>
+              ♊ Gemini: {serverStatus?.hasGemini ? '✓ По умолчанию' : 'нет'}
+            </span>
+            <span className={`px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+              serverStatus?.hasDeepInfra 
+                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold' 
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+            }`}>
+              ⚡ DeepInfra: {serverStatus?.hasDeepInfra ? '✓ Фоллбэк' : 'нет'}
+            </span>
+            <span className={`px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+              serverStatus?.hasMistral 
+                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold' 
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+            }`}>
+              🌪️ Mistral: {serverStatus?.hasMistral ? '✓ OCR' : 'нет'}
+            </span>
+            <span className={`px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+              serverStatus?.hasOpenAI 
+                ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 font-bold' 
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'
+            }`}>
+              🟢 OpenAI: {serverStatus?.hasOpenAI ? '✓ Активен' : 'нет'}
+            </span>
+          </div>
         </div>
 
         {/* Modal Content Area with Accordions */}
@@ -256,7 +293,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 </div>
                 <div>
                   <span className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white block">
-                    1. Модель и провайдер нейросети
+                    1. Выбор провайдера и модели ИИ
                   </span>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">
                     Текущая: <strong className="text-indigo-600 dark:text-indigo-400">{getProviderDisplayName(config.provider)}</strong> ({config.modelName})
@@ -281,44 +318,48 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 text-xs">
-                      <span>Выберите платформу провайдера:</span>
-                      <Tooltip content="Вы можете переключаться между облачными LLM или подключать локальный Ollama без передачи данных в сеть" position="right">
+                      <span>Выберите активного провайдера:</span>
+                      <Tooltip content="По умолчанию используется Gemini с автоматическим бесшовным фоллбэком на DeepInfra при сбоях. OCR документов выполняется через Mistral с фоллбэком на DeepInfra." position="right">
                         <Info className="w-3.5 h-3.5 text-slate-400 hover:text-indigo-500 cursor-help" />
                       </Tooltip>
                     </label>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     {[
-                      { id: 'gemini', name: 'Google Gemini', icon: '♊', badge: 'По умолчанию' },
-                      { id: 'mistral', name: 'Mistral AI', icon: '🌪️', badge: '+ OCR' },
-                      { id: 'openai', name: 'OpenAI', icon: '🟢', badge: 'GPT-4o' },
-                      { id: 'anthropic', name: 'Anthropic', icon: '🟣', badge: 'Claude 3.5' },
-                      { id: 'deepseek', name: 'DeepSeek', icon: '🐋', badge: 'R1 / V3' },
-                      { id: 'deepinfra', name: 'DeepInfra', icon: '⚡', badge: 'Fast / Llama' },
-                      { id: 'ollama', name: 'Ollama / Local', icon: '🦙', badge: 'Локальный' },
-                      { id: 'custom', name: 'Пользовательский', icon: '🔌', badge: 'OpenAI API' },
+                      { id: 'gemini', name: 'Google Gemini', icon: '♊', badge: 'По умолчанию', priority: true },
+                      { id: 'deepinfra', name: 'DeepInfra', icon: '⚡', badge: 'Фоллбэк / Llama' },
+                      { id: 'mistral', name: 'Mistral AI', icon: '🌪️', badge: 'OCR + Large' },
+                      { id: 'openai', name: 'OpenAI', icon: '🟢', badge: 'GPT-4o / o1' },
                     ].map(p => {
                       const isSelected = config.provider === p.id;
+                      const hasServerKey = isServerConfiguredFor(p.id as LLMProvider);
                       return (
                         <button
                           key={p.id}
                           type="button"
                           onClick={() => handleProviderChange(p.id as LLMProvider)}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-1.5 ${
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2 relative ${
                             isSelected
                               ? 'border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-500/50 shadow-xs'
                               : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
                           }`}
                         >
                           <div className="flex items-center justify-between w-full">
-                            <span className="text-base">{p.icon}</span>
-                            <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-md ${
+                            <span className="text-xl">{p.icon}</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
                               isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                             }`}>
                               {p.badge}
                             </span>
                           </div>
-                          <span className="font-extrabold text-xs block leading-tight">{p.name}</span>
+                          <div>
+                            <span className="font-extrabold text-sm block leading-tight">{p.name}</span>
+                            {hasServerKey && (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 mt-1">
+                                <CheckCircle2 className="w-3 h-3" /> На сервере
+                              </span>
+                            )}
+                          </div>
                         </button>
                       );
                     })}
@@ -439,7 +480,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                                   <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
                                     config.modelName === m.id ? 'bg-indigo-700 text-amber-300' : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
                                   }`}>
-                                    ★ Топ
+                                    ★ Рекомендуется
                                   </span>
                                 )}
                               </span>
@@ -476,17 +517,17 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   </div>
                 </div>
 
-                {/* API Key & Base URL Settings */}
+                {/* API Key & Base URL Settings (Application Level info) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   
-                  {/* API Key */}
+                  {/* API Key Override (Optional) */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="font-extrabold text-slate-700 dark:text-slate-300 flex items-center gap-1 text-xs">
                         <Key className="w-3.5 h-3.5 text-amber-500" />
                         <span>API Ключ {getProviderDisplayName(config.provider)}:</span>
                       </label>
-                      <Tooltip content="Ключ хранится локально в браузере и используется для отправки запросов" position="top">
+                      <Tooltip content="Ключи провайдеров (DEEPINFRA_API_KEY, MISTRAL_API_KEY, OPENAI_API_KEY) настроены на уровне сервера. Вы можете оставить это поле пустым или ввести персональный ключ." position="top">
                         <Info className="w-3 h-3 text-slate-400" />
                       </Tooltip>
                     </div>
@@ -495,19 +536,19 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                       value={config.apiKey || ''}
                       onChange={(e) => setConfig(prev => ({ ...prev, apiKey: e.target.value }))}
                       placeholder={
-                        config.provider === 'gemini' ? 'Оставьте пустым (встроенный ключ AI Studio)' :
-                        config.provider === 'mistral' ? 'sk-... или nvapi-...' :
-                        config.provider === 'openai' ? 'sk-...' :
-                        config.provider === 'anthropic' ? 'sk-ant-...' :
-                        config.provider === 'deepinfra' ? 'sk-... (DeepInfra Key)' :
-                        'Вставьте ваш API ключ'
+                        isServerConfiguredFor(config.provider)
+                          ? '✓ Настроен на сервере (оставьте пустым)'
+                          : config.provider === 'gemini' ? 'Настроен на сервере через GEMINI_API_KEY' :
+                          config.provider === 'deepinfra' ? 'Настроен на сервере через DEEPINFRA_API_KEY' :
+                          config.provider === 'mistral' ? 'Настроен на сервере через MISTRAL_API_KEY' :
+                          config.provider === 'openai' ? 'Настроен на сервере через OPENAI_API_KEY' :
+                          'Вставьте ваш API ключ'
                       }
                       className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
-                    <p className="text-[10px] text-slate-400">
-                      {config.provider === 'gemini' 
-                        ? 'По умолчанию автоматически используется серверный GEMINI_API_KEY.' 
-                        : 'Ключ безопасно используется сервером для проксирования.'}
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-indigo-500 inline" />
+                      <span>Ключи настроены на сервере в .env. Пользователям не нужно вводить ключи вручную.</span>
                     </p>
                   </div>
 
@@ -518,7 +559,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                         <Globe className="w-3.5 h-3.5 text-cyan-500" />
                         <span>Базовый URL (Endpoint):</span>
                       </label>
-                      <Tooltip content="Укажите URL для локального Ollama или кастомного OpenAI-совместимого прокси" position="top">
+                      <Tooltip content="Укажите URL для кастомного OpenAI-совместимого эндпоинта или прокси" position="top">
                         <Info className="w-3 h-3 text-slate-400" />
                       </Tooltip>
                     </div>
@@ -527,17 +568,15 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                       value={config.baseUrl || ''}
                       onChange={(e) => setConfig(prev => ({ ...prev, baseUrl: e.target.value }))}
                       placeholder={
+                        config.provider === 'deepinfra' ? 'https://api.deepinfra.com/v1/openai' :
                         config.provider === 'mistral' ? 'https://api.mistral.ai/v1' :
                         config.provider === 'openai' ? 'https://api.openai.com/v1' :
-                        config.provider === 'deepseek' ? 'https://api.deepseek.com/v1' :
-                        config.provider === 'deepinfra' ? 'https://api.deepinfra.com/v1/openai' :
-                        config.provider === 'ollama' ? 'http://localhost:11434/v1' :
-                        'https://your-api-endpoint.com/v1'
+                        'https://api.deepinfra.com/v1/openai'
                       }
                       className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                     <p className="text-[10px] text-slate-400">
-                      Заполняется для локальных сервисов (Ollama) или корпоративных шлюзов.
+                      По умолчанию используется официальный URL провайдера.
                     </p>
                   </div>
 
@@ -697,9 +736,9 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                     <div className="pt-1 space-y-1">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                          Отдельный API Ключ Mistral AI для OCR (если отличается от основного):
+                          Отдельный API Ключ Mistral AI для OCR (если отличается от серверного):
                         </label>
-                        <Tooltip content="Если у вас отдельный ключ для OCR Mistral, введите его здесь" position="top">
+                        <Tooltip content="По умолчанию используется MISTRAL_API_KEY на сервере" position="top">
                           <Info className="w-3 h-3 text-slate-400" />
                         </Tooltip>
                       </div>
@@ -707,7 +746,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                         type="password"
                         value={config.mistralApiKey || ''}
                         onChange={(e) => setConfig(prev => ({ ...prev, mistralApiKey: e.target.value }))}
-                        placeholder={config.provider === 'mistral' && config.apiKey ? 'Используется основной ключ Mistral выше' : 'Вставьте ключ Mistral API'}
+                        placeholder={serverStatus?.hasMistral ? '✓ Настроен на сервере (MISTRAL_API_KEY)' : 'Вставьте ключ Mistral API'}
                         className="w-full bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800/60 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>

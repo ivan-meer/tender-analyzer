@@ -129,6 +129,39 @@ export const TenderDeadlinesCalendarModal: React.FC<TenderDeadlinesCalendarModal
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [selectedDayISO, setSelectedDayISO] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
+  // Handler to open saved analysis report
+  const handleOpenAnalysis = (ev: DeadlineEvent) => {
+    if (!onSelectAnalysis) return;
+
+    if (ev.analysisResult) {
+      onSelectAnalysis(ev.analysisResult);
+      onClose();
+      return;
+    }
+
+    // Lookup in loaded analyses
+    if (ev.analysisId) {
+      const match = analyses.find((a) => a.id === ev.analysisId);
+      if (match?.analysisResult) {
+        onSelectAnalysis(match.analysisResult);
+        onClose();
+        return;
+      }
+    }
+
+    const matchByName = analyses.find((a) => 
+      (a.projectName && a.projectName === ev.projectName) || 
+      (a.title && a.title === ev.projectName) ||
+      (a.procurementNumber && a.procurementNumber === ev.procurementNumber)
+    );
+
+    if (matchByName?.analysisResult) {
+      onSelectAnalysis(matchByName.analysisResult);
+      onClose();
+      return;
+    }
+  };
+
   // Sync / load analyses from Firestore when opened
   useEffect(() => {
     if (!isOpen) return;
@@ -609,11 +642,12 @@ export const TenderDeadlinesCalendarModal: React.FC<TenderDeadlinesCalendarModal
                     return (
                       <div
                         key={ev.id}
+                        onClick={() => handleOpenAnalysis(ev)}
                         className={`bg-white dark:bg-slate-800/90 border ${
                           isParticipating
                             ? 'border-indigo-500 ring-1 ring-indigo-500/30'
                             : 'border-slate-200 dark:border-slate-700/80 hover:border-indigo-400'
-                        } rounded-2xl p-4 transition-all shadow-2xs hover:shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4`}
+                        } rounded-2xl p-4 transition-all shadow-2xs hover:shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-800`}
                       >
                         {/* Date & Countdown Block */}
                         <div className="flex items-center gap-3.5 shrink-0">
@@ -661,7 +695,7 @@ export const TenderDeadlinesCalendarModal: React.FC<TenderDeadlinesCalendarModal
                             </span>
                           </div>
 
-                          <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white leading-snug">
+                          <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white leading-snug hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                             {ev.projectName}
                           </h4>
 
@@ -673,7 +707,10 @@ export const TenderDeadlinesCalendarModal: React.FC<TenderDeadlinesCalendarModal
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                        <div 
+                          className="flex items-center gap-2 shrink-0 self-end md:self-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button
                             onClick={() => handleExportIcs(ev)}
                             className="p-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
@@ -682,15 +719,13 @@ export const TenderDeadlinesCalendarModal: React.FC<TenderDeadlinesCalendarModal
                             <Download className="w-4 h-4" />
                           </button>
 
-                          {ev.analysisResult && onSelectAnalysis && (
+                          {onSelectAnalysis && (
                             <button
-                              onClick={() => {
-                                onSelectAnalysis(ev.analysisResult!);
-                                onClose();
-                              }}
+                              onClick={() => handleOpenAnalysis(ev)}
                               className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                              title="Открыть сохраненный отчет по закупке"
                             >
-                              <span>Открыть</span>
+                              <span>Открыть отчет</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           )}
@@ -864,7 +899,8 @@ export const TenderDeadlinesCalendarModal: React.FC<TenderDeadlinesCalendarModal
                       {selectedDayEvents.map((ev) => (
                         <div
                           key={ev.id}
-                          className="p-3.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2 text-xs"
+                          onClick={() => handleOpenAnalysis(ev)}
+                          className="p-3.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 rounded-2xl space-y-2 text-xs cursor-pointer transition-all shadow-2xs hover:shadow-xs"
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-md font-bold text-[10px]">
@@ -875,7 +911,7 @@ export const TenderDeadlinesCalendarModal: React.FC<TenderDeadlinesCalendarModal
                             </span>
                           </div>
 
-                          <h5 className="font-bold text-slate-900 dark:text-white leading-snug">
+                          <h5 className="font-bold text-slate-900 dark:text-white leading-snug hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                             {ev.projectName}
                           </h5>
 
@@ -883,7 +919,10 @@ export const TenderDeadlinesCalendarModal: React.FC<TenderDeadlinesCalendarModal
                             <b>Заказчик:</b> {ev.customerName}
                           </div>
 
-                          <div className="flex items-center justify-between pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                          <div 
+                            className="flex items-center justify-between pt-2 border-t border-slate-200/80 dark:border-slate-800"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <button
                               onClick={() => handleExportIcs(ev)}
                               className="text-[10px] font-extrabold text-slate-600 dark:text-slate-300 hover:text-indigo-600 flex items-center gap-1 cursor-pointer"
@@ -892,15 +931,13 @@ export const TenderDeadlinesCalendarModal: React.FC<TenderDeadlinesCalendarModal
                               <span>Экспорт .ics</span>
                             </button>
 
-                            {ev.analysisResult && onSelectAnalysis && (
+                            {onSelectAnalysis && (
                               <button
-                                onClick={() => {
-                                  onSelectAnalysis(ev.analysisResult!);
-                                  onClose();
-                                }}
-                                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
+                                onClick={() => handleOpenAnalysis(ev)}
+                                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors shadow-2xs active:scale-95"
+                                title="Открыть сохраненный отчет по закупке"
                               >
-                                Открыть анализ
+                                Открыть отчет
                               </button>
                             )}
                           </div>
