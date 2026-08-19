@@ -45,6 +45,9 @@ import {
 import { detectLawTypeFromContent, LawDetectionResult } from '../utils/lawDetector';
 import { DocumentViewerModal } from './DocumentViewerModal';
 import { TokenPriceEstimator } from './TokenPriceEstimator';
+import { DocTypesGuide } from './uploader/DocTypesGuide';
+import { NotesModal } from './uploader/NotesModal';
+import { EisSearchModal } from './uploader/EisSearchModal';
 import { Camera, BookOpen, Info, ShieldCheck } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
@@ -764,100 +767,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
         />
 
         {/* INTERACTIVE GUIDE: DIFFERENCES IN DOCUMENT TYPES AND FORMATS ACROSS 44-FZ, 223-FZ, AND COMMERCIAL TENDERS */}
-        <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/70 rounded-2xl p-3 sm:p-3.5 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
-                Специфика видов документов и форматов ({lawType === '44_FZ' ? '44-ФЗ Госзакупки' : lawType === '223_FZ' ? '223-ФЗ Госкорпорации' : 'Коммерческие B2B тендеры'})
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowDocTypesGuide(!showDocTypesGuide)}
-              className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span>{showDocTypesGuide ? 'Скрыть справку' : 'Подробнее о форматах'}</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showDocTypesGuide ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-
-          {showDocTypesGuide && (
-            <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/60 text-xs text-slate-600 dark:text-slate-300 space-y-2.5 animate-fade-in">
-              {lawType === '44_FZ' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
-                      🏛️ Обязательный состав пакета 44-ФЗ:
-                    </span>
-                    <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-300">
-                      <li><strong>Проект госконтракта (ПГК)</strong> — строгие условия по ПП №1042 (штрафы) и ПП №783 (списание неустоек), электронное актирование.</li>
-                      <li><strong>Описание объекта закупки (ООЗ / ТЗ)</strong> — ст. 33 44-ФЗ, обязательное использование каталога КТРУ и ОКПД2.</li>
-                      <li><strong>Обоснование НМЦК</strong> — расчет методом сопоставимых рыночных цен (не менее 3 КП) или сметный расчет.</li>
-                      <li><strong>Национальный режим</strong> — выписки ГИСП/РЭП, запреты/ограничения (ПП №1875, №616, №878).</li>
-                    </ul>
-                  </div>
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
-                      📁 Поддерживаемые форматы:
-                    </span>
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                      Файлы <strong>.docx, .xlsx, .pdf, .xml (структурированный пакет из ЕИС), .zip/.rar</strong>. Система автоматически распознает реестровые номера, КТРУ и выписки из реестров Минпромторга.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {lawType === '223_FZ' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
-                      🏢 Специфика пакета по 223-ФЗ:
-                    </span>
-                    <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-300">
-                      <li><strong>Положение о закупке</strong> — индивидуальные правила заказчика, критерии отбора и скрытые основания отклонения.</li>
-                      <li><strong>Формы заявок (Формы 1–5)</strong> — шаблоны согласия, оферты, технического и ценового предложений.</li>
-                      <li><strong>Квалификационные требования</strong> — опыт, персонал, материальные ресурсы и подтверждающие акты.</li>
-                      <li><strong>Обеспечение и штрафы</strong> — заказчик может устанавливать несимметричные пени и удержания.</li>
-                    </ul>
-                  </div>
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
-                      📁 Поддерживаемые форматы:
-                    </span>
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                      Многостраничные регламенты в <strong>.docx / .pdf</strong>, таблицы форм заявок и смет в <strong>.xlsx / .xls</strong>, многотомные архивы <strong>.zip / .7z</strong>.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {lawType === 'COMMERCIAL' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
-                      💼 Специфика коммерческих закупок (B2B):
-                    </span>
-                    <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-300">
-                      <li><strong>Запрос предложений (RFP / RFQ)</strong> — гибкие регламенты и матрица цен для расчета коммерческого предложения.</li>
-                      <li><strong>Рамочный договор поставки / услуг</strong> — риски одностороннего отказа заказчика, отсрочки платежа до 90–120 дней.</li>
-                      <li><strong>Соглашение о неразглашении (NDA)</strong> — коммерческая тайна и жесткая ответственность за утечку.</li>
-                      <li><strong>Due Diligence (проверка благонадежности)</strong> — карточка предприятия, бухгалтерский баланс, сертификаты EAC/ГОСТ.</li>
-                    </ul>
-                  </div>
-                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <span className="font-bold text-slate-900 dark:text-white block mb-1">
-                      📁 Поддерживаемые форматы:
-                    </span>
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                      Прайс-листы и расчетные матрицы <strong>.xlsx / .csv</strong>, оферты и контракты <strong>.docx / .pdf</strong>, сканированные сертификаты и паспорта качества <strong>.jpg / .png / .pdf</strong>.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <DocTypesGuide lawType={lawType} />
 
         {/* AUTO-DETECTION NOTICE BANNER */}
         {autoDetectedInfo && (
@@ -1206,203 +1116,25 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
       </form>
 
       {/* Modal for Custom Instructions & Pasted Text */}
-      {isNotesModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-xl">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Инструкция и дополнительный текст
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Укажите комментарий эксперту ИИ или вставьте фрагмент вручную
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsNotesModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700 dark:text-slate-300 block">
-                  Примечания и особые указания тендерному эксперту:
-                </label>
-                <textarea
-                  rows={3}
-                  value={additionalNotes}
-                  onChange={(e) => setAdditionalNotes(e.target.value)}
-                  placeholder="Укажите особые условия: например, проверить аванс, штрафы ПП 1875 или спецификацию..."
-                  className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700 dark:text-slate-300 block">
-                  Вставьте фрагменты текста вручную (если нет файла):
-                </label>
-                <textarea
-                  rows={4}
-                  value={pastedText}
-                  onChange={(e) => setPastedText(e.target.value)}
-                  placeholder="Вставьте пункт о штрафах, ТЗ или извещение..."
-                  className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-slate-800 dark:text-slate-100 placeholder-slate-400 font-mono text-[11px] focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setIsNotesModalOpen(false)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer"
-              >
-                Сохранить и закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NotesModal
+        isOpen={isNotesModalOpen}
+        onClose={() => setIsNotesModalOpen(false)}
+        additionalNotes={additionalNotes}
+        setAdditionalNotes={setAdditionalNotes}
+        pastedText={pastedText}
+        setPastedText={setPastedText}
+      />
 
       {/* Modal for Direct EIS (zakupki.gov.ru) Import */}
-      {isEisModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-200/60 dark:border-indigo-800/60">
-                  <Globe className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    Загрузка закупки из ЕИС (zakupki.gov.ru)
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Автоматическое скачивание извещения, проекта контракта и ТЗ
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEisModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700 dark:text-slate-300 block">
-                  Номер закупки (ЕИС) или прямая ссылка:
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={eisQuery}
-                    onChange={(e) => setEisQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleFetchEis();
-                      }
-                    }}
-                    placeholder="Например: 0373200002824000001 или 32412345678"
-                    className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-mono text-xs"
-                  />
-                </div>
-              </div>
-
-              {eisError && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{eisError}</span>
-                </div>
-              )}
-
-              {/* Quick Presets for 1-click loading */}
-              <div className="space-y-2 pt-1">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block uppercase tracking-wider">
-                  Быстрый выбор из реестра ЕИС:
-                </span>
-
-                <div className="space-y-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleFetchEis('0373200002824000001')}
-                    disabled={isEisFetching}
-                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700/80 transition-colors flex items-center justify-between group cursor-pointer disabled:opacity-50"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                        № 0373200002824000001 (44-ФЗ)
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        Поставка компьютерной техники и рабочих мест ГБУ • 4,25 млн ₽
-                      </span>
-                    </div>
-                    <Download className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleFetchEis('32412345678')}
-                    disabled={isEisFetching}
-                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700/80 transition-colors flex items-center justify-between group cursor-pointer disabled:opacity-50"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-800 dark:text-slate-200 block text-xs group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                        № 32412345678 (223-ФЗ)
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        Закупка офисной мебели и оборудования • 2,85 млн ₽
-                      </span>
-                    </div>
-                    <Download className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setIsEisModalOpen(false)}
-                className="px-3.5 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                disabled={isEisFetching}
-                onClick={() => handleFetchEis()}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-50"
-              >
-                {isEisFetching ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Скачивание из ЕИС...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Импортировать пакет закупки</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EisSearchModal
+        isOpen={isEisModalOpen}
+        onClose={() => setIsEisModalOpen(false)}
+        eisQuery={eisQuery}
+        setEisQuery={setEisQuery}
+        eisError={eisError}
+        isEisFetching={isEisFetching}
+        onFetchEis={handleFetchEis}
+      />
 
       {/* Interactive Document Viewer Modal */}
       <DocumentViewerModal

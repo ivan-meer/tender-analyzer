@@ -19,7 +19,7 @@ export interface ServerLLMStatus {
 
 export const DEFAULT_LLM_CONFIG: LLMConfig = {
   provider: 'gemini',
-  modelName: 'gemini-2.5-flash',
+  modelName: 'gemini-3.1-flash-lite',
   temperature: 0.2,
   useMistralOcrForPdf: true,
 };
@@ -40,7 +40,7 @@ export async function fetchServerLLMStatus(): Promise<ServerLLMStatus> {
 
   return {
     defaultProvider: 'gemini',
-    defaultModel: 'gemini-2.5-flash',
+    defaultModel: 'gemini-3.1-flash-lite',
     hasGemini: true,
     hasDeepinfra: true,
     hasMistral: true,

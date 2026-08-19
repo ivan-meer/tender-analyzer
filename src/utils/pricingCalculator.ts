@@ -13,10 +13,12 @@ export const USD_TO_RUB_EXCHANGE_RATE = 90.0;
 // Pricing registry per 1M tokens in USD (as of 2025/2026 standard rates)
 export const MODEL_PRICING_TABLE: Record<string, { input: number; output: number; name: string }> = {
   // Google Gemini
+  'gemini-3.7-flash': { input: 0.075, output: 0.30, name: 'Gemini 3.7 Flash' },
   'gemini-2.5-flash': { input: 0.075, output: 0.30, name: 'Gemini 2.5 Flash' },
+  'gemini-3.1-flash-lite': { input: 0.0375, output: 0.15, name: 'Gemini 3.1 Flash Lite' },
+  'gemini-3.1-pro-preview': { input: 1.25, output: 5.00, name: 'Gemini 3.1 Pro' },
   'gemini-2.5-pro': { input: 1.25, output: 5.00, name: 'Gemini 2.5 Pro' },
-  'gemini-1.5-flash': { input: 0.075, output: 0.30, name: 'Gemini 1.5 Flash' },
-  'gemini-1.5-pro': { input: 1.25, output: 5.00, name: 'Gemini 1.5 Pro' },
+  'gemini-flash-latest': { input: 0.075, output: 0.30, name: 'Gemini Flash Latest' },
 
   // Mistral AI
   'mistral-large-latest': { input: 2.00, output: 6.00, name: 'Mistral Large' },

@@ -423,6 +423,7 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
 
       {/* Supplier Search Modal */}
       <SupplierSearchModal
+        key={selectedProductForSearch?.id || selectedProductForSearch?.name || 'search-modal'}
         product={selectedProductForSearch}
         isOpen={isSearchModalOpen}
         onClose={() => setIsSearchModalOpen(false)}

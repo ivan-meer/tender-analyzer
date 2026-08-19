@@ -43,6 +43,12 @@ import { NeonService, NeonCatalogItem, NeonStatus, NeonSupplier } from '../lib/n
 import { NeonSchemaModal } from './NeonSchemaModal';
 import { ProductSearchAgentModal } from './ProductSearchAgentModal';
 import { Bot } from 'lucide-react';
+import { ProductImageFallback, REALISTIC_PHOTO_PRESETS } from './suppliers/ProductImageFallback';
+import { SupplierInspectModal } from './suppliers/SupplierInspectModal';
+import { SupplierEditItemModal } from './suppliers/SupplierEditItemModal';
+import { SupplierEditSupplierModal } from './suppliers/SupplierEditSupplierModal';
+import { SupplierAddItemDrawer, SupplierAddSupplierDrawer } from './suppliers/SupplierAddDrawer';
+import { SuppliersFilterBar } from './suppliers/SuppliersFilterBar';
 
 interface SuppliersCatalogModalProps {
   isOpen: boolean;
@@ -50,71 +56,6 @@ interface SuppliersCatalogModalProps {
   procurementProducts?: ProductItem[];
   onSelectSupplierForProduct?: (productName: string, supplierName: string) => void;
 }
-
-// Curated bank of realistic photo presets for Russian procurement categories
-const REALISTIC_PHOTO_PRESETS = [
-  {
-    name: 'Стол рабочий (ЛДСП/Металл)',
-    category: 'Furniture',
-    url: 'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    name: 'Кресло операторское (Сетка)',
-    category: 'Furniture',
-    url: 'https://images.unsplash.com/photo-1580481072645-022f9a6d8310?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    name: 'Шкаф архивный / Стеллаж',
-    category: 'Furniture',
-    url: 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    name: 'Компьютер ПК / Монитор',
-    category: 'Tech',
-    url: 'https://images.unsplash.com/photo-1587831990711-23ca6441447b?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    name: 'Силовой кабель / Электро',
-    category: 'Electrical',
-    url: 'https://images.unsplash.com/photo-1558346490-a72e53ae2d4f?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    name: 'Медицинская лаборатория',
-    category: 'Medical',
-    url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=600&q=80'
-  }
-];
-
-// Robust product image component with error handling fallback
-const ProductImageFallback: React.FC<{
-  src?: string;
-  alt: string;
-  category?: string;
-  className?: string;
-}> = ({ src, alt, category, className = "w-full h-36 object-cover" }) => {
-  const [hasError, setHasError] = useState(false);
-
-  if (!src || hasError) {
-    return (
-      <div className={`bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center p-3 text-slate-400 text-center ${className}`}>
-        <Package className="w-8 h-8 text-cyan-500/80 mb-1 animate-pulse" />
-        <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-300 truncate max-w-[140px]">
-          {alt || category || 'Чертеж ТЗ / ГОСТ'}
-        </span>
-        <span className="text-[9px] text-slate-400 font-mono mt-0.5">Фото по запросу</span>
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      onError={() => setHasError(true)}
-      className={className}
-    />
-  );
-};
 
 export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
   isOpen,
@@ -685,334 +626,50 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
         </div>
 
         {/* Comprehensive Filter Panel */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 space-y-3">
-          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Поиск по названию модели, габаритам (1400х750), ОКПД2, ГОСТ, фабрике или бренду..."
-                className="w-full pl-10 pr-8 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-cyan-500 shadow-2xs"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Category Dropdown Filter */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <Filter className="w-3.5 h-3.5 text-cyan-500 shrink-0 hidden sm:inline" />
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none shadow-2xs shrink-0 cursor-pointer"
-              >
-                <option value="ALL">📦 Все категории продукции</option>
-                <option value="Furniture">Мебель, столы и кресла</option>
-                <option value="Tech">Оргтехника, ПК и Мониторы</option>
-                <option value="Electrical">Электротехника и кабель</option>
-                <option value="Construction">Стройматериалы</option>
-                <option value="Office">Канцелярия</option>
-                <option value="Medical">Медицинская мебель</option>
-              </select>
-            </div>
-
-            {/* Supplier / Manufacturer Dropdown Filter */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <Building2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 hidden sm:inline" />
-              <select
-                value={selectedSupplier}
-                onChange={(e) => setSelectedSupplier(e.target.value)}
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none shadow-2xs shrink-0 cursor-pointer max-w-[210px] truncate"
-              >
-                <option value="ALL">🏭 Все поставщики ({availableSuppliers.length})</option>
-                {availableSuppliers.map((supName, idx) => (
-                  <option key={idx} value={supName}>
-                    {supName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* View Mode Switcher (Grid / Table) */}
-            <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1 rounded-xl gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  viewMode === 'grid'
-                    ? 'bg-cyan-600 text-white shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-                title="Отображение карточками с фото"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Сетка</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  viewMode === 'table'
-                    ? 'bg-cyan-600 text-white shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-                title="Отображение компактной реестровой таблицей"
-              >
-                <List className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Таблица</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Secondary filter bar: Price Range + GISP toggle + Reset Button */}
-          <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Price range */}
-              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-xl text-xs">
-                <DollarSign className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span className="text-[10px] text-slate-400 font-bold">Прайс ₽:</span>
-                <input
-                  type="number"
-                  placeholder="от"
-                  value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
-                  className="w-14 bg-transparent text-slate-800 dark:text-slate-100 focus:outline-none text-xs"
-                />
-                <span className="text-slate-400">—</span>
-                <input
-                  type="number"
-                  placeholder="до"
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
-                  className="w-16 bg-transparent text-slate-800 dark:text-slate-100 focus:outline-none text-xs"
-                />
-              </div>
-
-              {/* GISP / Domestic check pill */}
-              <button
-                type="button"
-                onClick={() => setOnlyDomestic(!onlyDomestic)}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
-                  onlyDomestic
-                    ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Только ГИСП Минпромторг (ПП 1875)</span>
-              </button>
-
-              {/* Reset Filters / View Full Catalog Button */}
-              {(searchTerm || selectedCategory !== 'ALL' || selectedSupplier !== 'ALL' || onlyDomestic || minPrice || maxPrice) && (
-                <button
-                  type="button"
-                  onClick={resetAllFilters}
-                  className="px-3 py-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                  title="Показать весь каталог без каких-либо ограничений"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Показать весь каталог (Сброс)</span>
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowSchemaModal(true)}
-                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
-                title="Инспектор структуры данных таблиц Neon PostgreSQL"
-              >
-                <Database className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Структура БД</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={exportNeonCatalogCsv}
-                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
-                title="Экспорт выгрузки Neon DB в CSV/Excel"
-              >
-                <Download className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Прайс CSV</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowAddForm(!showAddForm)}
-                className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-2xs transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Добавить товар</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <SuppliersFilterBar
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          selectedSupplier={selectedSupplier}
+          setSelectedSupplier={setSelectedSupplier}
+          availableSuppliers={availableSuppliers}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          minPrice={minPrice}
+          setMinPrice={setMinPrice}
+          maxPrice={maxPrice}
+          setMaxPrice={setMaxPrice}
+          onlyDomestic={onlyDomestic}
+          setOnlyDomestic={setOnlyDomestic}
+          resetAllFilters={resetAllFilters}
+          onOpenSchemaModal={() => setShowSchemaModal(true)}
+          onExportCsv={exportNeonCatalogCsv}
+          onToggleAddForm={() => setShowAddForm(!showAddForm)}
+        />
 
         {/* Add Item Form Modal Drawer */}
-        {showAddForm && activeTab === 'neon' && (
-          <form onSubmit={handleAddNewItem} className="p-4 bg-cyan-950/20 border-b border-cyan-800/40 space-y-3 animate-fadeIn">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-extrabold text-cyan-400 flex items-center gap-1.5 uppercase tracking-wider">
-                <Database className="w-4 h-4" />
-                Новая карточка в Neon PostgreSQL (Каталог, Габариты, Прайс)
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                className="text-slate-400 hover:text-white text-xs font-bold cursor-pointer"
-              >
-                Отмена
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Компания / Поставщик:</label>
-                <input
-                  type="text"
-                  required
-                  value={newCompany}
-                  onChange={(e) => setNewCompany(e.target.value)}
-                  placeholder='ООО "Фабрика Офис-Мебель РФ"'
-                  className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Название модели / ТЗ:</label>
-                <input
-                  type="text"
-                  required
-                  value={newModel}
-                  onChange={(e) => setNewModel(e.target.value)}
-                  placeholder='Стол рабочий "Серия Элит"'
-                  className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Размеры / Габариты (мм):</label>
-                <input
-                  type="text"
-                  required
-                  value={newDimensions}
-                  onChange={(e) => setNewDimensions(e.target.value)}
-                  placeholder="1400х750х760 мм"
-                  className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Категория:</label>
-                <select
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                >
-                  <option value="Furniture">Мебель</option>
-                  <option value="Tech">Оргтехника</option>
-                  <option value="Electrical">Электротехника</option>
-                  <option value="Construction">Стройматериалы</option>
-                  <option value="Office">Канцелярия</option>
-                  <option value="Medical">Медицина</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Ориентировочная цена (₽):</label>
-                <input
-                  type="number"
-                  required
-                  value={newPrice}
-                  onChange={(e) => setNewPrice(e.target.value)}
-                  placeholder="18500"
-                  className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Статус ГИСП Минпромторг:</label>
-                <input
-                  type="text"
-                  value={newGispStatus}
-                  onChange={(e) => setNewGispStatus(e.target.value)}
-                  placeholder="Внесено в реестр Минпромторга (ПП 1875)"
-                  className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                />
-              </div>
-
-              <div className="col-span-1 sm:col-span-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 space-y-2">
-                <label className="text-[10px] font-bold text-cyan-400 block flex items-center gap-1">
-                  <Camera className="w-3 h-3" />
-                  Фотография / Изображение товара (Ссылка или Загрузка файла):
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newImageUrl}
-                    onChange={(e) => setNewImageUrl(e.target.value)}
-                    placeholder="https://... или выберите пресет ниже"
-                    className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
-                  />
-                  <label className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0">
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Загрузить фото</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => handlePhotoFileUpload(e, (url) => setNewImageUrl(url))}
-                    />
-                  </label>
-                </div>
-
-                {/* Preset Photo Selector Buttons */}
-                <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                  <span className="text-[10px] text-slate-400 font-bold block w-full">Реалистичные пресеты фото:</span>
-                  {REALISTIC_PHOTO_PRESETS.map((preset, idx) => (
-                    <button
-                      type="button"
-                      key={idx}
-                      onClick={() => setNewImageUrl(preset.url)}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-[10px] font-bold border border-slate-700 transition-colors cursor-pointer"
-                    >
-                      📷 {preset.name}
-                    </button>
-                  ))}
-                </div>
-
-                {newImageUrl && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <img src={newImageUrl} alt="Превью" className="w-12 h-12 object-cover rounded-lg border border-slate-700" />
-                    <span className="text-[10px] text-emerald-400 font-bold">✓ Изображение готово к сохранению</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <button
-                type="submit"
-                disabled={formSaving}
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>{formSaving ? 'Сохранение в Neon DB...' : 'Сохранить в Neon PostgreSQL'}</span>
-              </button>
-            </div>
-          </form>
-        )}
+        <SupplierAddItemDrawer
+          show={showAddForm && activeTab === 'neon'}
+          onClose={() => setShowAddForm(false)}
+          onSubmit={handleAddNewItem}
+          company={newCompany}
+          setCompany={setNewCompany}
+          model={newModel}
+          setModel={setNewModel}
+          dimensions={newDimensions}
+          setDimensions={setNewDimensions}
+          category={newCategory}
+          setCategory={setNewCategory}
+          price={newPrice}
+          setPrice={setNewPrice}
+          gispStatus={newGispStatus}
+          setGispStatus={setNewGispStatus}
+          imageUrl={newImageUrl}
+          setImageUrl={setNewImageUrl}
+          onFileUpload={handlePhotoFileUpload}
+          saving={formSaving}
+        />
 
         {/* Content Body */}
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
@@ -1298,103 +955,24 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
               </div>
 
               {/* Add Supplier Form Drawer */}
-              {showAddSupplierForm && (
-                <form onSubmit={handleAddNewSupplier} className="p-4 bg-emerald-950/30 border border-emerald-800/60 rounded-2xl space-y-3 animate-fadeIn">
-                  <h4 className="text-xs font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4" />
-                    Новая фабрика / поставщик в Neon PostgreSQL
-                  </h4>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Название компании:</label>
-                      <input
-                        type="text"
-                        required
-                        value={supCompany}
-                        onChange={(e) => setSupCompany(e.target.value)}
-                        placeholder='ООО "Фабрика Офисной Мебели"'
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Регион / Город:</label>
-                      <input
-                        type="text"
-                        value={supRegion}
-                        onChange={(e) => setSupRegion(e.target.value)}
-                        placeholder="Москва / Московская обл."
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Специализация:</label>
-                      <input
-                        type="text"
-                        value={supSpec}
-                        onChange={(e) => setSupSpec(e.target.value)}
-                        placeholder="Офисная и школьная мебель"
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Контакты (Тел / Email):</label>
-                      <input
-                        type="text"
-                        value={supContacts}
-                        onChange={(e) => setSupContacts(e.target.value)}
-                        placeholder="+7 (495) 123-45-67 / info@factory.ru"
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 block mb-1">Сайт:</label>
-                      <input
-                        type="text"
-                        value={supWebsite}
-                        onChange={(e) => setSupWebsite(e.target.value)}
-                        placeholder="https://factory.ru"
-                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-4">
-                      <input
-                        type="checkbox"
-                        id="supGisp"
-                        checked={supGisp}
-                        onChange={(e) => setSupGisp(e.target.checked)}
-                        className="w-4 h-4 rounded-md accent-emerald-500 cursor-pointer"
-                      />
-                      <label htmlFor="supGisp" className="text-xs text-slate-300 font-bold cursor-pointer">
-                        Внесено в реестр Минпромторга (ПП 1875)
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2 border-t border-emerald-900/50">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddSupplierForm(false)}
-                      className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-xs font-bold"
-                    >
-                      Отмена
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={formSaving}
-                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>{formSaving ? 'Сохранение...' : 'Сохранить фабрику'}</span>
-                    </button>
-                  </div>
-                </form>
-              )}
+              <SupplierAddSupplierDrawer
+                show={showAddSupplierForm}
+                onClose={() => setShowAddSupplierForm(false)}
+                onSubmit={handleAddNewSupplier}
+                company={supCompany}
+                setCompany={setSupCompany}
+                region={supRegion}
+                setRegion={setSupRegion}
+                spec={supSpec}
+                setSpec={setSupSpec}
+                contacts={supContacts}
+                setContacts={setSupContacts}
+                website={supWebsite}
+                setWebsite={setSupWebsite}
+                gisp={supGisp}
+                setGisp={setSupGisp}
+                saving={formSaving}
+              />
 
               {/* Suppliers list cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1661,93 +1239,11 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
       )}
 
       {/* Tech Specs Inspector Overlay Modal */}
-      {inspectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-slate-900 border border-cyan-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden p-6 space-y-5 text-white">
-            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-cyan-500/20 rounded-2xl text-cyan-400 border border-cyan-500/30">
-                  <Cpu className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-extrabold text-cyan-400 uppercase tracking-widest block">
-                    Neon PostgreSQL • Запись #{inspectedItem.id}
-                  </span>
-                  <h3 className="text-lg font-extrabold text-white">
-                    {inspectedItem.modelName}
-                  </h3>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setInspectedItem(null)}
-                className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Spec details grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-slate-400 font-bold block text-[10px] uppercase">Изготовитель / Бренд</span>
-                <span className="font-extrabold text-cyan-300">{inspectedItem.supplierName || inspectedItem.manufacturer}</span>
-              </div>
-
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-slate-400 font-bold block text-[10px] uppercase">Страна производства</span>
-                <span className="font-extrabold text-emerald-400">{inspectedItem.country}</span>
-              </div>
-
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-1">
-                <span className="text-slate-400 font-bold block text-[10px] uppercase">Габариты / Размеры</span>
-                <span className="font-mono font-extrabold text-white">{inspectedItem.dimensions || 'По ТЗ'}</span>
-              </div>
-
-              <div className="bg-emerald-950/40 p-3 rounded-2xl border border-emerald-800/60 space-y-1">
-                <span className="text-emerald-400 font-bold block text-[10px] uppercase">Прайс / Ориентировочная стоимость</span>
-                <span className="font-mono font-extrabold text-emerald-300 text-sm">
-                  {inspectedItem.priceFormatted || `${inspectedItem.estimatedPrice?.toLocaleString('ru-RU')} ₽`}
-                </span>
-              </div>
-            </div>
-
-            {/* Full description */}
-            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1.5">
-              <span className="text-slate-400 font-bold block text-[10px] uppercase">Полное описание ТХ и соответствие ГОСТ</span>
-              <p className="text-xs text-slate-200 leading-relaxed font-sans">
-                {inspectedItem.description}
-              </p>
-            </div>
-
-            {/* GISP Registry Status */}
-            <div className="bg-cyan-950/40 p-3 rounded-2xl border border-cyan-800/60 flex items-center justify-between text-xs">
-              <span className="text-slate-300 font-bold">Статус реестра Минпромторга РФ:</span>
-              <span className="font-extrabold text-cyan-300 bg-cyan-900/60 px-3 py-1 rounded-xl border border-cyan-700">
-                {inspectedItem.gispRegistryStatus}
-              </span>
-            </div>
-
-            {/* Modal actions */}
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => copyTechSpecsToClipboard(inspectedItem)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <Copy className="w-4 h-4 text-cyan-400" />
-                <span>Скопировать ТХ</span>
-              </button>
-
-              <button
-                onClick={() => setInspectedItem(null)}
-                className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-              >
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SupplierInspectModal
+        item={inspectedItem}
+        onClose={() => setInspectedItem(null)}
+        onCopy={copyTechSpecsToClipboard}
+      />
 
       {/* Database Schema Inspector Modal */}
       <NeonSchemaModal
@@ -1756,261 +1252,23 @@ export const SuppliersCatalogModal: React.FC<SuppliersCatalogModalProps> = ({
       />
 
       {/* Item Edit Overlay Modal */}
-      {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
-          <form
-            onSubmit={handleUpdateItemSubmit}
-            className="bg-slate-900 border border-cyan-700 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden p-6 space-y-4 text-white"
-          >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Pencil className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-base font-bold text-white">Редактирование товара (Neon DB #{editingItem.id})</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingItem(null)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <SupplierEditItemModal
+        item={editingItem}
+        onClose={() => setEditingItem(null)}
+        onItemChange={setEditingItem}
+        onUpdate={handleUpdateItemSubmit}
+        onFileUpload={handlePhotoFileUpload}
+        saving={formSaving}
+      />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Наименование модели:</label>
-                <input
-                  type="text"
-                  required
-                  value={editingItem.modelName}
-                  onChange={(e) => setEditingItem({ ...editingItem, modelName: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Поставщик / Производитель:</label>
-                <input
-                  type="text"
-                  value={editingItem.supplierName || ''}
-                  onChange={(e) => setEditingItem({ ...editingItem, supplierName: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Габариты / Размеры:</label>
-                <input
-                  type="text"
-                  value={editingItem.dimensions || ''}
-                  onChange={(e) => setEditingItem({ ...editingItem, dimensions: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Цена (₽):</label>
-                <input
-                  type="number"
-                  value={editingItem.estimatedPrice || 0}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0;
-                    setEditingItem({
-                      ...editingItem,
-                      estimatedPrice: val,
-                      priceFormatted: `${val.toLocaleString('ru-RU')} ₽`
-                    });
-                  }}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Описание ТХ и ГОСТ:</label>
-                <textarea
-                  rows={3}
-                  value={editingItem.description || ''}
-                  onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Статус ГИСП Минпромторга:</label>
-                <input
-                  type="text"
-                  value={editingItem.gispRegistryStatus || ''}
-                  onChange={(e) => setEditingItem({ ...editingItem, gispRegistryStatus: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                />
-              </div>
-
-              {/* Photo Upload for Editing */}
-              <div className="sm:col-span-2 bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2">
-                <label className="text-[10px] font-bold text-cyan-400 block flex items-center gap-1">
-                  <Camera className="w-3.5 h-3.5" />
-                  Изображение товара (Загрузить новое фото или вставить URL):
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={editingItem.imageUrl || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, imageUrl: e.target.value })}
-                    placeholder="https://... или выберите файл"
-                    className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
-                  />
-                  <label className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0">
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Загрузить фото</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => handlePhotoFileUpload(e, (url) => setEditingItem({ ...editingItem, imageUrl: url }))}
-                    />
-                  </label>
-                </div>
-
-                {editingItem.imageUrl && (
-                  <div className="flex items-center gap-3 pt-1">
-                    <img src={editingItem.imageUrl} alt="Предпросмотр" className="w-16 h-16 object-cover rounded-xl border border-slate-700" />
-                    <span className="text-[11px] text-emerald-400 font-bold">✓ Фото загружено</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setEditingItem(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
-              >
-                Отмена
-              </button>
-
-              <button
-                type="submit"
-                disabled={formSaving}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>{formSaving ? 'Сохранение...' : 'Сохранить изменения'}</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
       {/* Supplier Edit Overlay Modal */}
-      {editingSupplier && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
-          <form
-            onSubmit={handleUpdateSupplierSubmit}
-            className="bg-slate-900 border border-emerald-700 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden p-6 space-y-4 text-white"
-          >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Pencil className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-base font-bold text-white">Редактирование поставщика (Neon DB #{editingSupplier.id})</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingSupplier(null)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Название компании:</label>
-                <input
-                  type="text"
-                  required
-                  value={editingSupplier.companyName}
-                  onChange={(e) => setEditingSupplier({ ...editingSupplier, companyName: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 block mb-1">Регион / Город:</label>
-                  <input
-                    type="text"
-                    value={editingSupplier.region || ''}
-                    onChange={(e) => setEditingSupplier({ ...editingSupplier, region: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 block mb-1">Специализация:</label>
-                  <input
-                    type="text"
-                    value={editingSupplier.specialization || ''}
-                    onChange={(e) => setEditingSupplier({ ...editingSupplier, specialization: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">Контакты (Тел / Email):</label>
-                <input
-                  type="text"
-                  value={editingSupplier.contactsOrWebsite || ''}
-                  onChange={(e) => setEditingSupplier({ ...editingSupplier, contactsOrWebsite: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 block mb-1">URL Сайта:</label>
-                <input
-                  type="text"
-                  value={editingSupplier.websiteUrl || ''}
-                  onChange={(e) => setEditingSupplier({ ...editingSupplier, websiteUrl: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="editSupGisp"
-                  checked={editingSupplier.inGispRegistry || false}
-                  onChange={(e) => setEditingSupplier({ ...editingSupplier, inGispRegistry: e.target.checked })}
-                  className="w-4 h-4 rounded-md accent-emerald-500 cursor-pointer"
-                />
-                <label htmlFor="editSupGisp" className="text-xs text-slate-300 font-bold cursor-pointer">
-                  Внесено в реестр Минпромторга (ПП 1875)
-                </label>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setEditingSupplier(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
-              >
-                Отмена
-              </button>
-
-              <button
-                type="submit"
-                disabled={formSaving}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>{formSaving ? 'Сохранение...' : 'Сохранить изменения'}</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <SupplierEditSupplierModal
+        supplier={editingSupplier}
+        onClose={() => setEditingSupplier(null)}
+        onSupplierChange={setEditingSupplier}
+        onUpdate={handleUpdateSupplierSubmit}
+        saving={formSaving}
+      />
 
       {/* Product Search AI Agent Modal */}
       <ProductSearchAgentModal

@@ -32,9 +32,10 @@ interface AISettingsModalProps {
 
 const PROVIDER_MODELS: Record<LLMProvider, { name: string; id: string; desc: string; isRecommended?: boolean }[]> = {
   gemini: [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Основная модель по умолчанию: высокая скорость, глубокий анализ 223/44-ФЗ и ТЗ', isRecommended: true },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Углубленный юридический аудит, анализ рисков и рассуждения High Thinking' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Быстрый легковесный режим с огромным контекстом' },
+    { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', desc: 'Основная флагманская модель: высокая скорость, глубокий анализ 223/44-ФЗ и ТЗ', isRecommended: true },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Скоростной мультимодальный аудит с поддержкой Google Search' },
+    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', desc: 'Сверхбыстрый и экономичный режим для экспресс-проверок' },
+    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', desc: 'Углубленный юридический анализ, проверка рисков и High Reasoning' },
   ],
   deepinfra: [
     { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B Instruct', desc: 'Основная фоллбэк-модель: флагман Meta со скоростным инференсом', isRecommended: true },

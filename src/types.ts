@@ -133,15 +133,19 @@ export interface GeneratedTemplates {
 }
 
 export interface ProductParameter {
-  name: string; // Название параметра (например: "Размеры / Габариты", "Материал", "Масса", "Мощность", "Гарантия")
-  value: string; // Значение параметра (например: "1200x800x600 мм", "Сталь 09Г2С", "15 кг")
+  name: string; // Название параметра (например: "Размеры / Габариты", "Материалы", "Цвет", "Масса")
+  value: string; // Значение параметра (например: "1200x800x600 мм", "ЛДСП 25 мм / металлокаркас", "Венге")
+  isPrimary?: boolean; // Флаг ключевого параметра (Размеры, Материалы, Цвет)
 }
 
 export interface SuggestedModel {
   modelName: string;
   manufacturer: string;
   country: string;
-  dimensionsMatch: string;
+  dimensionsMatch: string; // Оценка соответствия размерам/габаритам
+  materialsMatch?: string; // Оценка соответствия материалам (каркас, обивка, покрытие)
+  colorMatch?: string; // Оценка соответствия цвету и отделке
+  matchScore?: number; // Итоговый процент соответствия ТЗ (0-100%)
   estimatedPrice: string;
   description: string;
   gispRegistryStatus?: string;
@@ -172,6 +176,11 @@ export interface SupplierSearchResult {
   fromCache?: boolean;
   cachedAt?: string;
   cacheHits?: number;
+  primaryParamsUsed?: {
+    dimensions?: string;
+    materials?: string;
+    color?: string;
+  };
 }
 
 export interface DeliveryInfo {
@@ -187,7 +196,9 @@ export interface ProductItem {
   id: string;
   name: string; // Наименование товара/работы/услуги
   quantity: string; // Количество с единицами измерения
-  dimensions?: string; // Размеры / Габариты из ТЗ (если есть)
+  dimensions?: string; // Размеры / Габариты из ТЗ (ПРИОРИТЕТ №1)
+  materials?: string; // Материалы: каркас, обивка, наполнение (ПРИОРИТЕТ №1)
+  color?: string; // Цвет / Отделка: венге, серый, хром и т.д. (ПРИОРИТЕТ №1)
   specification: string; // Основное описание / технические требования из ТЗ
   rawRequirementText?: string;
   parameters?: ProductParameter[]; // Список ключевых физико-технических параметров

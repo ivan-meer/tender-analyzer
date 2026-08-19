@@ -10,7 +10,8 @@ interface AnalysisProgressScreenProps {
 
 export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ procedureType, onCancel, onForceInstant }) => {
   const [currentStep, setCurrentStep] = useState(0);
-  const [progress, setProgress] = useState(12);
+  const [progress, setProgress] = useState(15);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const is44FZ = Boolean(procedureType && procedureType.startsWith('44_FZ'));
   const isCommercial = procedureType === 'COMMERCIAL' || procedureType === 'OTHER';
@@ -67,6 +68,11 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ 
   ];
 
   useEffect(() => {
+    // Increment elapsed seconds timer
+    const timerInterval = setInterval(() => {
+      setElapsedSeconds((sec) => sec + 1);
+    }, 1000);
+
     const stepInterval = setInterval(() => {
       setCurrentStep((prev) => {
         if (prev < steps.length - 1) return prev + 1;
@@ -76,16 +82,23 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ 
 
     const progressInterval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 95) return 95;
-        return prev + Math.floor(Math.random() * 8) + 3;
+        if (prev < 80) {
+          return prev + Math.floor(Math.random() * 8) + 4;
+        } else if (prev < 94) {
+          return prev + Math.floor(Math.random() * 3) + 1;
+        } else if (prev < 98) {
+          return prev + (Math.random() > 0.6 ? 1 : 0);
+        }
+        return 98;
       });
-    }, 300);
+    }, 400);
 
     return () => {
+      clearInterval(timerInterval);
       clearInterval(stepInterval);
       clearInterval(progressInterval);
     };
-  }, []);
+  }, [steps.length]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
@@ -110,7 +123,7 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ 
               </h3>
               <span className="px-2 py-0.5 text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-md flex items-center gap-1">
                 <Zap className="w-3 h-3 text-indigo-400 fill-indigo-400" />
-                Gemini 3.5 Flash
+                Gemini 3.1 Flash
               </span>
             </div>
             <p className="text-xs text-slate-400 font-medium">
@@ -124,8 +137,15 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ 
         {/* Progress Bar & Percentage Indicator */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs font-mono font-bold">
-            <span className="text-slate-400">Прогресс выполнения:</span>
-            <span className="text-indigo-400">{progress}%</span>
+            <span className="text-slate-400 flex items-center gap-1.5">
+              <span>Прогресс выполнения:</span>
+              {elapsedSeconds > 8 && (
+                <span className="text-slate-500 text-[11px] font-normal">
+                  ({elapsedSeconds} сек.)
+                </span>
+              )}
+            </span>
+            <span className="text-indigo-400 font-extrabold">{progress}%</span>
           </div>
 
           <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
@@ -134,6 +154,25 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ 
               style={{ width: `${progress}%` }}
             />
           </div>
+
+          {elapsedSeconds > 10 && (
+            <div className="p-2.5 bg-indigo-950/40 border border-indigo-500/30 rounded-xl text-xs text-indigo-200 flex items-center justify-between gap-2 animate-fadeIn">
+              <span className="truncate">
+                {elapsedSeconds > 18
+                  ? 'Финальная сборка и калькуляция юридического отчета...'
+                  : 'Обработка больших приложений и расчет спецификаций...'}
+              </span>
+              {onForceInstant && (
+                <button
+                  type="button"
+                  onClick={onForceInstant}
+                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] rounded-lg shrink-0 transition-colors shadow-xs"
+                >
+                  Открыть сейчас
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Step-by-Step Progress List */}
@@ -198,7 +237,7 @@ export const AnalysisProgressScreen: React.FC<AnalysisProgressScreenProps> = ({ 
               {is44FZ ? 'Проверка согласно законодательству 44-ФЗ и ПП РФ № 1875' : 'Проверка согласно регламенту 223-ФЗ и ПП РФ № 1875'}
             </span>
             <span className="font-mono text-[10px] text-slate-500">
-              ~3-5 сек.
+              ~3-8 сек.
             </span>
           </div>
 

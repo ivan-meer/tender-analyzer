@@ -16,6 +16,12 @@ import { getUniqueProductImageUrl } from '../utils/imageMapper';
 import { MermaidDiagram } from './MermaidDiagram';
 import { VERIFIED_SUPPLIERS } from '../data/verifiedSuppliers';
 import { TokenPriceEstimator } from './TokenPriceEstimator';
+import { ChatProductDetailModal } from './chat/ChatProductDetailModal';
+import { ChatPenaltyCalcModal } from './chat/ChatPenaltyCalcModal';
+import { ChatSuppliersTab } from './chat/ChatSuppliersTab';
+import { ChatProductsTab } from './chat/ChatProductsTab';
+import { ChatDetailsTab } from './chat/ChatDetailsTab';
+import { ChatToolsDropdown } from './chat/ChatToolsDropdown';
 
 export interface AttachedFile {
   id: string;
@@ -932,86 +938,15 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Tools Drawer Button */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowToolsDrawer(!showToolsDrawer)}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
-                title="Инструменты и экспорт"
-              >
-                <Wrench className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="hidden sm:inline">Инструменты</span>
-              </button>
-
-              {/* Tools Dropdown Menu */}
-              {showToolsDrawer && (
-                <div 
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute right-0 top-10 z-50 w-64 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-2 space-y-1 text-xs animate-fade-in"
-                >
-                  <div className="px-2 py-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider border-b border-slate-800">
-                    🛠️ Полезные утилиты
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setShowPenaltyCalc(true);
-                      setShowToolsDrawer(false);
-                    }}
-                    className="w-full text-left px-2.5 py-2 hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2 text-slate-200 font-medium"
-                  >
-                    <Calculator className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <div>
-                      <div className="font-bold">Калькулятор пеней 223-ФЗ</div>
-                      <div className="text-[10px] text-slate-400">Расчет неустойки 1/300 ставки ЦБ</div>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      handleSend("Сгенерируй шаблон Протокола разногласий по закупке мебели (ГОСТ 19917-2014) с обоснованием несоответствия ТЗ");
-                      setShowToolsDrawer(false);
-                    }}
-                    className="w-full text-left px-2.5 py-2 hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2 text-slate-200 font-medium"
-                  >
-                    <FileText className="w-4 h-4 text-amber-400 shrink-0" />
-                    <div>
-                      <div className="font-bold">Протокол разногласий</div>
-                      <div className="text-[10px] text-slate-400">Генерация обращения к заказчику</div>
-                    </div>
-                  </button>
-
-                  <div className="px-2 py-1 text-[10px] uppercase font-bold text-slate-400 tracking-wider border-b border-slate-800 pt-2">
-                    📥 Экспорт истории
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      handleExportChat('md');
-                      setShowToolsDrawer(false);
-                    }}
-                    disabled={messages.length === 0}
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2 text-slate-300 disabled:opacity-40"
-                  >
-                    <DownloadCloud className="w-4 h-4 text-indigo-400 shrink-0" />
-                    <span>Скачать Markdown (.md)</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      handleExportChat('json');
-                      setShowToolsDrawer(false);
-                    }}
-                    disabled={messages.length === 0}
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2 text-slate-300 disabled:opacity-40"
-                  >
-                    <FileJson className="w-4 h-4 text-cyan-400 shrink-0" />
-                    <span>Скачать JSON (.json)</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Tools Drawer Dropdown */}
+            <ChatToolsDropdown
+              isOpen={showToolsDrawer}
+              onToggle={() => setShowToolsDrawer(!showToolsDrawer)}
+              onOpenPenaltyCalc={() => setShowPenaltyCalc(true)}
+              onGenerateDisagreementTemplate={() => handleSend("Сгенерируй шаблон Протокола разногласий по закупке мебели (ГОСТ 19917-2014) с обоснованием несоответствия ТЗ")}
+              onExportChat={handleExportChat}
+              hasMessages={messages.length > 0}
+            />
 
             {/* Clear Chat Button */}
             <div className="relative">
@@ -1113,278 +1048,31 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
         </div>
 
         {modalMode === 'suppliers' ? (
-          /* SUPPLIERS VIEW COMPONENT */
-          <div className="flex-1 p-4 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-4">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-amber-500" />
-                  Реестр проверенных отечественных поставщиков (ГИСП / Минпромторг)
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Фабрики полного цикла с локализацией производства в РФ и ЕАЭС
-                </p>
-              </div>
-
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  value={supplierSearch}
-                  onChange={(e) => setSupplierSearch(e.target.value)}
-                  placeholder="Поиск по бренду, региону, специализации..."
-                  className="pl-8 pr-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {VERIFIED_SUPPLIERS
-                .filter(sup => {
-                  if (!supplierSearch.trim()) return true;
-                  const q = supplierSearch.toLowerCase();
-                  return (
-                    sup.brandName.toLowerCase().includes(q) ||
-                    sup.category.toLowerCase().includes(q) ||
-                    sup.region.toLowerCase().includes(q) ||
-                    sup.description.toLowerCase().includes(q)
-                  );
-                })
-                .map(sup => (
-                  <div key={sup.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-3 shadow-2xs hover:border-indigo-400 transition-all">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">{sup.brandName}</h4>
-                          {sup.isDomesticProducer ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3 text-emerald-500" />
-                              ГИСП / Минпромторг РФ
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
-                              ЕАЭС / Импорт
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-1">
-                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                          {sup.region}
-                        </span>
-                      </div>
-
-                      {sup.website && (
-                        <a
-                          href={sup.website}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-slate-600 dark:text-slate-300 transition-colors shrink-0"
-                          title="Официальный сайт"
-                        >
-                          <Globe className="w-4 h-4 text-indigo-500" />
-                        </a>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{sup.description}</p>
-
-                    <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl text-[11px] space-y-1.5 border border-slate-100 dark:border-slate-800">
-                      <div className="text-slate-700 dark:text-slate-200 font-semibold">
-                        🏷️ <strong>Профиль:</strong> {sup.category}
-                      </div>
-                      <div className="text-slate-500 dark:text-slate-400 font-mono">
-                        📞 <strong>Контакты:</strong> {sup.contacts}
-                      </div>
-                    </div>
-
-                    {sup.sampleProducts && sup.sampleProducts.length > 0 && (
-                      <div className="space-y-1">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Примеры моделей в каталоге:</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {sup.sampleProducts.map((sp, idx) => (
-                            <span key={idx} className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 rounded-lg text-[10px] font-medium text-indigo-800 dark:text-indigo-200">
-                              {sp.name} ({sp.priceRange})
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={() => {
-                        setModalMode('chat');
-                        handleSend(`Покажи подходящие модели и сертификаты фабрики ${sup.brandName} из базы данных PostgreSQL`);
-                      }}
-                      className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold border border-indigo-200 dark:border-indigo-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Bot className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Запросить подбор моделей в ИИ-чате</span>
-                    </button>
-                  </div>
-                ))}
-            </div>
-          </div>
+          <ChatSuppliersTab
+            supplierSearch={supplierSearch}
+            setSupplierSearch={setSupplierSearch}
+            onAskAiAboutSupplier={(supplierName) => {
+              setModalMode('chat');
+              handleSend(`Покажи подходящие модели и сертификаты фабрики ${supplierName} из базы данных PostgreSQL`);
+            }}
+          />
         ) : modalMode === 'products' ? (
-          /* PRODUCTS CATALOG VIEW COMPONENT */
-          <div className="flex-1 p-4 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-4">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4 text-cyan-500" />
-                  Каталог позиций мебели и оборудования (ГОСТ 19917-2014)
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Базовые образцы с кодами ОКПД2 и диапазонами габаритов
-                </p>
-              </div>
-
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  placeholder="Поиск товара по наименованию, ОКПД2..."
-                  className="pl-8 pr-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-              {VERIFIED_SUPPLIERS.flatMap(s => (s.sampleProducts || []).map(p => ({ ...p, supplier: s.brandName })))
-                .filter(p => {
-                  if (!productSearch.trim()) return true;
-                  const q = productSearch.toLowerCase();
-                  return p.name.toLowerCase().includes(q) || p.supplier.toLowerCase().includes(q) || (p.okpd2 && p.okpd2.includes(q));
-                })
-                .map((prod, idx) => (
-                  <div key={idx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-2.5 shadow-2xs hover:border-indigo-400 transition-all flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <div className="h-32 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden relative border border-slate-200 dark:border-slate-700">
-                        <img 
-                          src={MOCK_CHAIR_IMAGES[idx % MOCK_CHAIR_IMAGES.length].url} 
-                          alt={prod.name} 
-                          className="w-full h-full object-cover"
-                        />
-                        <span className="absolute top-2 right-2 px-2 py-0.5 bg-slate-900/80 text-white font-mono text-[10px] font-bold rounded-md backdrop-blur-xs">
-                          ОКПД2 {prod.okpd2 || '31.01.12'}
-                        </span>
-                      </div>
-
-                      <h4 className="font-extrabold text-xs text-slate-900 dark:text-white leading-snug">
-                        {prod.name}
-                      </h4>
-
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <div>🏭 <strong>Фабрика:</strong> {prod.supplier}</div>
-                        <div>📐 <strong>Габариты:</strong> {prod.dimensions}</div>
-                        <div className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                          💰 <strong>Цена:</strong> {prod.priceRange}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        setModalMode('chat');
-                        handleSend(`Проверь соответствие позиции «${prod.name}» требованием ГОСТ 19917-2014 и покажи допуски в таблице`);
-                      }}
-                      className="w-full py-1.5 bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950 text-slate-700 hover:text-indigo-600 dark:text-slate-200 dark:hover:text-indigo-300 rounded-xl text-[11px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <Bot className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Сравнить с ТЗ в чате</span>
-                    </button>
-                  </div>
-                ))}
-            </div>
-          </div>
+          <ChatProductsTab
+            productSearch={productSearch}
+            setProductSearch={setProductSearch}
+            onCompareWithTz={(productName) => {
+              setModalMode('chat');
+              handleSend(`Проверь соответствие позиции «${productName}» требованием ГОСТ 19917-2014 и покажи допуски в таблице`);
+            }}
+          />
         ) : modalMode === 'details' ? (
-          /* PROCUREMENT DETAILS VIEW COMPONENT */
-          <div className="flex-1 p-4 overflow-y-auto bg-slate-50 dark:bg-slate-950 space-y-4">
-            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-indigo-600 text-white rounded-xl">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                      {activeAnalysisContext?.summary?.procurementTitle || 'Поставки кресел и офисной мебели для нужд ГУП'}
-                    </h3>
-                    <p className="text-xs text-slate-400">Паспорт закупки 223-ФЗ / Извлеченные параметры</p>
-                  </div>
-                </div>
-
-                <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                  Индекс риска: {activeAnalysisContext?.riskAssessment?.riskIndex || 15} / 100
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Заказчик</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200 block truncate">
-                    {activeAnalysisContext?.summary?.customerName || 'ГУП «Мосгортранс»'}
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Сумма НМЦК</span>
-                  <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 block">
-                    {activeAnalysisContext?.summary?.procurementSum || '12 450 000 ₽'}
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Дата аукциона</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                    {activeAnalysisContext?.summary?.auctionDate || '15.08.2026'}
-                  </span>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Статус аудита</span>
-                  <span className="font-bold text-indigo-600 dark:text-indigo-400 block">
-                    {activeAnalysisContext?.summary?.status || 'Проверено ИИ'}
-                  </span>
-                </div>
-              </div>
-
-              {activeAnalysisContext?.requirements && activeAnalysisContext.requirements.length > 0 && (
-                <div className="space-y-2 pt-2">
-                  <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-                    📋 Позиции спецификации ТЗ ({activeAnalysisContext.requirements.length}):
-                  </h4>
-                  <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                    {activeAnalysisContext.requirements.map((req: any, idx: number) => (
-                      <div key={idx} className="p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between">
-                        <div>
-                          <span className="font-extrabold text-slate-900 dark:text-white block">{req.name || req.title}</span>
-                          <span className="text-[11px] text-slate-500">{req.specs || req.description}</span>
-                        </div>
-                        <span className="font-mono font-bold text-indigo-600 dark:text-indigo-300 text-[11px] shrink-0 ml-2">
-                          {req.quantity ? `${req.quantity} шт.` : '100 шт.'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-2 flex flex-wrap gap-2">
-                <button
-                  onClick={() => {
-                    setModalMode('chat');
-                    handleSend("Сформируй подробный Протокол разногласий к этой закупке с указанием всех жестких требований ТЗ");
-                  }}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
-                >
-                  <Bot className="w-3.5 h-3.5" />
-                  <span>Сгенерировать Протокол разногласий в чате</span>
-                </button>
-              </div>
-            </div>
-          </div>
+          <ChatDetailsTab
+            activeAnalysisContext={activeAnalysisContext}
+            onGenerateDisagreementProtocol={() => {
+              setModalMode('chat');
+              handleSend("Сформируй подробный Протокол разногласий к этой закупке с указанием всех жестких требований ТЗ");
+            }}
+          />
         ) : (
           /* CHAT MODE VIEW (Existing Chat Interface) */
           <>
@@ -2192,451 +1880,38 @@ export const TenderChatModal: React.FC<TenderChatModalProps> = ({
 
       {/* Penalty Calculator Modal */}
       {showPenaltyCalc && (
-        <div 
-          onClick={() => setShowPenaltyCalc(false)}
-          className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-xs flex flex-col items-center justify-center p-4 animate-fade-in"
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl text-white space-y-4"
-          >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Calculator className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-extrabold text-base">Калькулятор пеней по 223-ФЗ</h3>
-              </div>
-              <button 
-                onClick={() => setShowPenaltyCalc(false)}
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-400 font-medium mb-1">Сумма контракта / просрочки (₽):</label>
-                <input 
-                  type="number"
-                  value={penaltyContractAmount}
-                  onChange={(e) => setPenaltyContractAmount(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">Дней просрочки:</label>
-                  <input 
-                    type="number"
-                    value={penaltyDays}
-                    onChange={(e) => setPenaltyDays(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-medium mb-1">Ставка ЦБ (%):</label>
-                  <input 
-                    type="number"
-                    value={penaltyKeyRate}
-                    onChange={(e) => setPenaltyKeyRate(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Calculation Result */}
-              {(() => {
-                const amount = parseFloat(penaltyContractAmount) || 0;
-                const days = parseFloat(penaltyDays) || 0;
-                const rate = parseFloat(penaltyKeyRate) || 0;
-                const dailyRate = (rate / 100) / 300;
-                const totalPenalty = amount * dailyRate * days;
-                const maxPenalty3Pct = amount * 0.03;
-
-                return (
-                  <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-2xl space-y-2 mt-2 font-mono">
-                    <div className="flex justify-between text-slate-400 text-[11px]">
-                      <span>Ставка в день (1/300 ЦБ):</span>
-                      <span className="text-cyan-300 font-bold">{(dailyRate * 100).toFixed(4)}%</span>
-                    </div>
-                    <div className="flex justify-between text-slate-200 text-xs pt-1 border-t border-slate-800">
-                      <span>Расчетная неустойка:</span>
-                      <span className="text-emerald-400 font-extrabold text-sm">{totalPenalty.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400 text-[10px]">
-                      <span>Предел 3% от суммы контракта:</span>
-                      <span>{maxPenalty3Pct.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</span>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                onClick={() => {
-                  const amount = parseFloat(penaltyContractAmount) || 0;
-                  const days = parseFloat(penaltyDays) || 0;
-                  const rate = parseFloat(penaltyKeyRate) || 0;
-                  const totalPenalty = (amount * ((rate / 100) / 300) * days).toFixed(2);
-                  handleSend(`Рассчитать и оформить обоснование неустойки по 223-ФЗ: Сумма контракта ${amount} ₽, дни просрочки ${days}, ключевая ставка ЦБ ${rate}%. Итоговая пени ${totalPenalty} ₽.`);
-                  setShowPenaltyCalc(false);
-                }}
-                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer text-center"
-              >
-                Вставить расчет в чат
-              </button>
-            </div>
-          </div>
-        </div>
+        <ChatPenaltyCalcModal
+          isOpen={showPenaltyCalc}
+          onClose={() => setShowPenaltyCalc(false)}
+          penaltyContractAmount={penaltyContractAmount}
+          setPenaltyContractAmount={setPenaltyContractAmount}
+          penaltyDays={penaltyDays}
+          setPenaltyDays={setPenaltyDays}
+          penaltyKeyRate={penaltyKeyRate}
+          setPenaltyKeyRate={setPenaltyKeyRate}
+          onInsertToChat={(text) => handleSend(text)}
+        />
       )}
 
       {/* Product Detail Modal */}
       {selectedProduct && (
-        <div 
-          onClick={() => setSelectedProduct(null)}
-          className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fade-in"
-        >
-          {/* Hidden File Input for Product Photo */}
-          <input 
-            type="file" 
-            ref={productImageFileInputRef} 
-            onChange={handleProductPhotoFileSelect} 
-            accept="image/*" 
-            className="hidden" 
-          />
-
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl text-white p-5 sm:p-6 space-y-5 scrollbar-thin"
-          >
-            {/* Modal Header */}
-            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-950 text-indigo-300 border border-indigo-700/60">
-                    ГОСТ 19917-2014
-                  </span>
-                  {selectedProduct.matchStatus && (
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-700/60">
-                      {selectedProduct.matchStatus}
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-base sm:text-lg font-extrabold text-white">
-                  {isEditingProduct ? 'Редактирование карточки товара' : selectedProduct.modelName}
-                </h3>
-                <p className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
-                  <Building2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <span>Поставщик / Производитель: <strong>{selectedProduct.supplierName}</strong></span>
-                </p>
-              </div>
-
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsEditingProduct(!isEditingProduct)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border active:scale-95 ${
-                    isEditingProduct
-                      ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/50'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                  }`}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  <span>{isEditingProduct ? 'Отмена' : 'Редактировать'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedProduct(null)}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Product Image Section & Photo Action Controls */}
-            <div className="space-y-3">
-              <div className="relative group w-full h-56 sm:h-64 bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center">
-                <img 
-                  src={selectedProduct.imageUrl} 
-                  alt={selectedProduct.modelName}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-contain p-2"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=400&q=80';
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setActiveZoomImage({ url: selectedProduct.imageUrl, title: `${selectedProduct.modelName}` })}
-                  className="absolute bottom-3 right-3 p-2 bg-slate-900/80 hover:bg-slate-900 text-white rounded-xl text-xs font-bold border border-slate-700 backdrop-blur-xs transition-transform active:scale-95 flex items-center gap-1"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  <span>Увеличить</span>
-                </button>
-              </div>
-
-              {/* Photo Editing & Action Toolbar */}
-              <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-2xl space-y-2">
-                <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Camera className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Управление фото товара:</span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => productImageFileInputRef.current?.click()}
-                    className="px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Загрузить с ПК</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleReplacePhotoUrl}
-                    className="px-3 py-1.5 bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
-                  >
-                    <Link className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Заменить по URL</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowMockGallery(!showMockGallery)}
-                    className="px-3 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Галерея ИИ-моделей</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleDeleteProductPhoto}
-                    className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 ml-auto"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Удалить фото</span>
-                  </button>
-                </div>
-
-                {/* AI Mock Images Gallery Drawer */}
-                {showMockGallery && (
-                  <div className="pt-3 border-t border-slate-800 space-y-2 animate-fade-in">
-                    <div className="text-[10px] text-slate-400 font-bold uppercase">Выбрать из сгенерированных моделей:</div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {MOCK_CHAIR_IMAGES.map((mockImg, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleSelectMockImage(mockImg.url)}
-                          className="group relative h-20 bg-slate-900 rounded-xl overflow-hidden border border-slate-700 hover:border-cyan-400 transition-all cursor-pointer p-1"
-                        >
-                          <img src={mockImg.url} alt={mockImg.title} className="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform" />
-                          <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-1 text-[9px] font-bold text-cyan-300 text-center">
-                            Выбрать
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Editable or View Specifications */}
-            {isEditingProduct ? (
-              <div className="space-y-4 bg-slate-950 p-4 rounded-2xl border border-slate-800 text-xs">
-                <div className="font-bold text-amber-400 uppercase tracking-wider text-[11px]">
-                  Редактирование параметров в базе:
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-slate-400 mb-1">Модель товара:</label>
-                    <input 
-                      type="text" 
-                      value={productEditForm.modelName}
-                      onChange={(e) => setProductEditForm({ ...productEditForm, modelName: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 mb-1">Поставщик / Производитель:</label>
-                    <input 
-                      type="text" 
-                      value={productEditForm.supplierName}
-                      onChange={(e) => setProductEditForm({ ...productEditForm, supplierName: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 mb-1">Статус соответствия ТЗ:</label>
-                    <input 
-                      type="text" 
-                      value={productEditForm.matchStatus}
-                      onChange={(e) => setProductEditForm({ ...productEditForm, matchStatus: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 mb-1">Цена (ориентировочно):</label>
-                    <input 
-                      type="text" 
-                      value={productEditForm.priceText}
-                      onChange={(e) => setProductEditForm({ ...productEditForm, priceText: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 mb-1">Высота сиденья до верха (мм):</label>
-                    <input 
-                      type="text" 
-                      value={productEditForm.seatHeightTop}
-                      onChange={(e) => setProductEditForm({ ...productEditForm, seatHeightTop: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 mb-1">Ширина сиденья (мм):</label>
-                    <input 
-                      type="text" 
-                      value={productEditForm.seatWidth}
-                      onChange={(e) => setProductEditForm({ ...productEditForm, seatWidth: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 mb-1">Глубина сиденья (мм):</label>
-                    <input 
-                      type="text" 
-                      value={productEditForm.seatDepth}
-                      onChange={(e) => setProductEditForm({ ...productEditForm, seatDepth: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 mb-1">Габаритная высота (мм):</label>
-                    <input 
-                      type="text" 
-                      value={productEditForm.overallHeight}
-                      onChange={(e) => setProductEditForm({ ...productEditForm, overallHeight: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-400 mb-1">Максимальная нагрузка (кг):</label>
-                    <input 
-                      type="text" 
-                      value={productEditForm.loadMax}
-                      onChange={(e) => setProductEditForm({ ...productEditForm, loadMax: e.target.value })}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={handleSaveProductEdits}
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Сохранить изменения</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="font-bold text-slate-300 text-xs uppercase tracking-wider flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span>Технические характеристики (ГОСТ 19917-2014):</span>
-                  <span className="text-emerald-400 font-mono font-extrabold text-sm">{selectedProduct.priceText}</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
-                    <span className="text-slate-400">Модель:</span>
-                    <span className="font-bold text-white text-right">{selectedProduct.modelName}</span>
-                  </div>
-
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
-                    <span className="text-slate-400">Поставщик:</span>
-                    <span className="font-bold text-cyan-300 text-right">{selectedProduct.supplierName}</span>
-                  </div>
-
-                  {selectedProduct.rawRow.seat_height_top && (
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <span className="text-slate-400">Высота сиденья до верха:</span>
-                      <span className="font-bold font-mono text-emerald-400">{selectedProduct.rawRow.seat_height_top} мм</span>
-                    </div>
-                  )}
-
-                  {selectedProduct.rawRow.seat_width && (
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <span className="text-slate-400">Ширина сиденья:</span>
-                      <span className="font-bold font-mono text-emerald-400">{selectedProduct.rawRow.seat_width} мм</span>
-                    </div>
-                  )}
-
-                  {selectedProduct.rawRow.seat_depth && (
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <span className="text-slate-400">Глубина сиденья:</span>
-                      <span className="font-bold font-mono text-emerald-400">{selectedProduct.rawRow.seat_depth} мм</span>
-                    </div>
-                  )}
-
-                  {selectedProduct.rawRow.overall_height && (
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <span className="text-slate-400">Габаритная высота:</span>
-                      <span className="font-bold font-mono text-emerald-400">{selectedProduct.rawRow.overall_height} мм</span>
-                    </div>
-                  )}
-
-                  {selectedProduct.rawRow.load_max && (
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <span className="text-slate-400">Максимальная нагрузка:</span>
-                      <span className="font-bold font-mono text-amber-400">{selectedProduct.rawRow.load_max} кг</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-2 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleCopy(`detail_${selectedProduct.modelName}`, `${selectedProduct.modelName} — Поставщик: ${selectedProduct.supplierName}, Цена: ${selectedProduct.priceText}`);
-                    }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Скопировать ТХ позиции</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingProduct(true)}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1.5 border border-slate-700"
-                  >
-                    <Pencil className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Редактировать параметры</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <ChatProductDetailModal
+          selectedProduct={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          isEditingProduct={isEditingProduct}
+          setIsEditingProduct={setIsEditingProduct}
+          productEditForm={productEditForm}
+          setProductEditForm={setProductEditForm}
+          showMockGallery={showMockGallery}
+          setShowMockGallery={setShowMockGallery}
+          fileInputRef={productImageFileInputRef as any}
+          onFileSelect={handleProductPhotoFileSelect}
+          onReplacePhotoUrl={handleReplacePhotoUrl}
+          onDeletePhoto={handleDeleteProductPhoto}
+          onSelectMockImage={handleSelectMockImage}
+          onSave={handleSaveProductEdits}
+          onCopy={(key, text) => handleCopy(key, text)}
+        />
       )}
 
       {/* Lightbox Image Zoom Modal */}
