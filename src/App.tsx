@@ -11,7 +11,20 @@ import { useAuthUser } from './hooks/useAuthUser';
 import { useModals } from './hooks/useModals';
 import { useAnalysis } from './hooks/useAnalysis';
 import { useExports } from './hooks/useExports';
-import { AlertCircle, RotateCcw, Sparkles, Settings, X, FileText } from 'lucide-react';
+import { 
+  AlertCircle, 
+  RotateCcw, 
+  Sparkles, 
+  Settings, 
+  X, 
+  FileText, 
+  Layers, 
+  Clock, 
+  Bookmark, 
+  Zap, 
+  CheckCircle2,
+  Maximize2
+} from 'lucide-react';
 
 export default function App() {
   // 1. Theme Management (Logic hook)
@@ -32,6 +45,13 @@ export default function App() {
   // 4. Procurement Analysis Engine & State (Logic hook)
   const {
     isAnalyzing,
+    isBackgroundProcessing,
+    elapsedSeconds,
+    isHeavyTimeout,
+    showHeavyTimeoutPrompt,
+    backgroundNotification,
+    savedDraftNotification,
+    savedDrafts,
     activeProcedureType,
     analysisResult,
     setAnalysisResult,
@@ -49,6 +69,14 @@ export default function App() {
     handleLoadPresetResult,
     cancelAnalysis,
     forceInstantAudit,
+    switchToBackgroundMode,
+    reopenProgressModal,
+    dismissHeavyTimeoutPrompt,
+    saveProgressAsDraft,
+    loadDraft,
+    deleteDraft,
+    clearBackgroundNotification,
+    clearSavedDraftNotification,
     resetAnalysis,
   } = useAnalysis();
 
@@ -93,7 +121,7 @@ export default function App() {
         onOpenGuide={() => modals.setIsGuideOpen(true)}
         isDarkMode={isDarkMode}
         onToggleDarkMode={toggleDarkMode}
-        isAnalyzing={isAnalyzing}
+        isAnalyzing={isAnalyzing || isBackgroundProcessing}
         onOpenChat={() => modals.setIsChatOpen(true)}
         onOpenSearch={() => modals.setIsSearchOpen(true)}
         onOpenDeepAudit={() => modals.setIsDeepAuditOpen(true)}
@@ -112,28 +140,71 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 sm:space-y-8 flex-1 w-full">
-        {/* Screen 1: Dashboard & Document Uploader */}
-        {!isAnalyzing && !analysisResult && (
-          <>
-            <PreAnalysisDashboard
-              onOpenHistory={() => modals.setIsHistoryOpen(true)}
-              onSelectAnalysis={handleSelectSavedAnalysis}
-              onOpenSuppliersCatalog={() => modals.setIsSuppliersCatalogOpen(true)}
-            />
-            <div id="uploader-section">
-              <DocumentUploader
-                onAnalyze={handleAnalyze}
-                onLoadPresetResult={handleLoadPresetResult}
-                isAnalyzing={isAnalyzing}
-                onOpenScanModal={() => modals.setIsScanOpen(true)}
-                onOpenHistory={() => modals.setIsHistoryOpen(true)}
-                onOpenContractDiff={(text) => modals.openContractDiff(text)}
-                onOpenFasComplaint={() => modals.setIsFasComplaintOpen(true)}
-                onOpenBankGuarantee={() => modals.setIsBankGuaranteeOpen(true)}
-                onOpenAISettings={() => modals.setIsAISettingsOpen(true)}
-              />
+        
+        {/* Background Analysis Completed Interactive Banner */}
+        {backgroundNotification && (
+          <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-indigo-950/80 border-2 border-emerald-500/60 rounded-3xl p-4 sm:p-5 text-slate-100 shadow-xl space-y-2 animate-fadeIn flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/40 shrink-0">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-sm sm:text-base text-emerald-200 flex items-center gap-2">
+                  <span>Фоновый анализ закупки успешно завершен!</span>
+                  <span className="text-[10px] font-mono font-normal text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                    {backgroundNotification.timestamp}
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-300 line-clamp-1 mt-0.5">
+                  {backgroundNotification.title}
+                </p>
+              </div>
             </div>
-          </>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setAnalysisResult(backgroundNotification.result);
+                  setActiveTab('all');
+                  clearBackgroundNotification();
+                  setTimeout(() => {
+                    const el = document.getElementById('analysis-results-section');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }, 100);
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <span>Открыть отчет</span>
+              </button>
+              <button
+                type="button"
+                onClick={clearBackgroundNotification}
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+                title="Закрыть"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Saved Draft Success Banner */}
+        {savedDraftNotification && (
+          <div className="bg-amber-950/40 border border-amber-500/40 rounded-2xl p-3.5 sm:p-4 text-amber-200 text-xs sm:text-sm shadow-md flex items-center justify-between gap-3 animate-fadeIn">
+            <div className="flex items-center gap-2.5">
+              <Bookmark className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{savedDraftNotification}</span>
+            </div>
+            <button
+              type="button"
+              onClick={clearSavedDraftNotification}
+              className="p-1 text-amber-400 hover:text-white rounded-lg hover:bg-amber-900/40 transition-colors cursor-pointer"
+              title="Скрыть"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         )}
 
         {/* Global Error & Recovery Action Banner */}
@@ -213,10 +284,43 @@ export default function App() {
           </div>
         )}
 
-        {/* Screen 2: Loading State Progress Screen */}
+        {/* Screen 1: Dashboard & Document Uploader */}
+        {!isAnalyzing && !analysisResult && (
+          <>
+            <PreAnalysisDashboard
+              onOpenHistory={() => modals.setIsHistoryOpen(true)}
+              onSelectAnalysis={handleSelectSavedAnalysis}
+              onOpenSuppliersCatalog={() => modals.setIsSuppliersCatalogOpen(true)}
+            />
+            <div id="uploader-section">
+              <DocumentUploader
+                onAnalyze={handleAnalyze}
+                onLoadPresetResult={handleLoadPresetResult}
+                isAnalyzing={isAnalyzing || isBackgroundProcessing}
+                savedDrafts={savedDrafts}
+                onLoadDraft={loadDraft}
+                onDeleteDraft={deleteDraft}
+                onOpenScanModal={() => modals.setIsScanOpen(true)}
+                onOpenHistory={() => modals.setIsHistoryOpen(true)}
+                onOpenContractDiff={(text) => modals.openContractDiff(text)}
+                onOpenFasComplaint={() => modals.setIsFasComplaintOpen(true)}
+                onOpenBankGuarantee={() => modals.setIsBankGuaranteeOpen(true)}
+                onOpenAISettings={() => modals.setIsAISettingsOpen(true)}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Screen 2: Foreground Loading State Progress Screen */}
         {isAnalyzing && (
           <AnalysisProgressScreen
             procedureType={activeProcedureType}
+            elapsedSeconds={elapsedSeconds}
+            isHeavyTimeout={isHeavyTimeout}
+            showHeavyTimeoutPrompt={showHeavyTimeoutPrompt}
+            onSwitchToBackground={switchToBackgroundMode}
+            onSaveDraft={saveProgressAsDraft}
+            onDismissHeavyPrompt={dismissHeavyTimeoutPrompt}
             onCancel={cancelAnalysis}
             onForceInstant={forceInstantAudit}
           />
@@ -254,6 +358,75 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Persistent Floating Background Progress Widget (when working in background) */}
+      {isBackgroundProcessing && (
+        <aside aria-label="Фоновый анализ закупки" className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 animate-slideUp">
+          <div className="bg-slate-900/95 border-2 border-indigo-500/60 backdrop-blur-md rounded-2xl shadow-2xl p-3.5 text-slate-100 max-w-sm sm:max-w-md space-y-2.5 ring-1 ring-indigo-500/20">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="relative">
+                  <div className="w-3 h-3 rounded-full bg-indigo-500 animate-ping absolute inset-0" />
+                  <div className="w-3 h-3 rounded-full bg-indigo-400 relative" />
+                </div>
+                <div>
+                  <h5 className="font-bold text-xs text-white flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Фоновый анализ закупки</span>
+                  </h5>
+                  <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-slate-500" />
+                    <span>{elapsedSeconds} сек. в работе</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={reopenProgressModal}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Развернуть окно прогресса"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelAnalysis}
+                  className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Отменить"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+              <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 rounded-full animate-pulse w-full" />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <button
+                type="button"
+                onClick={saveProgressAsDraft}
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 text-[11px] font-semibold rounded-lg border border-amber-500/30 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <Bookmark className="w-3 h-3" />
+                <span>В черновик</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={forceInstantAudit}
+                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold rounded-lg shadow-xs flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <Zap className="w-3 h-3 text-amber-300" />
+                <span>Открыть сейчас</span>
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
 
       {/* Unified Modals & Overlays Container */}
       <AppModals

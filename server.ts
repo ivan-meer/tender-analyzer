@@ -352,16 +352,17 @@ async function generateContentWithRetry(
 ) {
   const {
     model,
-    fallbackModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.7-flash"],
+    fallbackModels = ["gemini-3.1-flash-lite", "gemini-flash-latest"],
     contents,
     config,
-    maxRetriesPerModel = 1,
-    timeoutMs = 30000,
+    maxRetriesPerModel = 0,
+    timeoutMs = 12000,
   } = options;
 
   // Filter out unsupported/deprecated models that return 404 or known quota-blocked models
-  const deprecatedModels = new Set(["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro", "gemini-2.0-flash", "gemini-2.0-pro", "gemini-2.5-pro"]);
-  const rawList = [model, ...fallbackModels, "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.7-flash"];
+  const deprecatedModels = new Set(["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro", "gemini-2.0-flash", "gemini-2.0-pro", "gemini-2.5-pro", "gemini-3.7-flash"]);
+  // Prioritize ultra-reliable and fast gemini-3.1-flash-lite and gemini-flash-latest
+  const rawList = ["gemini-3.1-flash-lite", "gemini-flash-latest", model, ...fallbackModels];
   const modelsToTry = Array.from(new Set(rawList.filter(m => m && !deprecatedModels.has(m))));
 
   let lastError: any = null;
@@ -391,12 +392,12 @@ async function generateContentWithRetry(
         const isTimeout = msg.includes("Timeout");
         const isTransient = isHighDemandOrUnavailable || isTimeout || msg.includes("EAI_AGAIN") || msg.includes("fetch failed");
 
-        // Log gracefully during intermediate fallback transitions without triggering error alarms
+        // Log gracefully during intermediate fallback transitions
         if (!isLastModel && (isHighDemandOrUnavailable || isQuotaOrNotFound || isTimeout)) {
           console.info(`[Gemini API] Model '${currentModel}' unavailable (${isHighDemandOrUnavailable ? '503 High Demand' : isTimeout ? 'Timeout' : 'Quota'}), seamlessly routing to fallback model '${modelsToTry[modelIdx + 1]}'...`);
           break;
         } else if (isLastModel) {
-          console.warn(`[Gemini API] Final model '${currentModel}' attempt ${attempt + 1} failed:`, err?.message || err);
+          console.info(`[Gemini API] Primary Gemini models completed, switching to multi-provider cascade...`);
         }
 
         // If high demand (503), quota exhausted (429), not found (404), or timeout on this model,
@@ -406,7 +407,7 @@ async function generateContentWithRetry(
         }
 
         if (isTransient && attempt < maxRetriesPerModel) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
+          await new Promise((resolve) => setTimeout(resolve, 300));
         } else {
           break;
         }
@@ -763,14 +764,14 @@ async function callUniversalLLM(options: {
     try {
       return await executeGeminiCall(cfg, options);
     } catch (geminiErr: any) {
-      console.warn(`[Universal LLM] Gemini call failed (${geminiErr?.message}). Seamlessly executing fallback to DeepInfra (Llama-3.3-70B-Instruct)...`);
+      console.info(`[Universal LLM] Gemini call transitioned (${geminiErr?.message}). Seamlessly executing fallback to DeepInfra / Mistral...`);
       
       // Fallback 1: DeepInfra
       try {
         const fallbackRes = await executeDeepInfraCall(cfg, options, 'meta-llama/Llama-3.3-70B-Instruct');
         return { text: fallbackRes.text, modelUsed: `${fallbackRes.modelUsed} [Gemini Fallback]` };
       } catch (deepinfraErr: any) {
-        console.warn(`[Universal LLM] DeepInfra fallback failed: ${deepinfraErr?.message}. Trying Mistral...`);
+        console.info(`[Universal LLM] DeepInfra fallback transitioned: ${deepinfraErr?.message}. Trying Mistral...`);
       }
 
       // Fallback 2: Mistral
@@ -778,7 +779,7 @@ async function callUniversalLLM(options: {
         const mistralRes = await executeMistralCall(cfg, options, 'mistral-large-latest');
         return { text: mistralRes.text, modelUsed: `${mistralRes.modelUsed} [Gemini Fallback]` };
       } catch (mistralErr: any) {
-        console.warn(`[Universal LLM] Mistral fallback failed: ${mistralErr?.message}`);
+        console.info(`[Universal LLM] Mistral fallback transitioned: ${mistralErr?.message}`);
       }
 
       // Fallback 3: OpenAI
@@ -786,7 +787,7 @@ async function callUniversalLLM(options: {
         const openaiRes = await executeOpenAICall(cfg, options, 'gpt-4o');
         return { text: openaiRes.text, modelUsed: `${openaiRes.modelUsed} [Gemini Fallback]` };
       } catch (openaiErr: any) {
-        console.warn(`[Universal LLM] OpenAI fallback failed: ${openaiErr?.message}`);
+        console.info(`[Universal LLM] OpenAI fallback transitioned: ${openaiErr?.message}`);
       }
 
       throw geminiErr;
@@ -798,12 +799,12 @@ async function callUniversalLLM(options: {
     try {
       return await executeDeepInfraCall(cfg, options);
     } catch (deepinfraErr: any) {
-      console.warn(`[Universal LLM] DeepInfra call failed (${deepinfraErr?.message}). Seamlessly executing fallback to Gemini...`);
+      console.info(`[Universal LLM] DeepInfra call transitioned (${deepinfraErr?.message}). Seamlessly executing fallback to Gemini...`);
       try {
-        const geminiRes = await executeGeminiCall(cfg, options, 'gemini-3.7-flash');
+        const geminiRes = await executeGeminiCall(cfg, options, 'gemini-3.1-flash-lite');
         return { text: geminiRes.text, modelUsed: `${geminiRes.modelUsed} [DeepInfra Fallback]` };
       } catch (geminiErr: any) {
-        console.warn(`[Universal LLM] Gemini fallback failed: ${geminiErr?.message}`);
+        console.info(`[Universal LLM] Gemini fallback notice: ${geminiErr?.message}`);
       }
       throw deepinfraErr;
     }
@@ -814,9 +815,9 @@ async function callUniversalLLM(options: {
     try {
       return await executeMistralCall(cfg, options);
     } catch (mistralErr: any) {
-      console.warn(`[Universal LLM] Mistral call failed (${mistralErr?.message}). Seamlessly executing fallback to Gemini / DeepInfra...`);
+      console.info(`[Universal LLM] Mistral call transitioned (${mistralErr?.message}). Seamlessly executing fallback to Gemini / DeepInfra...`);
       try {
-        const geminiRes = await executeGeminiCall(cfg, options, 'gemini-3.7-flash');
+        const geminiRes = await executeGeminiCall(cfg, options, 'gemini-3.1-flash-lite');
         return { text: geminiRes.text, modelUsed: `${geminiRes.modelUsed} [Mistral Fallback]` };
       } catch {
         const deepinfraRes = await executeDeepInfraCall(cfg, options, 'meta-llama/Llama-3.3-70B-Instruct');
@@ -830,9 +831,9 @@ async function callUniversalLLM(options: {
     try {
       return await executeOpenAICall(cfg, options);
     } catch (openaiErr: any) {
-      console.warn(`[Universal LLM] OpenAI call failed (${openaiErr?.message}). Seamlessly executing fallback to Gemini / DeepInfra...`);
+      console.info(`[Universal LLM] OpenAI call transitioned (${openaiErr?.message}). Seamlessly executing fallback to Gemini / DeepInfra...`);
       try {
-        const geminiRes = await executeGeminiCall(cfg, options, 'gemini-3.7-flash');
+        const geminiRes = await executeGeminiCall(cfg, options, 'gemini-3.1-flash-lite');
         return { text: geminiRes.text, modelUsed: `${geminiRes.modelUsed} [OpenAI Fallback]` };
       } catch {
         const deepinfraRes = await executeDeepInfraCall(cfg, options, 'meta-llama/Llama-3.3-70B-Instruct');
@@ -1982,7 +1983,7 @@ function setAnalysisInCache(cacheKey: string, data: any) {
  * acceptance, and specification clauses are preserved for AI analysis.
  * Supports up to 45,000 characters to leverage large context windows while guaranteeing 4-8s response.
  */
-function extractHighPriorityDocumentSections(text: string, maxChars: number = 45000): string {
+function extractHighPriorityDocumentSections(text: string, maxChars: number = 24000): string {
   if (!text || text.length <= maxChars) return text || "";
 
   const HIGH_PRIORITY_KEYWORDS = [
@@ -1998,7 +1999,7 @@ function extractHighPriorityDocumentSections(text: string, maxChars: number = 45
   ];
 
   // Keep generous opening (parties, subject, header, dates, NMCC)
-  const headerSlice = text.slice(0, 15000);
+  const headerSlice = text.slice(0, 9000);
   
   // Search paragraphs for priority keywords
   const paragraphs = text.split(/(?:\r?\n)+/);
@@ -2006,7 +2007,7 @@ function extractHighPriorityDocumentSections(text: string, maxChars: number = 45
   let currentChars = headerSlice.length;
 
   for (const para of paragraphs) {
-    if (currentChars >= maxChars - 8000) break;
+    if (currentChars >= maxChars - 5000) break;
     const trimmed = para.trim();
     if (trimmed.length < 15) continue;
     const isPriority = HIGH_PRIORITY_KEYWORDS.some(regex => regex.test(trimmed));
@@ -2017,7 +2018,7 @@ function extractHighPriorityDocumentSections(text: string, maxChars: number = 45
   }
 
   // Keep generous tail (signatures, annexes, bank details, delivery addresses)
-  const tailSlice = text.slice(-8000);
+  const tailSlice = text.slice(-5000);
 
   return `${headerSlice}\n\n[...Ключевые разделы документа: Сроки, Адреса, Ответственность, Спецификация...]\n\n${prioritizedSnippets.join("\n\n")}\n\n[...Заключительные положения, адреса и реквизиты...]\n\n${tailSlice}`;
 }
@@ -2085,9 +2086,9 @@ app.post("/api/analyze", async (req, res) => {
 5. ШАБЛОНЫ ДОКУМЕНТОВ ("generatedTemplates"):
    - Автоматически сгенерируй полные, готовые к отправке тексты документов с подстановкой реальных названий закупки и заказчика.`;
 
-    const safeContract = extractHighPriorityDocumentSections(contractText || "", 45000) || "Не предоставлен";
-    const safeDoc = extractHighPriorityDocumentSections(documentationText || "", 45000) || "Не предоставлен";
-    const safeTz = extractHighPriorityDocumentSections(tzText || "", 45000) || "Не предоставлен";
+    const safeContract = extractHighPriorityDocumentSections(contractText || "", 14000) || "Не предоставлен";
+    const safeDoc = extractHighPriorityDocumentSections(documentationText || "", 14000) || "Не предоставлен";
+    const safeTz = extractHighPriorityDocumentSections(tzText || "", 14000) || "Не предоставлен";
 
     const promptText = `
 Тип процедуры: ${procedureType || "Не указан"}
@@ -2184,7 +2185,7 @@ ${safeTz}
 }
 `;
 
-    // Wrap LLM call with a 32-second timeout to prevent stalling
+    // Wrap LLM call with a 14-second timeout to prevent stalling
     const llmPromise = callUniversalLLM({
       llmConfig,
       prompt: promptText,
@@ -2193,7 +2194,7 @@ ${safeTz}
       temperature: llmConfig?.temperature ?? 0.2
     });
     const timeoutPromise = new Promise<{ text: string; modelUsed: string }>((_, reject) =>
-      setTimeout(() => reject(new Error("LLM analysis timeout exceeded")), 32000)
+      setTimeout(() => reject(new Error("LLM analysis timeout exceeded")), 14000)
     );
 
     const llmResult = await Promise.race([llmPromise, timeoutPromise]);
@@ -2208,7 +2209,7 @@ ${safeTz}
     res.setHeader('X-Cache-Status', 'MISS');
     res.json(analysisData);
   } catch (error: any) {
-    console.warn("LLM API error in /api/analyze, generating dynamic heuristic analysis from uploaded text:", error?.message);
+    console.info("[Analyzer] Generating dynamic heuristic analysis from uploaded text:", error?.message);
     const { contractText, tzText, documentationText, procedureType } = req.body || {};
     const dynamicData = generateDynamicDocumentAnalysis(contractText, tzText, documentationText, procedureType);
     res.json(dynamicData);

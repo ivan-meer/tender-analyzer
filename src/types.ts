@@ -246,6 +246,17 @@ export interface AnalysisInput {
   additionalNotes?: string;
 }
 
+export interface ProcurementDraft {
+  id: string;
+  createdAt: string;
+  title: string;
+  procedureType: ProcedureType;
+  lawType?: string;
+  input: AnalysisInput;
+  charCount?: number;
+  previewSummary?: string;
+}
+
 export interface VerifiedSupplierProduct {
   name: string;
   dimensions?: string;

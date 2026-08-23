@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { AnalysisInput, AnalysisResult, ProcedureType } from '../types';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { AnalysisInput, AnalysisResult, ProcedureType, ProcurementDraft } from '../types';
 import { getStoredLLMConfig } from '../utils/aiConfig';
 import { getPresetAnalysisResult } from '../data/presetResults';
 import { auth, saveAnalysisToDb } from '../lib/firebase';
@@ -7,8 +7,43 @@ import { generateClientSideDynamicAnalysis } from '../utils/dynamicAnalysis';
 
 export type ReportTab = 'all' | 'overview' | 'spec' | 'risks' | 'workflow' | 'templates';
 
+const DRAFTS_STORAGE_KEY = 'saved_procurement_drafts';
+
+function getStoredDrafts(): ProcurementDraft[] {
+  try {
+    const raw = localStorage.getItem(DRAFTS_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Failed to parse saved procurement drafts:', e);
+    return [];
+  }
+}
+
+function persistDraftsToStorage(drafts: ProcurementDraft[]): void {
+  try {
+    localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(drafts.slice(0, 30)));
+  } catch (e) {
+    console.warn('Failed to persist drafts:', e);
+  }
+}
+
 export function useAnalysis() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isBackgroundProcessing, setIsBackgroundProcessing] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isHeavyTimeout, setIsHeavyTimeout] = useState(false);
+  const [showHeavyTimeoutPrompt, setShowHeavyTimeoutPrompt] = useState(false);
+  
+  const [backgroundNotification, setBackgroundNotification] = useState<{
+    title: string;
+    result: AnalysisResult;
+    timestamp: string;
+  } | null>(null);
+
+  const [savedDraftNotification, setSavedDraftNotification] = useState<string | null>(null);
+  const [savedDrafts, setSavedDrafts] = useState<ProcurementDraft[]>(() => getStoredDrafts());
+
   const [activeProcedureType, setActiveProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +53,41 @@ export function useAnalysis() {
   const [externalSeverityFilter, setExternalSeverityFilter] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const timerIntervalRef = useRef<any>(null);
+
+  // Timer effect: tracks elapsed seconds during foreground or background analysis
+  useEffect(() => {
+    if (isAnalyzing || isBackgroundProcessing) {
+      if (!timerIntervalRef.current) {
+        timerIntervalRef.current = setInterval(() => {
+          setElapsedSeconds((prev) => {
+            const next = prev + 1;
+            // When reaching >= 20 seconds, trigger heavy operation timeout prompt
+            if (next >= 20) {
+              setIsHeavyTimeout(true);
+              setShowHeavyTimeoutPrompt((currentShow) => {
+                // If it's the exact moment or not yet dismissed, show prompt
+                return next === 20 ? true : currentShow;
+              });
+            }
+            return next;
+          });
+        }, 1000);
+      }
+    } else {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    };
+  }, [isAnalyzing, isBackgroundProcessing]);
 
   const handleRiskSectorClick = (filter: { category?: string | null; severity?: string | null }) => {
     if (activeTab !== 'all' && activeTab !== 'risks') {
@@ -38,6 +108,10 @@ export function useAnalysis() {
       abortControllerRef.current = null;
     }
     setIsAnalyzing(false);
+    setIsBackgroundProcessing(false);
+    setShowHeavyTimeoutPrompt(false);
+    setIsHeavyTimeout(false);
+    setElapsedSeconds(0);
     setError('Анализ отменен пользователем');
   };
 
@@ -47,9 +121,22 @@ export function useAnalysis() {
       abortControllerRef.current = null;
     }
     setIsAnalyzing(false);
+    setIsBackgroundProcessing(false);
+    setShowHeavyTimeoutPrompt(false);
+    setIsHeavyTimeout(false);
+    setElapsedSeconds(0);
+
     const is44 = Boolean(lastInput?.procedureType?.startsWith('44_FZ') || activeProcedureType.startsWith('44_FZ'));
-    const fallbackPreset = getPresetAnalysisResult(is44 ? 'sample-medical-44fz' : 'sample-furniture-223fz');
-    setAnalysisResult(fallbackPreset);
+    
+    // Generate high-accuracy dynamic analysis immediately from actual provided text or fallback preset
+    let instantResult: AnalysisResult;
+    if (lastInput && (lastInput.contractText || lastInput.documentationText || lastInput.tzText)) {
+      instantResult = generateClientSideDynamicAnalysis(lastInput);
+    } else {
+      instantResult = getPresetAnalysisResult(is44 ? 'sample-medical-44fz' : 'sample-furniture-223fz');
+    }
+
+    setAnalysisResult(instantResult);
     setActiveTab('all');
     setError(null);
     setTimeout(() => {
@@ -58,8 +145,105 @@ export function useAnalysis() {
     }, 100);
   };
 
+  // Switch active analysis to background mode (unblocks UI, keeps execution running silently)
+  const switchToBackgroundMode = useCallback(() => {
+    setIsAnalyzing(false);
+    setIsBackgroundProcessing(true);
+    setShowHeavyTimeoutPrompt(false);
+  }, []);
+
+  // Reopen the foreground progress modal from background state
+  const reopenProgressModal = useCallback(() => {
+    if (isBackgroundProcessing) {
+      setIsAnalyzing(true);
+    }
+  }, [isBackgroundProcessing]);
+
+  // Dismiss heavy timeout prompt inside the modal
+  const dismissHeavyTimeoutPrompt = useCallback(() => {
+    setShowHeavyTimeoutPrompt(false);
+  }, []);
+
+  // Save current input and progress as draft to allow continuation/re-analysis anytime
+  const saveProgressAsDraft = useCallback((): string | null => {
+    if (!lastInput) return null;
+
+    const draftId = `draft_${Date.now()}`;
+    const totalChars =
+      (lastInput.contractText?.length || 0) +
+      (lastInput.documentationText?.length || 0) +
+      (lastInput.tzText?.length || 0);
+
+    // Extract human-readable title from the input text
+    const sampleText = lastInput.contractText || lastInput.documentationText || lastInput.tzText || '';
+    const firstCleanLine = sampleText
+      .split('\n')
+      .map((l) => l.trim().replace(/^===|===$/g, '').trim())
+      .find((l) => l.length > 8 && l.length < 140 && !l.toLowerCase().includes('==='));
+
+    const is44FZ = lastInput.procedureType.startsWith('44_FZ');
+    const draftTitle =
+      firstCleanLine ||
+      `Черновик закупки (${is44FZ ? '44-ФЗ' : '223-ФЗ'}) от ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
+
+    const newDraft: ProcurementDraft = {
+      id: draftId,
+      createdAt: new Date().toISOString(),
+      title: draftTitle,
+      procedureType: lastInput.procedureType,
+      lawType: is44FZ ? '44_FZ' : '223_FZ',
+      input: lastInput,
+      charCount: totalChars,
+      previewSummary: `${Math.round(totalChars / 1000)} тыс. симв. • Сохранено для дозагрузки`,
+    };
+
+    const currentDrafts = getStoredDrafts();
+    const updatedDrafts = [newDraft, ...currentDrafts.filter((d) => d.id !== draftId)];
+    persistDraftsToStorage(updatedDrafts);
+    setSavedDrafts(updatedDrafts);
+
+    // Cancel current active fetch to release resources
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    setIsAnalyzing(false);
+    setIsBackgroundProcessing(false);
+    setShowHeavyTimeoutPrompt(false);
+    setIsHeavyTimeout(false);
+    setElapsedSeconds(0);
+
+    setSavedDraftNotification(`Черновик «${draftTitle}» успешно сохранен! Вы можете продолжить анализ в любой момент.`);
+    return draftId;
+  }, [lastInput]);
+
+  // Load a saved draft into active analysis
+  const loadDraft = useCallback((draft: ProcurementDraft) => {
+    setLastInput(draft.input);
+    setActiveProcedureType(draft.procedureType);
+    setSavedDraftNotification(null);
+    handleAnalyze(draft.input);
+  }, []);
+
+  // Delete a saved draft
+  const deleteDraft = useCallback((draftId: string) => {
+    const currentDrafts = getStoredDrafts();
+    const updated = currentDrafts.filter((d) => d.id !== draftId);
+    persistDraftsToStorage(updated);
+    setSavedDrafts(updated);
+  }, []);
+
+  const clearBackgroundNotification = useCallback(() => {
+    setBackgroundNotification(null);
+  }, []);
+
+  const clearSavedDraftNotification = useCallback(() => {
+    setSavedDraftNotification(null);
+  }, []);
+
   const handleAnalyze = async (input: AnalysisInput) => {
-    // Cancel any previous request
+    // Cancel any previous active request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -67,9 +251,14 @@ export function useAnalysis() {
     abortControllerRef.current = controller;
 
     setIsAnalyzing(true);
+    setIsBackgroundProcessing(false);
+    setElapsedSeconds(0);
+    setIsHeavyTimeout(false);
+    setShowHeavyTimeoutPrompt(false);
     setActiveProcedureType(input.procedureType);
     setError(null);
     setLastInput(input);
+    setSavedDraftNotification(null);
 
     // Persist active procedure and law choice to localStorage
     const is44FZ = input.procedureType.startsWith('44_FZ');
@@ -81,13 +270,13 @@ export function useAnalysis() {
     localStorage.setItem('selected_procedure_type', input.procedureType);
     localStorage.setItem('selected_law_type', lawCategory);
 
-    // Client-side safety timeout: 35 seconds max for large documents with automatic instant fallback
-    const timeoutId = setTimeout(() => {
+    // Absolute fallback threshold (55 seconds) in case of silent network failure
+    const maxSafetyTimeoutId = setTimeout(() => {
       if (abortControllerRef.current === controller) {
-        console.warn("Analysis safety timeout reached (35s), resolving via instant dynamic engine");
+        console.warn('Max safety threshold reached (55s), resolving via instant dynamic engine');
         controller.abort();
       }
-    }, 35000);
+    }, 55000);
 
     try {
       // Load saved law-specific regulations and guidelines from localStorage
@@ -145,7 +334,7 @@ export function useAnalysis() {
           signal: controller.signal,
         });
 
-        clearTimeout(timeoutId);
+        clearTimeout(maxSafetyTimeoutId);
 
         const rawText = await response.text();
 
@@ -160,7 +349,7 @@ export function useAnalysis() {
           console.warn(`Server responded with status ${response.status}: ${rawText.slice(0, 200)}`);
         }
       } catch (fetchErr: any) {
-        clearTimeout(timeoutId);
+        clearTimeout(maxSafetyTimeoutId);
         if (fetchErr.name === 'AbortError') {
           console.warn('Backend request timed out or aborted, switching to dynamic analysis');
         } else {
@@ -177,27 +366,35 @@ export function useAnalysis() {
       setAnalysisResult(data);
       setActiveTab('all');
 
-      // Auto-save analysis result to Firestore database
+      // Non-blocking auto-save analysis result to Firestore database (runs in background, never delays UI)
       if (auth.currentUser && data) {
-        try {
-          await saveAnalysisToDb(
-            auth.currentUser.uid,
-            auth.currentUser.email || 'Пользователь',
-            data,
-            data.summary?.procurementTitle || (is44FZ ? 'Анализ закупки 44-ФЗ' : 'Анализ закупки 223-ФЗ')
-          );
-        } catch (dbErr) {
-          console.warn('Auto-save notice:', dbErr);
-        }
+        saveAnalysisToDb(
+          auth.currentUser.uid,
+          auth.currentUser.email || 'Пользователь',
+          data,
+          data.summary?.procurementTitle || (is44FZ ? 'Анализ закупки 44-ФЗ' : 'Анализ закупки 223-ФЗ')
+        ).catch((dbErr) => console.warn('Background auto-save notice:', dbErr));
       }
 
-      // Smooth scroll to analysis results
+      // Check if user was in background mode
+      setIsBackgroundProcessing((wasBackground) => {
+        if (wasBackground && data) {
+          setBackgroundNotification({
+            title: data.summary?.procurementTitle || (is44FZ ? 'Анализ закупки 44-ФЗ' : 'Анализ закупки 223-ФЗ'),
+            result: data,
+            timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+          });
+        }
+        return false;
+      });
+
+      // Smooth scroll to analysis results if foreground
       setTimeout(() => {
         const el = document.getElementById('analysis-results-section');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       }, 100);
     } catch (err: any) {
-      clearTimeout(timeoutId);
+      clearTimeout(maxSafetyTimeoutId);
       console.error('Analysis error:', err);
       // Even in unexpected failure, generate dynamic analysis so user is never blocked
       try {
@@ -209,12 +406,18 @@ export function useAnalysis() {
       }
     } finally {
       setIsAnalyzing(false);
+      setIsBackgroundProcessing(false);
+      setShowHeavyTimeoutPrompt(false);
+      setIsHeavyTimeout(false);
+      setElapsedSeconds(0);
       abortControllerRef.current = null;
     }
   };
 
   const handleLoadPresetResult = (presetId?: string) => {
     setIsAnalyzing(true);
+    setIsBackgroundProcessing(false);
+    setElapsedSeconds(0);
     setError(null);
     setTimeout(() => {
       const data = getPresetAnalysisResult(presetId || 'sample-furniture-223fz');
@@ -240,6 +443,13 @@ export function useAnalysis() {
 
   return {
     isAnalyzing,
+    isBackgroundProcessing,
+    elapsedSeconds,
+    isHeavyTimeout,
+    showHeavyTimeoutPrompt,
+    backgroundNotification,
+    savedDraftNotification,
+    savedDrafts,
     activeProcedureType,
     analysisResult,
     setAnalysisResult,
@@ -257,6 +467,14 @@ export function useAnalysis() {
     handleLoadPresetResult,
     cancelAnalysis,
     forceInstantAudit,
+    switchToBackgroundMode,
+    reopenProgressModal,
+    dismissHeavyTimeoutPrompt,
+    saveProgressAsDraft,
+    loadDraft,
+    deleteDraft,
+    clearBackgroundNotification,
+    clearSavedDraftNotification,
     resetAnalysis,
   };
 }

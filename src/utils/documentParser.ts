@@ -418,7 +418,7 @@ export async function parseDocumentFile(
       try {
         const ocrPromise = runMistralOcrForFile(file);
         const timeoutPromise = new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error('OCR Timeout')), 8000)
+          setTimeout(() => reject(new Error('OCR Timeout')), 2500)
         );
         const ocrRes = await Promise.race([ocrPromise, timeoutPromise]) as any;
         if (ocrRes && ocrRes.markdownText && ocrRes.markdownText.trim().length > 20) {

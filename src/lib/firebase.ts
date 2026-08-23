@@ -1,7 +1,24 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, orderBy, serverTimestamp, getDoc } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  setLogLevel,
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  deleteDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  getDoc
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+// Suppress transient connection warnings and offline notices in sandbox/iframe environments
+setLogLevel('error');
 
 const app = initializeApp(firebaseConfig);
 
@@ -9,9 +26,13 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
 const configAny = firebaseConfig as any;
+const firestoreSettings = {
+  experimentalAutoDetectLongPolling: true,
+};
+
 export const db = configAny.firestoreDatabaseId
-  ? getFirestore(app, configAny.firestoreDatabaseId)
-  : getFirestore(app);
+  ? initializeFirestore(app, firestoreSettings, configAny.firestoreDatabaseId)
+  : initializeFirestore(app, firestoreSettings);
 
 export interface SavedCustomer {
   id?: string;

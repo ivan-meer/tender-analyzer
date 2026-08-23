@@ -31,7 +31,7 @@ import {
   Calculator,
   ChevronDown
 } from 'lucide-react';
-import { AnalysisInput, ProcedureType } from '../types';
+import { AnalysisInput, ProcedureType, ProcurementDraft } from '../types';
 import { SAMPLE_PROCUREMENTS } from '../data/sampleProcurements';
 import { 
   parseDocumentFile, 
@@ -48,13 +48,16 @@ import { TokenPriceEstimator } from './TokenPriceEstimator';
 import { DocTypesGuide } from './uploader/DocTypesGuide';
 import { NotesModal } from './uploader/NotesModal';
 import { EisSearchModal } from './uploader/EisSearchModal';
-import { Camera, BookOpen, Info, ShieldCheck } from 'lucide-react';
+import { Camera, BookOpen, Info, ShieldCheck, Bookmark, Clock, Play } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 interface DocumentUploaderProps {
   onAnalyze: (input: AnalysisInput) => void;
   onLoadPresetResult?: (presetId?: string) => void;
   isAnalyzing: boolean;
+  savedDrafts?: ProcurementDraft[];
+  onLoadDraft?: (draft: ProcurementDraft) => void;
+  onDeleteDraft?: (draftId: string) => void;
   onOpenScanModal?: () => void;
   onOpenHistory?: () => void;
   onOpenContractDiff?: (initialOriginalText?: string) => void;
@@ -75,6 +78,9 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   onAnalyze, 
   onLoadPresetResult, 
   isAnalyzing,
+  savedDrafts = [],
+  onLoadDraft,
+  onDeleteDraft,
   onOpenScanModal,
   onOpenHistory,
   onOpenContractDiff,
@@ -114,6 +120,61 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const [previewingFileId, setPreviewingFileId] = useState<string | null>(null);
   const [modalDocument, setModalDocument] = useState<ParsedDocument | null>(null);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const [isDraftsModalOpen, setIsDraftsModalOpen] = useState(false);
+
+  // Restore a saved draft into the current form workspace
+  const handleApplyDraftToForm = (draft: ProcurementDraft) => {
+    setProcedureType(draft.procedureType);
+    if (draft.lawType) {
+      setLawType(draft.lawType as any);
+    }
+    setAdditionalNotes(draft.input.additionalNotes || '');
+    
+    // Create virtual documents from draft texts
+    const now = Date.now();
+    const virtualDraftFiles: ParsedDocument[] = [];
+    if (draft.input.contractText) {
+      virtualDraftFiles.push({
+        id: `draft_contract_${now}`,
+        fileName: 'Проект_Договора_из_черновика.docx',
+        fileType: 'word',
+        fileSize: draft.input.contractText.length * 2,
+        category: 'contract',
+        content: draft.input.contractText,
+        charCount: draft.input.contractText.length,
+        status: 'ready',
+      });
+    }
+    if (draft.input.documentationText) {
+      virtualDraftFiles.push({
+        id: `draft_docs_${now}`,
+        fileName: 'Извещение_из_черновика.pdf',
+        fileType: 'pdf',
+        fileSize: draft.input.documentationText.length * 2,
+        category: 'docs',
+        content: draft.input.documentationText,
+        charCount: draft.input.documentationText.length,
+        status: 'ready',
+      });
+    }
+    if (draft.input.tzText) {
+      virtualDraftFiles.push({
+        id: `draft_tz_${now}`,
+        fileName: 'Техническое_Задание_из_черновика.xlsx',
+        fileType: 'excel',
+        fileSize: draft.input.tzText.length * 2,
+        category: 'tz',
+        content: draft.input.tzText,
+        charCount: draft.input.tzText.length,
+        status: 'ready',
+      });
+    }
+
+    if (virtualDraftFiles.length > 0) {
+      setParsedFiles(virtualDraftFiles);
+    }
+    setIsDraftsModalOpen(false);
+  };
 
   // EIS (zakupki.gov.ru) Import State
   const [isEisModalOpen, setIsEisModalOpen] = useState(false);
@@ -606,6 +667,20 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {/* SAVED DRAFTS BUTTON */}
+            {savedDrafts && savedDrafts.length > 0 && (
+              <Tooltip content="Открыть список сохраненных черновиков закупки" position="bottom">
+                <button
+                  type="button"
+                  onClick={() => setIsDraftsModalOpen(true)}
+                  className="text-xs font-semibold flex items-center gap-1.5 transition-colors bg-amber-50 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-3 py-1.5 rounded-lg cursor-pointer"
+                >
+                  <Bookmark className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>Черновики ({savedDrafts.length})</span>
+                </button>
+              </Tooltip>
+            )}
+
             {/* DEMO REPORT BUTTON */}
             {onLoadPresetResult && (
               <Tooltip content="Загрузить готовый пример детального аудита закупки мебели по 223-ФЗ" position="bottom">
@@ -1143,6 +1218,108 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
         onClose={() => setModalDocument(null)}
         onCategoryChange={handleCategoryChange}
       />
+
+      {/* Saved Drafts List Modal */}
+      {isDraftsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 w-full max-w-xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-300 dark:border-amber-800">
+                  <Bookmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                    Сохраненные черновики закупок
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Черновики, сохраненные при таймаутах или паузах анализа
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDraftsModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto space-y-2.5 flex-1 pr-1 scrollbar-thin">
+              {savedDrafts.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-xs">
+                  Нет сохраненных черновиков.
+                </div>
+              ) : (
+                savedDrafts.map((draft) => (
+                  <div
+                    key={draft.id}
+                    className="p-3.5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-indigo-400/60 transition-all"
+                  >
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                          {draft.title}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                          {draft.lawType === '44_FZ' ? '44-ФЗ' : draft.lawType === '223_FZ' ? '223-ФЗ' : 'Коммерческая'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          {draft.createdAt}
+                        </span>
+                        {draft.charCount && (
+                          <span>{Math.round(draft.charCount / 1000)}k симв.</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleApplyDraftToForm(draft)}
+                        className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-600 transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Загрузить в форму для редактирования"
+                      >
+                        <span>В форму</span>
+                      </button>
+
+                      {onLoadDraft && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsDraftsModalOpen(false);
+                            onLoadDraft(draft);
+                          }}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Запустить анализ"
+                        >
+                          <Play className="w-3 h-3 fill-white" />
+                          <span>Анализ</span>
+                        </button>
+                      )}
+
+                      {onDeleteDraft && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteDraft(draft.id)}
+                          className="p-1.5 text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-xl transition-colors cursor-pointer"
+                          title="Удалить черновик"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
