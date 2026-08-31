@@ -56,6 +56,9 @@ import {
 } from 'lucide-react';
 import { TenderCompareModal } from './TenderCompareModal';
 import { generateBatchSummaryPdfReport } from '../utils/pdfGenerator';
+import { PRESET_TAG_DEFINITIONS, normalizeTagName } from '../utils/tagUtils';
+import { TagBadge } from './tags/TagBadge';
+import { QuickTagPicker } from './tags/QuickTagPicker';
 
 interface AuthAndHistoryDrawerProps {
   isOpen: boolean;
@@ -64,8 +67,6 @@ interface AuthAndHistoryDrawerProps {
   onSelectAnalysis: (analysisResult: any) => void;
   onOpenCalendar?: () => void;
 }
-
-const PRESET_TAGS = ['Срочно', 'Малый объем', 'Строительство', 'Оборудование', 'ПП 1875', 'СИЗ', 'ИТ / Софт'];
 
 export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   isOpen,
@@ -80,6 +81,7 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveTitle, setSaveTitle] = useState('');
+  const [saveTags, setSaveTags] = useState<string[]>([]);
   const [historySearch, setHistorySearch] = useState('');
   const [activeTab, setActiveTab] = useState<'tenders' | 'customers'>('tenders');
   const [selectedCustomerFilter, setSelectedCustomerFilter] = useState<string | null>(null);
@@ -91,6 +93,9 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   const [isCompareOpen, setIsCompareOpen] = useState<boolean>(false);
   const [selectedTenderIds, setSelectedTenderIds] = useState<string[]>([]);
   const [isGeneratingBatchPdf, setIsGeneratingBatchPdf] = useState<boolean>(false);
+
+  // Quick tag picker state for history cards
+  const [activeQuickTagId, setActiveQuickTagId] = useState<string | null>(null);
 
   const handleToggleSelectTender = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -132,7 +137,24 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
   const [editParticipationStatus, setEditParticipationStatus] = useState<TenderParticipationStatus>('NEW');
   const [editNotes, setEditNotes] = useState('');
   const [editTags, setEditTags] = useState<string[]>([]);
+  const [newCustomTagInput, setNewCustomTagInput] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    if (currentAnalysisResult?.tags && Array.isArray(currentAnalysisResult.tags)) {
+      setSaveTags(currentAnalysisResult.tags);
+    } else {
+      // Auto-suggest tags based on analysis properties
+      const autoTags: string[] = [];
+      if (currentAnalysisResult?.summary?.riskLevel === 'CRITICAL' || currentAnalysisResult?.summary?.overallRiskScore > 65) {
+        autoTags.push('High Risk');
+      }
+      if (currentAnalysisResult?.submissionRulesCheck?.pp1875Applies) {
+        autoTags.push('ПП 1875');
+      }
+      setSaveTags(autoTags);
+    }
+  }, [currentAnalysisResult]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -192,7 +214,8 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
         currentUser.uid, 
         currentUser.email || 'Анонимный юзер', 
         currentAnalysisResult, 
-        titleToSave
+        titleToSave,
+        saveTags
       );
       setSaveTitle('');
       await fetchAnalysesAndCustomers(currentUser.uid);
@@ -446,6 +469,61 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
     return dates;
   };
 
+  const allUniqueTags = React.useMemo(() => {
+    const list: string[] = [];
+    const seen = new Set<string>();
+
+    // 1. Add preset tags first
+    PRESET_TAG_DEFINITIONS.forEach((p) => {
+      list.push(p.name);
+      seen.add(p.name.toLowerCase());
+    });
+
+    // 2. Add dynamic tags from loaded analyses
+    analyses.forEach((a) => {
+      if (a.tags && Array.isArray(a.tags)) {
+        a.tags.forEach((t) => {
+          const clean = normalizeTagName(t);
+          if (clean && !seen.has(clean.toLowerCase())) {
+            seen.add(clean.toLowerCase());
+            list.push(clean);
+          }
+        });
+      }
+    });
+
+    return list;
+  }, [analyses]);
+
+  const tagCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    analyses.forEach((a) => {
+      if (a.tags && Array.isArray(a.tags)) {
+        a.tags.forEach((t) => {
+          const clean = normalizeTagName(t).toLowerCase();
+          counts[clean] = (counts[clean] || 0) + 1;
+        });
+      }
+    });
+    return counts;
+  }, [analyses]);
+
+  const handleQuickTagsChange = async (itemId: string, newTags: string[]) => {
+    // Optimistic state update
+    setAnalyses((prev) =>
+      prev.map((a) => (a.id === itemId ? { ...a, tags: newTags } : a))
+    );
+
+    try {
+      if (itemId && !itemId.startsWith('sample-')) {
+        await updateAnalysisInDb(itemId, { tags: newTags });
+      }
+      if (currentUser) fetchAnalysesAndCustomers(currentUser.uid);
+    } catch (err) {
+      console.error('Error updating tags:', err);
+    }
+  };
+
   const filteredAnalyses = analyses.filter((item) => {
     if (selectedCustomerFilter) {
       const custName = (item.customerName || item.analysisResult?.summary?.customerName || '').toLowerCase().trim();
@@ -454,7 +532,8 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
       }
     }
     if (selectedTagFilter) {
-      if (!item.tags || !item.tags.includes(selectedTagFilter)) {
+      const targetFilter = selectedTagFilter.toLowerCase();
+      if (!item.tags || !item.tags.some(t => normalizeTagName(t).toLowerCase() === targetFilter)) {
         return false;
       }
     }
@@ -645,10 +724,13 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
 
         {/* Save Current Analysis Bar */}
         {currentAnalysisResult && currentUser && (
-          <div className="mx-4 mt-3 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-2">
-            <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-200 text-xs font-bold">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <span>Сохранить текущий анализ в БД:</span>
+          <div className="mx-4 mt-3 p-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2.5 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-800 dark:text-slate-200 text-xs font-bold">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <span>Сохранить текущий анализ в БД:</span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium">Firestore</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -657,16 +739,44 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                 value={saveTitle}
                 onChange={(e) => setSaveTitle(e.target.value)}
                 placeholder={currentAnalysisResult.summary?.procurementTitle || 'Название закупки...'}
-                className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white px-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500"
+                className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white px-3 py-1.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500"
               />
               <button
                 onClick={handleSaveCurrentAnalysis}
                 disabled={isSaving}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50 shadow-xs"
               >
                 {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                 <span>Сохранить</span>
               </button>
+            </div>
+
+            {/* Quick Tag Selector for Saving */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase shrink-0 flex items-center gap-1">
+                <TagIcon className="w-3 h-3" /> Метки:
+              </span>
+              {['High Risk', 'Urgent', 'Review Needed', 'ПП 1875', 'Согласовано'].map((tag) => {
+                const isSelected = saveTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() =>
+                      setSaveTags((prev) =>
+                        prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+                      )
+                    }
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                    }`}
+                  >
+                    #{tag} {isSelected && '✓'}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -746,34 +856,50 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
               </div>
             )}
 
-            {/* Tag Filter Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[11px]">
-              <span className="text-slate-400 font-bold text-[10px] uppercase shrink-0 flex items-center gap-0.5">
-                <TagIcon className="w-3 h-3" /> Теги:
-              </span>
-              <button
-                onClick={() => setSelectedTagFilter(null)}
-                className={`px-2 py-0.5 rounded-lg font-bold shrink-0 transition-colors cursor-pointer ${
-                  !selectedTagFilter 
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' 
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                Все
-              </button>
-              {PRESET_TAGS.map((tag) => (
+            {/* Interactive Tag Filter Bar */}
+            <div className="space-y-1 pt-0.5">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-bold text-[10px] uppercase flex items-center gap-1">
+                  <TagIcon className="w-3 h-3" /> Фильтр по тегам:
+                </span>
+                {selectedTagFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTagFilter(null)}
+                    className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                  >
+                    Сбросить тег (#{selectedTagFilter})
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[11px]">
                 <button
-                  key={tag}
-                  onClick={() => setSelectedTagFilter(selectedTagFilter === tag ? null : tag)}
-                  className={`px-2 py-0.5 rounded-lg font-bold shrink-0 transition-colors cursor-pointer ${
-                    selectedTagFilter === tag
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-indigo-300'
+                  onClick={() => setSelectedTagFilter(null)}
+                  className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
+                    !selectedTagFilter 
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs' 
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
                   }`}
                 >
-                  #{tag}
+                  Все ({analyses.length})
                 </button>
-              ))}
+
+                {allUniqueTags.map((tagName) => {
+                  const isSelected = selectedTagFilter?.toLowerCase() === tagName.toLowerCase();
+                  const count = tagCounts[tagName.toLowerCase()] || 0;
+                  return (
+                    <TagBadge
+                      key={tagName}
+                      tag={tagName}
+                      isActive={isSelected}
+                      count={count}
+                      onClick={() => setSelectedTagFilter(isSelected ? null : tagName)}
+                      className="shrink-0"
+                    />
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -948,15 +1074,44 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                                       <span className="text-slate-400">{item.auctionDate || 'Уточняется'}</span>
                                     </div>
 
-                                    {item.tags && item.tags.length > 0 && (
-                                      <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                                        {item.tags.map(t => (
-                                          <span key={t} className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md text-[9px] font-bold">
-                                            #{t}
-                                          </span>
-                                        ))}
+                                    {/* Tags & Quick Tag Picker in Grouped View */}
+                                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5 relative">
+                                      {item.tags && item.tags.length > 0 && item.tags.map(t => (
+                                        <TagBadge
+                                          key={t}
+                                          tag={t}
+                                          onClick={(e) => {
+                                            e?.stopPropagation();
+                                            setSelectedTagFilter(selectedTagFilter === t ? null : t);
+                                          }}
+                                          size="xs"
+                                        />
+                                      ))}
+
+                                      <div className="relative inline-block">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveQuickTagId(activeQuickTagId === item.id ? null : item.id!);
+                                          }}
+                                          className="px-1.5 py-0.5 bg-slate-100 hover:bg-indigo-50 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-md text-[10px] font-bold transition-all border border-slate-200/80 dark:border-slate-700 flex items-center gap-0.5 cursor-pointer"
+                                          title="Управление тегами"
+                                        >
+                                          <Plus className="w-2.5 h-2.5" />
+                                          <span>Тег</span>
+                                        </button>
+
+                                        {activeQuickTagId === item.id && (
+                                          <QuickTagPicker
+                                            selectedTags={item.tags || []}
+                                            onTagsChange={(newTags) => handleQuickTagsChange(item.id!, newTags)}
+                                            onClose={() => setActiveQuickTagId(null)}
+                                            position="bottom-left"
+                                          />
+                                        )}
                                       </div>
-                                    )}
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -1070,16 +1225,44 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                       </div>
                     </div>
 
-                    {/* Tags Pills */}
-                    {item.tags && item.tags.length > 0 && (
-                      <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                        {item.tags.map(t => (
-                          <span key={t} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md text-[10px] font-bold">
-                            #{t}
-                          </span>
-                        ))}
+                    {/* Tags Pills & Quick Picker */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5 relative">
+                      {item.tags && item.tags.length > 0 && item.tags.map(t => (
+                        <TagBadge
+                          key={t}
+                          tag={t}
+                          onClick={(e) => {
+                            e?.stopPropagation();
+                            setSelectedTagFilter(selectedTagFilter === t ? null : t);
+                          }}
+                          size="sm"
+                        />
+                      ))}
+
+                      <div className="relative inline-block">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveQuickTagId(activeQuickTagId === item.id ? null : item.id!);
+                          }}
+                          className="px-2 py-0.5 bg-slate-100 hover:bg-indigo-50 dark:bg-slate-700/60 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-lg text-[10px] font-bold transition-all border border-slate-200/80 dark:border-slate-700 flex items-center gap-1 cursor-pointer"
+                          title="Добавить или изменить теги"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          <span>Тег</span>
+                        </button>
+
+                        {activeQuickTagId === item.id && (
+                          <QuickTagPicker
+                            selectedTags={item.tags || []}
+                            onTagsChange={(newTags) => handleQuickTagsChange(item.id!, newTags)}
+                            onClose={() => setActiveQuickTagId(null)}
+                            position="bottom-left"
+                          />
+                        )}
                       </div>
-                    )}
+                    </div>
 
                     {/* Quick Action Footer: Participate Button + Open Report */}
                     <div className="flex items-center justify-between pt-1">
@@ -1339,24 +1522,79 @@ export const AuthAndHistoryDrawer: React.FC<AuthAndHistoryDrawerProps> = ({
                 <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
                   Теги и метки закупки:
                 </label>
-                <div className="flex items-center gap-1.5 flex-wrap p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
-                  {PRESET_TAGS.map((tag) => {
-                    const active = editTags.includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => handleToggleTagInEdit(tag)}
-                        className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
-                          active
-                            ? 'bg-indigo-600 text-white shadow-2xs'
-                            : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:border-indigo-400'
-                        }`}
-                      >
-                        #{tag} {active && '✓'}
-                      </button>
-                    );
-                  })}
+
+                {/* Active Tags */}
+                {editTags.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap mb-2 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">Выбрано:</span>
+                    {editTags.map((t) => (
+                      <TagBadge
+                        key={t}
+                        tag={t}
+                        onRemove={() => setEditTags(prev => prev.filter(x => x !== t))}
+                        size="sm"
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Presets Grid */}
+                <div className="space-y-1.5 p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Быстрый выбор пресетов:</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {PRESET_TAG_DEFINITIONS.map((preset) => {
+                      const active = editTags.some(t => t.toLowerCase() === preset.name.toLowerCase());
+                      return (
+                        <button
+                          key={preset.name}
+                          type="button"
+                          onClick={() => handleToggleTagInEdit(preset.name)}
+                          className={`px-2 py-1 rounded-lg font-bold text-[10px] transition-all cursor-pointer border ${
+                            active
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                              : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-indigo-400'
+                          }`}
+                        >
+                          #{preset.name} {active && '✓'}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Add Custom Tag Input */}
+                  <div className="flex items-center gap-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <input
+                      type="text"
+                      value={newCustomTagInput}
+                      onChange={(e) => setNewCustomTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newCustomTagInput.trim()) {
+                          e.preventDefault();
+                          const val = normalizeTagName(newCustomTagInput);
+                          if (val && !editTags.includes(val)) {
+                            setEditTags(prev => [...prev, val]);
+                            setNewCustomTagInput('');
+                          }
+                        }
+                      }}
+                      placeholder="Свой тег..."
+                      className="flex-1 px-2.5 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = normalizeTagName(newCustomTagInput);
+                        if (val && !editTags.includes(val)) {
+                          setEditTags(prev => [...prev, val]);
+                          setNewCustomTagInput('');
+                        }
+                      }}
+                      disabled={!newCustomTagInput.trim()}
+                      className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg font-bold text-xs cursor-pointer disabled:opacity-50"
+                    >
+                      + Добавить
+                    </button>
+                  </div>
                 </div>
               </div>
 

@@ -210,6 +210,26 @@ export interface ProductItem {
   deliveryDeadline?: string; // Конкретный срок поставки для данной позиции
 }
 
+export interface SmartInsightQuestion {
+  id: string;
+  category: 'PENALTIES' | 'DELIVERY_LOGISTICS' | 'TECHNICAL_SPEC' | 'NATIONAL_REGIME' | 'PAYMENT_TERMS' | 'ACCEPTANCE_EIS' | 'OTHER';
+  categoryLabel: string;
+  priority: 'HIGH' | 'MEDIUM' | 'RECOMMENDED';
+  relatedRiskOrClause?: string;
+  title: string;
+  rationale: string;
+  questionText: string;
+  expectedOutcome?: string;
+  legalBasis?: string;
+}
+
+export interface SmartInsightsResponse {
+  questions: SmartInsightQuestion[];
+  modelUsed?: string;
+  generatedAt?: string;
+  _cached?: boolean;
+}
+
 export interface AnalysisResult {
   version?: number; // Номер текущей версии документации (1, 2, 3...)
   versionTimestamp?: string;
@@ -218,6 +238,7 @@ export interface AnalysisResult {
   newRisksCount?: number; // Кол-во новых рисков
   resolvedRisksCount?: number; // Кол-во устраненных рисков
   versionHistory?: AnalysisVersion[]; // Полная история прошлых версий анализа
+  tags?: string[]; // Теги закупки (напр. 'High Risk', 'Urgent', 'Review Needed')
   summary: {
     procurementTitle: string;
     projectName?: string; // Понятное название проекта (напр. "Проект №223-894: Поставка офисной мебели")
@@ -255,6 +276,7 @@ export interface ProcurementDraft {
   input: AnalysisInput;
   charCount?: number;
   previewSummary?: string;
+  tags?: string[];
 }
 
 export interface VerifiedSupplierProduct {

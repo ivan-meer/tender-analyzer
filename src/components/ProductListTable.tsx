@@ -21,7 +21,9 @@ import {
   Bot,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Download,
+  FileText
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -112,6 +114,48 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
     return sortOrder === 'desc' ? -comparison : comparison;
   });
 
+  const [isCopiedAll, setIsCopiedAll] = useState(false);
+
+  const handleCopyAllProducts = () => {
+    if (!products || products.length === 0) return;
+    const lines = products.map((p, idx) => {
+      const params = p.parameters ? p.parameters.map(param => `${param.name}: ${param.value}`).join('; ') : '';
+      return `${idx + 1}. ${p.name} | Кол-во: ${p.quantity} | Габариты: ${p.dimensions || 'По ТЗ'} | ОКПД2: ${p.okpd2OrGvin || '—'} | Нацрежим: ${p.pp1875Status === 'RUSSIAN_REQUIRED' ? 'Требуется РФ' : p.pp1875Status === 'RESTRICTED' ? 'Ограничение' : 'Без ограничений'}\nПараметры: ${params}\nОписание: ${p.specification}\n`;
+    });
+    navigator.clipboard.writeText(lines.join('\n---\n\n'));
+    setIsCopiedAll(true);
+    setTimeout(() => setIsCopiedAll(false), 2500);
+  };
+
+  const handleExportCsv = () => {
+    if (!products || products.length === 0) return;
+    const headers = ['№', 'Наименование', 'Количество', 'Габариты', 'Характеристики и параметры ТЗ', 'ОКПД2 / КТРУ', 'Статус ПП 1875'];
+    const rows = products.map((p, idx) => {
+      const params = p.parameters ? p.parameters.map(param => `${param.name}: ${param.value}`).join('; ') : '';
+      const fullSpec = `"${(p.specification + (params ? ' | ' + params : '')).replace(/"/g, '""')}"`;
+      return [
+        idx + 1,
+        `"${p.name.replace(/"/g, '""')}"`,
+        `"${p.quantity.replace(/"/g, '""')}"`,
+        `"${(p.dimensions || '').replace(/"/g, '""')}"`,
+        fullSpec,
+        `"${(p.okpd2OrGvin || '').replace(/"/g, '""')}"`,
+        `"${p.pp1875Status === 'RUSSIAN_REQUIRED' ? 'Требуется РФ' : p.pp1875Status === 'RESTRICTED' ? 'Ограничение' : 'Без ограничений'}"`
+      ].join(';');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Спецификация_товаров_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleCopyProduct = (product: ProductItem) => {
     let text = `Наименование: ${product.name}\nКоличество: ${product.quantity}\n`;
     if (product.dimensions) {
@@ -197,7 +241,36 @@ export const ProductListTable: React.FC<ProductListTableProps> = ({ products }) 
             <span>🤖 ИИ-Агент Поиска</span>
           </button>
 
-          <div className="relative min-w-[220px]">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95"
+            title="Экспортировать спецификацию в формате CSV (Excel)"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Экспорт CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCopyAllProducts}
+            className="flex items-center gap-1.5 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95"
+            title="Скопировать весь перечень позиций со спецификациями и параметрами в буфер обмена"
+          >
+            {isCopiedAll ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-emerald-600 dark:text-emerald-400">Скопировано!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Скопировать всё</span>
+              </>
+            )}
+          </button>
+
+          <div className="relative min-w-[200px]">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
               type="text"

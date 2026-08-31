@@ -139,11 +139,12 @@ export async function getOrCreateCustomerRecord(userId: string, customerName: st
 }
 
 // Helper functions for analysis database operations
-export async function saveAnalysisToDb(userId: string, userEmail: string, result: any, title?: string): Promise<string> {
+export async function saveAnalysisToDb(userId: string, userEmail: string, result: any, title?: string, tags?: string[]): Promise<string> {
   const collectionRef = collection(db, 'analyses');
   const docTitle = title || result.summary?.projectName || result.summary?.procurementTitle || 'Анализ закупки 223-ФЗ';
   const rawCustomer = result.summary?.customerName || 'Заказчик по 223-ФЗ';
   const procSum = result.summary?.procurementSum || 'Определяется заявкой';
+  const itemTags = tags || result.tags || [];
 
   // Ensure Customer Account uniqueness: linking repeat tenders to existing account
   const customerAccount = await getOrCreateCustomerRecord(userId, rawCustomer, procSum);
@@ -167,6 +168,7 @@ export async function saveAnalysisToDb(userId: string, userEmail: string, result
     analysisResult: result,
     isFavorite: false,
     notes: '',
+    tags: itemTags,
   });
 
   return docRef.id;

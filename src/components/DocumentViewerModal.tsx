@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ParsedDocument, formatFileSize } from '../utils/documentParser';
 import { 
   X, 
@@ -12,8 +12,6 @@ import {
   Download, 
   ZoomIn, 
   ZoomOut, 
-  Eye, 
-  Sliders, 
   Sparkles, 
   AlertTriangle, 
   ShieldAlert, 
@@ -22,14 +20,20 @@ import {
   Maximize2,
   Minimize2,
   ListOrdered,
-  BarChart2
+  BarChart2,
+  Edit3,
+  RotateCcw,
+  Save,
+  CheckCircle2
 } from 'lucide-react';
+import { Tooltip } from './Tooltip';
 
 interface DocumentViewerModalProps {
   document: ParsedDocument | null;
   isOpen: boolean;
   onClose: () => void;
   onCategoryChange?: (fileId: string, category: ParsedDocument['category']) => void;
+  onDocumentContentChange?: (fileId: string, newContent: string) => void;
 }
 
 export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
@@ -37,36 +41,52 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   isOpen,
   onClose,
   onCategoryChange,
+  onDocumentContentChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<'text' | 'table' | 'analytics'>('text');
+  const [activeTab, setActiveTab] = useState<'text' | 'edit' | 'table' | 'analytics'>('text');
   const [searchQuery, setSearchQuery] = useState('');
   const [fontSize, setFontSize] = useState<number>(12); // in px
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // In-modal text editing state
+  const [editedContent, setEditedContent] = useState('');
+  const [isModified, setIsModified] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+
+  // Sync editedContent with doc.content whenever doc changes
+  useEffect(() => {
+    if (doc?.content) {
+      setEditedContent(doc.content);
+      setIsModified(false);
+    }
+  }, [doc?.id, doc?.content]);
+
+  // Current content to display
+  const currentContent = activeTab === 'edit' ? editedContent : (doc?.content || '');
 
   // Computed Text Lines and Statistics
   const lines = useMemo(() => {
-    if (!doc?.content) return [];
-    return doc.content.split('\n');
-  }, [doc?.content]);
+    if (!currentContent) return [];
+    return currentContent.split('\n');
+  }, [currentContent]);
 
   const wordCount = useMemo(() => {
-    if (!doc?.content) return 0;
-    return doc.content.trim().split(/\s+/).length;
-  }, [doc?.content]);
+    if (!currentContent) return 0;
+    return currentContent.trim().split(/\s+/).length;
+  }, [currentContent]);
 
   // Search occurrence stats
   const searchMatchesCount = useMemo(() => {
-    if (!searchQuery.trim() || !doc?.content) return 0;
+    if (!searchQuery.trim() || !currentContent) return 0;
     const regex = new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    const matches = doc.content.match(regex);
+    const matches = currentContent.match(regex);
     return matches ? matches.length : 0;
-  }, [doc?.content, searchQuery]);
+  }, [currentContent, searchQuery]);
 
   // Detected key terms and potential risk clauses in the document
   const documentAnalytics = useMemo(() => {
-    if (!doc?.content) return null;
-    const text = doc.content.toLowerCase();
+    if (!currentContent) return null;
 
     const riskKeywords = [
       { term: 'штраф', label: 'Указания о штрафах', icon: <ShieldAlert className="w-4 h-4 text-rose-600" /> },
@@ -81,7 +101,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
     const detectedRisks = riskKeywords.map(rk => {
       const regex = new RegExp(rk.term, 'gi');
-      const matches = doc.content.match(regex);
+      const matches = currentContent.match(regex);
       return {
         ...rk,
         count: matches ? matches.length : 0,
@@ -92,11 +112,11 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
       detectedRisks,
       readingTimeMinutes: Math.max(1, Math.ceil(wordCount / 180)),
     };
-  }, [doc?.content, wordCount]);
+  }, [currentContent, wordCount]);
 
   // Parse lines into structured table rows if table format or CSV/pipes/tabs
   const parsedTableData = useMemo(() => {
-    if (!doc?.content) return [];
+    if (!currentContent) return [];
     
     // Check if lines contain CSV commas, tabs, or pipe characters
     const sample = lines.slice(0, 30);
@@ -119,18 +139,18 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     }
 
     return rows;
-  }, [lines, doc?.content]);
+  }, [lines, currentContent]);
 
   if (!isOpen || !doc) return null;
 
   const handleCopyText = () => {
-    navigator.clipboard.writeText(doc.content);
+    navigator.clipboard.writeText(currentContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownloadText = () => {
-    const blob = new Blob([doc.content], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([currentContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -139,6 +159,31 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleSaveTextChanges = () => {
+    if (doc && onDocumentContentChange) {
+      onDocumentContentChange(doc.id, editedContent);
+      setIsModified(false);
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2500);
+    }
+  };
+
+  const handleResetToOriginal = () => {
+    if (doc?.content) {
+      setEditedContent(doc.content);
+      setIsModified(false);
+    }
+  };
+
+  const handleContentTyping = (val: string) => {
+    setEditedContent(val);
+    setIsModified(val !== doc.content);
+    // Real-time propagating to parent for live autosaving
+    if (onDocumentContentChange) {
+      onDocumentContentChange(doc.id, val);
+    }
   };
 
   const highlightText = (text: string, query: string) => {
@@ -183,11 +228,21 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
               {getFileIcon()}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 rounded-md">
-                  Интерактивный Ридер Документов
+                  Интерактивный Ридер & Редактор
                 </span>
                 <span className="text-xs text-slate-400 font-medium">• {formatFileSize(doc.fileSize)}</span>
+                {doc.ocrProcessed && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-400/30 rounded-md">
+                    Mistral OCR ({doc.ocrPagesCount || 1} стр.)
+                  </span>
+                )}
+                {isModified && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-md animate-pulse">
+                    Есть несохраненные правки
+                  </span>
+                )}
               </div>
               <h2 className="text-base sm:text-lg font-bold text-white truncate leading-snug">
                 {doc.fileName}
@@ -236,7 +291,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         <div className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 p-3 sm:px-6 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
           
           {/* Tab Navigation */}
-          <div className="flex items-center gap-1.5 bg-slate-200/80 dark:bg-slate-900/80 p-1 rounded-2xl">
+          <div className="flex items-center gap-1.5 bg-slate-200/80 dark:bg-slate-900/80 p-1 rounded-2xl flex-wrap">
             <button
               type="button"
               onClick={() => setActiveTab('text')}
@@ -247,7 +302,20 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
               }`}
             >
               <ListOrdered className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-300" />
-              <span>Текстовый вид ({lines.length} стр.)</span>
+              <span>Просмотр ({lines.length} стр.)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('edit')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'edit'
+                  ? 'bg-white dark:bg-indigo-600 text-indigo-900 dark:text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Edit3 className="w-3.5 h-3.5 text-amber-500" />
+              <span>Редактировать текст {isModified ? '•' : ''}</span>
             </button>
 
             {doc.fileType === 'excel' || parsedTableData.length > 0 ? (
@@ -282,25 +350,27 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           {/* Search Input & Font Zoom & Copy/Download */}
           <div className="flex flex-wrap items-center gap-2">
             
-            {/* Search Input */}
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск по документу..."
-                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-medium"
-              />
-              {searchQuery && (
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md">
-                  {searchMatchesCount}
-                </span>
-              )}
-            </div>
+            {/* Search Input (in read mode) */}
+            {activeTab !== 'edit' && (
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Поиск по документу..."
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-medium"
+                />
+                {searchQuery && (
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md">
+                    {searchMatchesCount}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Font Zoom Controls */}
-            {activeTab === 'text' && (
+            {(activeTab === 'text' || activeTab === 'edit') && (
               <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1">
                 <button
                   type="button"
@@ -322,6 +392,31 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
               </div>
             )}
 
+            {/* Edit actions in Edit Tab */}
+            {activeTab === 'edit' && (
+              <div className="flex items-center gap-2">
+                {isModified && (
+                  <button
+                    type="button"
+                    onClick={handleResetToOriginal}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                    title="Сбросить правки к исходному тексту"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Сбросить</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSaveTextChanges}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  {justSaved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>{justSaved ? 'Сохранено!' : 'Сохранить правки'}</span>
+                </button>
+              </div>
+            )}
+
             {/* Copy All */}
             <button
               type="button"
@@ -329,7 +424,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
               className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />}
-              <span>{copied ? 'Скопировано' : 'Текст'}</span>
+              <span>{copied ? 'Скопировано' : 'Копировать'}</span>
             </button>
 
             {/* Download TXT */}
@@ -372,7 +467,46 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: Table Spreadsheet View */}
+          {/* TAB 2: Text Editing Mode */}
+          {activeTab === 'edit' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Редактор текста документа:</span>
+                  <span>Вы можете корректировать пункты ТЗ, формулировки договора или распознанный OCR текст.</span>
+                </div>
+                <div className="text-[11px] font-mono">
+                  {editedContent.length.toLocaleString('ru-RU')} симв. • {editedContent.split('\n').length} строк
+                </div>
+              </div>
+
+              <div className="relative">
+                <textarea
+                  value={editedContent}
+                  onChange={(e) => handleContentTyping(e.target.value)}
+                  className="w-full h-[55vh] p-4 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-2xl font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none leading-relaxed"
+                  style={{ fontSize: `${fontSize}px` }}
+                  placeholder="Введите или отредактируйте текст документа..."
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1">
+                <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Все правки автоматически сохраняются в активную сессию</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('text')}
+                  className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                >
+                  Вернуться в режим чтения →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: Table Spreadsheet View */}
           {activeTab === 'table' && (
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-inner overflow-hidden overflow-x-auto max-h-[60vh]">
               {parsedTableData.length > 0 ? (
@@ -415,7 +549,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: Document Analytics & Risk Scan */}
+          {/* TAB 4: Document Analytics & Risk Scan */}
           {activeTab === 'analytics' && documentAnalytics && (
             <div className="space-y-6">
               
@@ -424,7 +558,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-1">
                   <span className="text-[11px] font-bold text-slate-400 uppercase">Общий объем</span>
                   <p className="text-lg font-black text-slate-900 dark:text-white">
-                    {doc.charCount.toLocaleString('ru-RU')} символов
+                    {currentContent.length.toLocaleString('ru-RU')} символов
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">~{wordCount} слов</p>
                 </div>
@@ -480,15 +614,22 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium shrink-0">
-          <span>Символов: {doc.charCount} • Строк: {lines.length}</span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-xl font-bold transition-all cursor-pointer"
-          >
-            Закрыть ридер
-          </button>
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 font-medium shrink-0">
+          <div className="flex items-center gap-2">
+            <span>Символов: {currentContent.length.toLocaleString('ru-RU')} • Строк: {lines.length}</span>
+            {isModified && (
+              <span className="text-amber-600 dark:text-amber-400 font-bold">• Текст изменен</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-xl font-bold transition-all cursor-pointer"
+            >
+              Закрыть ридер
+            </button>
+          </div>
         </div>
 
       </div>

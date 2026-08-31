@@ -4,13 +4,14 @@ import { ReportTab } from '../hooks/useAnalysis';
 import { AnalysisVersionHistoryBanner } from './AnalysisVersionHistoryBanner';
 import { RiskSummaryCard } from './RiskSummaryCard';
 import { RiskMapCard } from './RiskMapCard';
-import { RiskDynamicsChart } from './RiskDynamicsChart';
 import { DeliveryLogisticsCard } from './DeliveryLogisticsCard';
 import { ContractRisksTable } from './ContractRisksTable';
 import { ProductListTable } from './ProductListTable';
 import { SubmissionChecklist } from './SubmissionChecklist';
 import { PostAwardWorkflow } from './PostAwardWorkflow';
 import { TemplatesSection } from './TemplatesSection';
+import { TagManager } from './TagManager';
+import { SmartInsightsSection } from './SmartInsightsSection';
 import { 
   ArrowLeft, 
   History, 
@@ -32,7 +33,16 @@ import {
   Calculator,
   ChevronDown,
   Sparkles,
-  Share2
+  Share2,
+  Copy,
+  Check,
+  Building2,
+  Calendar,
+  DollarSign,
+  Clock,
+  Tag as TagIcon,
+  Plus,
+  Eye
 } from 'lucide-react';
 
 interface AnalysisReportViewProps {
@@ -57,6 +67,9 @@ interface AnalysisReportViewProps {
 
   // Exports
   isExportingPdf: boolean;
+  pdfSuccessMessage?: string | null;
+  onClearPdfSuccess?: () => void;
+  onDownloadPdf?: () => void;
   isExportingGoogleDocs: boolean;
   isExportingGoogleSheets: boolean;
   googleDocsSuccessUrl: string | null;
@@ -86,6 +99,9 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
   onRiskSectorClick,
   onClearExternalFilter,
   isExportingPdf,
+  pdfSuccessMessage,
+  onClearPdfSuccess,
+  onDownloadPdf,
   isExportingGoogleDocs,
   isExportingGoogleSheets,
   googleDocsSuccessUrl,
@@ -98,6 +114,7 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
 }) => {
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
+  const [isSummaryCopied, setIsSummaryCopied] = useState(false);
 
   const productsCount = analysisResult?.productList?.length || 0;
   const risksCount = analysisResult?.contractRisks?.length || 0;
@@ -109,6 +126,26 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
     : 0;
 
   const hasLegalTools = Boolean(onOpenContractDiff || onOpenFasComplaint || onOpenBankGuarantee);
+
+  const handleCopySummary = () => {
+    if (!analysisResult) return;
+    const summary = analysisResult.summary;
+    const text = `ЮРИДИЧЕСКИЙ АУДИТ ЗАКУПКИ
+Предмет: ${summary.procurementTitle || 'Тендер'}
+Закон: ${summary.is223FZ ? '223-ФЗ' : '44-ФЗ'}
+Заказчик: ${summary.customerName || '—'} ${summary.customerInn ? `(ИНН: ${summary.customerInn})` : ''}
+НМЦК: ${summary.procurementSum || '—'}
+Индекс риска: ${summary.overallRiskScore}/100 (${summary.riskLevel})
+Ключевой вывод: ${summary.keyTakeaway}
+Логистика: ${analysisResult.deliveryInfo?.deliveryPeriod || 'По договору'}
+Нацрежим (ПП 1875): ${analysisResult.submissionRulesCheck?.pp1875Applies ? 'Применяется' : 'Не применяется'}
+Выявлено рисков: ${risksCount} (Критичных: ${criticalRisksCount})
+Номенклатура: ${productsCount} позиций`;
+
+    navigator.clipboard.writeText(text);
+    setIsSummaryCopied(true);
+    setTimeout(() => setIsSummaryCopied(false), 2500);
+  };
 
   return (
     <div id="analysis-results-section" className="space-y-5 animate-fade-in pt-2">
@@ -126,20 +163,56 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
             <span className="hidden sm:inline">Новый анализ</span>
           </button>
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 px-2 py-0.5 rounded-md uppercase shrink-0">
-                Отчет готов
+              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase shrink-0 border ${
+                analysisResult.summary.is223FZ 
+                  ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border-blue-300 dark:border-blue-800'
+                  : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+              }`}>
+                {analysisResult.summary.is223FZ ? '223-ФЗ' : '44-ФЗ'}
               </span>
               <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white truncate" title={analysisResult?.summary?.projectName || analysisResult?.summary?.procurementTitle}>
                 {analysisResult?.summary?.projectName || analysisResult?.summary?.procurementTitle || 'Анализ закупки'}
               </h2>
             </div>
+
+            {/* Document Tags with TagManager */}
+            <TagManager
+              tags={analysisResult.tags || []}
+              onChange={(newTags) => {
+                onUpdateAnalysisVersion({
+                  ...analysisResult,
+                  tags: newTags,
+                });
+              }}
+              variant="compact"
+            />
           </div>
         </div>
 
         {/* Action Buttons & Dropdowns */}
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* Copy Summary Button */}
+          <button
+            type="button"
+            onClick={handleCopySummary}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
+            title="Скопировать краткое резюме аудита"
+          >
+            {isSummaryCopied ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-emerald-600 dark:text-emerald-400">Скопировано</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4 text-slate-500" />
+                <span className="hidden sm:inline">Скопировать резюме</span>
+              </>
+            )}
+          </button>
+
           {/* History Button */}
           <button
             type="button"
@@ -228,6 +301,18 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
             </div>
           )}
 
+          {/* Direct Report Preview Button */}
+          <button
+            id="open-report-preview-toolbar-btn"
+            type="button"
+            onClick={onOpenPdfPreview}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
+            title="Интерактивный предпросмотр отчета (PDF, Google Docs, Sheets, TXT)"
+          >
+            <Eye className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span>Предпросмотр</span>
+          </button>
+
           {/* Export Dropdown */}
           <div className="relative">
             <button
@@ -237,7 +322,7 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
                 setIsToolsMenuOpen(false);
               }}
               className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
-              title="Экспорт отчета в Google Docs, Google Sheets, TXT"
+              title="Экспорт отчета в PDF, Google Docs, Google Sheets, TXT"
             >
               <Share2 className="w-4 h-4 text-slate-500" />
               <span>Экспорт</span>
@@ -248,6 +333,43 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setIsExportMenuOpen(false)} />
                 <div className="absolute right-0 mt-1.5 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-30 p-1.5 text-xs animate-fade-in space-y-1">
+                  <button
+                    id="export-pdf-preview-btn"
+                    type="button"
+                    onClick={() => {
+                      onOpenPdfPreview();
+                      setIsExportMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-indigo-700 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors text-left cursor-pointer"
+                  >
+                    <Eye className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    <div>
+                      <span className="font-bold block">Предпросмотр отчета</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">PDF, Google Docs, Sheets, TXT</span>
+                    </div>
+                  </button>
+
+                  <button
+                    id="export-pdf-direct-btn"
+                    type="button"
+                    onClick={() => {
+                      if (onDownloadPdf) onDownloadPdf();
+                      setIsExportMenuOpen(false);
+                    }}
+                    disabled={isExportingPdf}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors text-left cursor-pointer disabled:opacity-50"
+                  >
+                    {isExportingPdf ? (
+                      <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+                    ) : (
+                      <Download className="w-4 h-4 text-indigo-600 shrink-0" />
+                    )}
+                    <div>
+                      <span className="font-bold block">Скачать PDF (.PDF)</span>
+                      <span className="text-[10px] text-slate-400">Прямое скачивание отчета в браузер</span>
+                    </div>
+                  </button>
+
                   <button
                     id="export-gdocs-report-btn"
                     type="button"
@@ -310,23 +432,60 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
             )}
           </div>
 
-          {/* Primary CTA: PDF Report */}
+          {/* Primary CTA: Direct Download PDF */}
           <button
             id="export-pdf-report-btn"
-            onClick={onOpenPdfPreview}
+            onClick={() => {
+              if (onDownloadPdf) {
+                onDownloadPdf();
+              } else {
+                onOpenPdfPreview();
+              }
+            }}
             disabled={isExportingPdf}
             className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
-            title="Предпросмотр и скачивание PDF-отчета"
+            title="Сформировать и скачать PDF-отчет"
           >
             {isExportingPdf ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Генерация PDF...</span>
+              </>
             ) : (
-              <Download className="w-4 h-4" />
+              <>
+                <Download className="w-4 h-4" />
+                <span>Скачать PDF</span>
+              </>
             )}
-            <span>PDF Отчет</span>
           </button>
         </div>
       </div>
+
+      {/* PDF Export Success Notification */}
+      {pdfSuccessMessage && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 rounded-2xl p-3.5 px-5 flex items-center justify-between gap-3 text-xs text-emerald-900 dark:text-emerald-200 animate-fade-in shadow-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1.5 bg-emerald-600 text-white rounded-xl shrink-0">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-extrabold text-sm block">PDF-отчет готов и загружен!</span>
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                {pdfSuccessMessage}
+              </span>
+            </div>
+          </div>
+          {onClearPdfSuccess && (
+            <button
+              type="button"
+              onClick={onClearPdfSuccess}
+              className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-slate-700 text-emerald-700 dark:text-emerald-300 font-bold rounded-lg transition-colors cursor-pointer shrink-0 border border-emerald-200 dark:border-emerald-900"
+            >
+              Закрыть
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Export Error Banner */}
       {exportError && (
@@ -359,7 +518,7 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
             <div>
               <span className="font-extrabold text-sm block">Отчет сохранен в ваш Google Документ!</span>
               <span className="text-[11px] text-blue-700 dark:text-blue-300">
-                Файл доступен на вашем Google Диске для редактирования и распечатки.
+                Файл доступен на вашем Google Диске для совместной работы, правок и печати.
               </span>
             </div>
           </div>
@@ -383,9 +542,9 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
               <CheckCircle2 className="w-4 h-4" />
             </div>
             <div>
-              <span className="font-extrabold text-sm block">Таблица ТЗ и Рисков сохранена в Google Таблицах!</span>
+              <span className="font-extrabold text-sm block">Спецификация и реестр рисков выгружены в Google Таблицы!</span>
               <span className="text-[11px] text-emerald-700 dark:text-emerald-300">
-                Создана многостраничная таблица с разбором спецификации, рисками договора и логистикой.
+                Создана 4-страничная форматированная таблица со спецификацией, рисками и шаблонами.
               </span>
             </div>
           </div>
@@ -401,16 +560,16 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
         </div>
       )}
 
-      {/* Quick Metrics & Tab Switcher */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3 shadow-xs space-y-3">
+      {/* Executive Summary Key Stats Bar */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3 sm:p-4 shadow-xs space-y-3">
         {/* Metric Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-1 pt-1">
           <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-2.5 rounded-2xl flex items-center gap-2.5">
-            <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-xl">
+            <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-xl shrink-0">
               <BarChart3 className="w-4 h-4" />
             </div>
-            <div>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none">
+            <div className="min-w-0">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none truncate">
                 Индекс риска
               </span>
               <span className="text-sm font-black font-mono text-slate-900 dark:text-white mt-0.5 block">
@@ -420,25 +579,25 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
           </div>
 
           <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-2.5 rounded-2xl flex items-center gap-2.5">
-            <div className="p-2 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded-xl">
+            <div className="p-2 bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 rounded-xl shrink-0">
               <Package className="w-4 h-4" />
             </div>
-            <div>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none">
+            <div className="min-w-0">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none truncate">
                 Позиции ТЗ
               </span>
               <span className="text-sm font-black font-mono text-slate-900 dark:text-white mt-0.5 block">
-                {productsCount} товаров
+                {productsCount} позиций
               </span>
             </div>
           </div>
 
           <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-2.5 rounded-2xl flex items-center gap-2.5">
-            <div className="p-2 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-xl">
+            <div className="p-2 bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 rounded-xl shrink-0">
               <ShieldAlert className="w-4 h-4" />
             </div>
-            <div>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none">
+            <div className="min-w-0">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none truncate">
                 Критичные риски
               </span>
               <span className="text-sm font-black font-mono text-rose-700 dark:text-rose-400 mt-0.5 block">
@@ -448,15 +607,15 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
           </div>
 
           <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 p-2.5 rounded-2xl flex items-center gap-2.5">
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-xl">
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-xl shrink-0">
               <FileCheck className="w-4 h-4" />
             </div>
-            <div>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none">
-                Готовые документы
+            <div className="min-w-0">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block leading-none truncate">
+                Готовые шаблоны
               </span>
               <span className="text-sm font-black font-mono text-slate-900 dark:text-white mt-0.5 block">
-                {templatesCount} шаблонов
+                {templatesCount} писем
               </span>
             </div>
           </div>
@@ -488,6 +647,19 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
           >
             <BarChart3 className="w-3.5 h-3.5" />
             <span>Аналитика & Риски</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('insights')}
+            className={`px-3 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+              activeTab === 'insights'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+            <span>Smart Insights</span>
           </button>
 
           <button
@@ -561,6 +733,17 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
             analysis={analysisResult}
             onUpdateAnalysisVersion={onUpdateAnalysisVersion}
           />
+          <TagManager
+            tags={analysisResult.tags || []}
+            onChange={(newTags) => {
+              onUpdateAnalysisVersion({
+                ...analysisResult,
+                tags: newTags,
+              });
+            }}
+            variant="expanded"
+            label="Метки и категоризация закупки"
+          />
           <RiskSummaryCard
             summary={analysisResult.summary}
             onOpenCustomerVerification={onOpenCustomerVerification}
@@ -570,10 +753,13 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
             contractRisks={analysisResult.contractRisks}
             onRiskSectorClick={onRiskSectorClick}
           />
-          <RiskDynamicsChart
-            summary={analysisResult.summary}
-            contractRisks={analysisResult.contractRisks}
-          />
+          <SmartInsightsSection analysis={analysisResult} />
+        </div>
+      )}
+
+      {activeTab === 'insights' && (
+        <div className="space-y-6">
+          <SmartInsightsSection analysis={analysisResult} />
         </div>
       )}
 
@@ -585,7 +771,20 @@ export const AnalysisReportView: React.FC<AnalysisReportViewProps> = ({
         <ProductListTable products={analysisResult.productList || []} />
       )}
 
-      {(activeTab === 'all' || activeTab === 'risks') && (
+      {(activeTab === 'risks') && (
+        <div className="space-y-6">
+          <SmartInsightsSection analysis={analysisResult} />
+          <ContractRisksTable
+            risks={analysisResult.contractRisks}
+            externalCategoryFilter={externalCategoryFilter}
+            externalSeverityFilter={externalSeverityFilter}
+            onClearExternalFilter={onClearExternalFilter}
+          />
+          <SubmissionChecklist check={analysisResult.submissionRulesCheck} />
+        </div>
+      )}
+
+      {(activeTab === 'all') && (
         <div className="space-y-6">
           <ContractRisksTable
             risks={analysisResult.contractRisks}

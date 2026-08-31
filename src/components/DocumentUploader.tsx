@@ -48,8 +48,11 @@ import { TokenPriceEstimator } from './TokenPriceEstimator';
 import { DocTypesGuide } from './uploader/DocTypesGuide';
 import { NotesModal } from './uploader/NotesModal';
 import { EisSearchModal } from './uploader/EisSearchModal';
-import { Camera, BookOpen, Info, ShieldCheck, Bookmark, Clock, Play } from 'lucide-react';
+import { Camera, BookOpen, Info, ShieldCheck, Bookmark, Clock, Play, CheckCircle2 } from 'lucide-react';
 import { Tooltip } from './Tooltip';
+import { useAutoSave } from '../hooks/useAutoSave';
+import { AutoSaveIndicator } from './AutoSaveIndicator';
+import { loadActiveSession, clearActiveSession } from '../utils/autoSaveManager';
 
 interface DocumentUploaderProps {
   onAnalyze: (input: AnalysisInput) => void;
@@ -88,11 +91,19 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   onOpenBankGuarantee,
   onOpenAISettings,
 }) => {
+  const initialAutoSave = useRef(loadActiveSession()).current;
+
   const [lawType, setLawType] = useState<'223_FZ' | '44_FZ' | 'COMMERCIAL'>(() => {
+    if (initialAutoSave?.uploaderState?.lawType) {
+      return initialAutoSave.uploaderState.lawType;
+    }
     const saved = localStorage.getItem('selected_law_type');
     return (saved as '223_FZ' | '44_FZ' | 'COMMERCIAL') || '223_FZ';
   });
   const [procedureType, setProcedureType] = useState<ProcedureType>(() => {
+    if (initialAutoSave?.uploaderState?.procedureType) {
+      return initialAutoSave.uploaderState.procedureType;
+    }
     const saved = localStorage.getItem('selected_procedure_type');
     if (saved) return saved as ProcedureType;
     const law = localStorage.getItem('selected_law_type');
@@ -100,7 +111,9 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     if (law === 'COMMERCIAL') return 'COMMERCIAL';
     return '223_FZ_QUOTATION';
   });
-  const [parsedFiles, setParsedFiles] = useState<ParsedDocument[]>([]);
+  const [parsedFiles, setParsedFiles] = useState<ParsedDocument[]>(() => {
+    return initialAutoSave?.uploaderState?.parsedFiles || [];
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -115,12 +128,57 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   }, [procedureType]);
   
   // Single-window workspace text inputs & modals
-  const [pastedText, setPastedText] = useState('');
-  const [additionalNotes, setAdditionalNotes] = useState('');
+  const [pastedText, setPastedText] = useState(() => {
+    return initialAutoSave?.uploaderState?.pastedText || '';
+  });
+  const [additionalNotes, setAdditionalNotes] = useState(() => {
+    return initialAutoSave?.uploaderState?.additionalNotes || '';
+  });
+  const [userOverridden, setUserOverridden] = useState(() => {
+    return initialAutoSave?.uploaderState?.userOverridden || false;
+  });
   const [previewingFileId, setPreviewingFileId] = useState<string | null>(null);
   const [modalDocument, setModalDocument] = useState<ParsedDocument | null>(null);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [isDraftsModalOpen, setIsDraftsModalOpen] = useState(false);
+
+  // Auto-save integration
+  const {
+    isSaving,
+    lastSavedAt,
+    showRestoredNotice,
+    saveImmediately,
+    clearAutoSaveDraft,
+    dismissRestoredNotice,
+  } = useAutoSave({
+    uploaderState: {
+      lawType,
+      procedureType,
+      parsedFiles,
+      pastedText,
+      additionalNotes,
+      userOverridden,
+    },
+    mode: 'uploader',
+  });
+
+  // Handle in-place document content editing from Viewer Modal
+  const handleDocumentContentChange = (fileId: string, newContent: string) => {
+    setParsedFiles(prev =>
+      prev.map(doc =>
+        doc.id === fileId
+          ? {
+              ...doc,
+              content: newContent,
+              charCount: newContent.length,
+            }
+          : doc
+      )
+    );
+    if (modalDocument && modalDocument.id === fileId) {
+      setModalDocument(prev => prev ? { ...prev, content: newContent, charCount: newContent.length } : null);
+    }
+  };
 
   // Restore a saved draft into the current form workspace
   const handleApplyDraftToForm = (draft: ProcurementDraft) => {
@@ -216,7 +274,6 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
 
   // Automatic Law Type Detection (44-FZ / 223-FZ / Commercial)
   const [autoDetectedInfo, setAutoDetectedInfo] = useState<LawDetectionResult | null>(null);
-  const [userOverridden, setUserOverridden] = useState(false);
 
   // Auto-detect law type when documents or pasted text change
   React.useEffect(() => {
@@ -451,6 +508,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     setPreviewingFileId(null);
     setUserOverridden(false);
     setAutoDetectedInfo(null);
+    clearAutoSaveDraft();
   };
 
   // Compile all loaded documents and text into the unified AnalysisInput with rich legal markers
@@ -667,6 +725,17 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {/* AutoSave Live Indicator */}
+            <AutoSaveIndicator
+              isSaving={isSaving}
+              lastSavedAt={lastSavedAt}
+              onSaveNow={saveImmediately}
+              onClearDraft={() => {
+                handleClearAll();
+              }}
+              hasContent={hasContent}
+            />
+
             {/* SAVED DRAFTS BUTTON */}
             {savedDrafts && savedDrafts.length > 0 && (
               <Tooltip content="Открыть список сохраненных черновиков закупки" position="bottom">
@@ -840,6 +909,51 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           className="hidden"
           onChange={(e) => e.target.files && handleFilesAdded(e.target.files)}
         />
+
+        {/* RESTORED SESSION NOTIFICATION BANNER */}
+        {showRestoredNotice && (hasContent || parsedFiles.length > 0 || pastedText.trim().length > 0) && (
+          <div className="bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-700/60 rounded-2xl p-3.5 sm:p-4 text-emerald-950 dark:text-emerald-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 rounded-xl border border-emerald-500/30 shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-xs sm:text-sm flex items-center gap-2">
+                  <span>Сеанс работы автоматически восстановлен</span>
+                  {lastSavedAt && (
+                    <span className="text-[10px] font-mono bg-emerald-200/60 dark:bg-emerald-900/60 px-2 py-0.5 rounded-md font-semibold">
+                      {new Date(lastSavedAt).toLocaleTimeString('ru-RU')}
+                    </span>
+                  )}
+                </h4>
+                <p className="text-[11px] text-emerald-800 dark:text-emerald-300 mt-0.5">
+                  Восстановлено: {parsedFiles.length > 0 ? `${parsedFiles.length} файл(ов)` : 'параметры закупки'}
+                  {pastedText.trim() ? ', вставленный текст' : ''}
+                  {additionalNotes.trim() ? ', инструкция' : ''}. Вы можете продолжить с того же места.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={dismissRestoredNotice}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              >
+                Продолжить
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleClearAll();
+                  dismissRestoredNotice();
+                }}
+                className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/80 hover:bg-emerald-200 dark:hover:bg-emerald-800 text-emerald-800 dark:text-emerald-200 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+              >
+                Очистить черновик
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* INTERACTIVE GUIDE: DIFFERENCES IN DOCUMENT TYPES AND FORMATS ACROSS 44-FZ, 223-FZ, AND COMMERCIAL TENDERS */}
         <DocTypesGuide lawType={lawType} />
@@ -1217,6 +1331,7 @@ export const DocumentUploader: React.FC<DocumentUploaderProps> = ({
         isOpen={!!modalDocument}
         onClose={() => setModalDocument(null)}
         onCategoryChange={handleCategoryChange}
+        onDocumentContentChange={handleDocumentContentChange}
       />
 
       {/* Saved Drafts List Modal */}

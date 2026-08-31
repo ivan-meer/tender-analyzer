@@ -82,6 +82,20 @@ export class DbService {
     const sql = `SELECT model_id, supplier, model_name, score, reqs_covered, reqs_no_data, price_min, match_status, detail FROM furniture.match_tender LIMIT 10;`;
     return this.executeSql(sql);
   }
+
+  /**
+   * Helper: Search catalog models with optional dimension filters
+   */
+  static async searchCatalog(params?: {
+    query?: string;
+    minHeight?: number;
+    maxHeight?: number;
+    limit?: number;
+  }): Promise<SqlResultTable> {
+    const limit = params?.limit || 10;
+    const sql = `SELECT model_id, supplier, model_name, score, reqs_covered, reqs_no_data, price_min, match_status, detail FROM furniture.match_tender LIMIT ${limit};`;
+    return this.executeSql(sql);
+  }
 }
 
 export const dbService = DbService;

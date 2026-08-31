@@ -1,4 +1,5 @@
 import { AnalysisInput, AnalysisResult, ContractRiskItem, ProductItem } from '../types';
+import { extractIndividualProductsFromText } from './productExtractor';
 
 /**
  * Client-side heuristic and semantic procurement analyzer.
@@ -145,52 +146,13 @@ export function generateClientSideDynamicAnalysis(input: AnalysisInput): Analysi
     deliveryAddresses.push('По адресу Заказчика согласно разделу «Место поставки товара» документации');
   }
 
-  // 6. EXTRACT PRODUCTS FROM SPECIFICATION / TZ
-  const productList: ProductItem[] = [];
-  const lines = `${tzText}\n${contractText}`.split(/\r?\n/);
-  const itemRowRegex = /^(?:\d+[\s.)]|\s*[-*•])\s*([А-Яа-яA-Za-z0-9\s«"'_/-]{4,100})\s*[,;:]?\s*(\d+[\s.,]*\d*)\s*(шт|компл|ед|м|пог\.м|кг|т|упак|пар|набор|л|усл|порц|кв\.м)/i;
-
-  for (const line of lines) {
-    if (productList.length >= 10) break;
-    const trimmed = line.trim();
-    if (trimmed.length < 6 || trimmed.length > 300) continue;
-
-    const rowMatch = trimmed.match(itemRowRegex);
-    if (rowMatch) {
-      const prodName = rowMatch[1].trim();
-      const qty = `${rowMatch[2]} ${rowMatch[3]}`.trim();
-      if (prodName.length > 3 && !productList.some(p => p.name === prodName)) {
-        productList.push({
-          id: `prod-dyn-${productList.length + 1}`,
-          name: prodName,
-          quantity: qty,
-          dimensions: 'По техническому заданию',
-          specification: trimmed,
-          parameters: [
-            { name: 'Наименование', value: prodName },
-            { name: 'Количество', value: qty }
-          ],
-          okpd2OrGvin: is44FZ ? 'По КТРУ / ОКПД2' : 'По классификатору',
-          pp1875Status: is44FZ ? 'RUSSIAN_REQUIRED' : 'NOT_APPLICABLE',
-          registryNumberNote: is44FZ ? 'Требуется проверка по реестру ГИСП / РЭП (ПП РФ № 1875)' : 'Согласно требованиям документации'
-        });
-      }
-    }
-  }
-
-  if (productList.length === 0) {
-    productList.push({
-      id: 'prod-dyn-1',
-      name: extractedTitle,
-      quantity: '1 комплект / по спецификации',
-      dimensions: 'Согласно приложению к контракту',
-      specification: `Поставка продукции по предмету: ${extractedTitle}. Требования к качеству и ГОСТ по ТЗ.`,
-      parameters: [{ name: 'Объект закупки', value: extractedTitle }],
-      okpd2OrGvin: is44FZ ? 'КТРУ / ОКПД2' : 'По номенклатуре',
-      pp1875Status: is44FZ ? 'RUSSIAN_REQUIRED' : 'NOT_APPLICABLE',
-      registryNumberNote: 'Проверка реестровых номеров Минпромторга (ПП 1875 / ПП 616 / ПП 878)'
-    });
-  }
+  // 6. EXTRACT PRODUCTS FROM SPECIFICATION / TZ / CONTRACT TABLES
+  const combinedTzAndContract = `${tzText}\n\n${contractText}\n\n${documentationText}`;
+  const productList: ProductItem[] = extractIndividualProductsFromText(
+    combinedTzAndContract,
+    is44FZ,
+    extractedTitle
+  );
 
   // 7. EXTRACT REAL CONTRACT RISKS & PENALTIES
   const contractRisks: ContractRiskItem[] = [];

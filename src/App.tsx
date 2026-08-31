@@ -83,6 +83,8 @@ export default function App() {
   // 5. Multi-format Document Exports (Logic hook)
   const {
     isExportingPdf,
+    pdfSuccessMessage,
+    setPdfSuccessMessage,
     isExportingGoogleDocs,
     isExportingGoogleSheets,
     googleDocsSuccessUrl,
@@ -346,6 +348,9 @@ export default function App() {
             onRiskSectorClick={handleRiskSectorClick}
             onClearExternalFilter={clearExternalFilters}
             isExportingPdf={isExportingPdf}
+            pdfSuccessMessage={pdfSuccessMessage}
+            onClearPdfSuccess={() => setPdfSuccessMessage(null)}
+            onDownloadPdf={() => handleExportPdf(false)}
             isExportingGoogleDocs={isExportingGoogleDocs}
             isExportingGoogleSheets={isExportingGoogleSheets}
             googleDocsSuccessUrl={googleDocsSuccessUrl}
@@ -472,6 +477,8 @@ export default function App() {
         isExportingPdf={isExportingPdf}
         isExportingGoogleDocs={isExportingGoogleDocs}
         isExportingGoogleSheets={isExportingGoogleSheets}
+        googleDocsSuccessUrl={googleDocsSuccessUrl}
+        googleSheetsSuccessUrl={googleSheetsSuccessUrl}
         onDownloadPdf={handleExportPdf}
         onExportTxt={handleExportTxt}
         onExportGoogleDocs={handleExportGoogleDocs}

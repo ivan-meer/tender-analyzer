@@ -4,8 +4,10 @@ import { getStoredLLMConfig } from '../utils/aiConfig';
 import { getPresetAnalysisResult } from '../data/presetResults';
 import { auth, saveAnalysisToDb } from '../lib/firebase';
 import { generateClientSideDynamicAnalysis } from '../utils/dynamicAnalysis';
+import { extractIndividualProductsFromText, isGenericUmbrellaName } from '../utils/productExtractor';
+import { loadActiveSession, saveActiveSession, clearActiveSession } from '../utils/autoSaveManager';
 
-export type ReportTab = 'all' | 'overview' | 'spec' | 'risks' | 'workflow' | 'templates';
+export type ReportTab = 'all' | 'overview' | 'insights' | 'spec' | 'risks' | 'workflow' | 'templates';
 
 const DRAFTS_STORAGE_KEY = 'saved_procurement_drafts';
 
@@ -44,13 +46,40 @@ export function useAnalysis() {
   const [savedDraftNotification, setSavedDraftNotification] = useState<string | null>(null);
   const [savedDrafts, setSavedDrafts] = useState<ProcurementDraft[]>(() => getStoredDrafts());
 
-  const [activeProcedureType, setActiveProcedureType] = useState<ProcedureType>('223_FZ_QUOTATION');
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const initialSession = useRef(loadActiveSession()).current;
+
+  const [activeProcedureType, setActiveProcedureType] = useState<ProcedureType>(
+    () => initialSession?.uploaderState?.procedureType || '223_FZ_QUOTATION'
+  );
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    () => initialSession?.analysisState?.result || null
+  );
   const [error, setError] = useState<string | null>(null);
-  const [lastInput, setLastInput] = useState<AnalysisInput | null>(null);
-  const [activeTab, setActiveTab] = useState<ReportTab>('all');
+  const [lastInput, setLastInput] = useState<AnalysisInput | null>(
+    () => initialSession?.analysisState?.lastInput || null
+  );
+  const [activeTab, setActiveTab] = useState<ReportTab>(
+    () => (initialSession?.analysisState?.activeTab as ReportTab) || 'all'
+  );
   const [externalCategoryFilter, setExternalCategoryFilter] = useState<string | null>(null);
   const [externalSeverityFilter, setExternalSeverityFilter] = useState<string | null>(null);
+
+  // Auto-sync completed analysis or active report tab state to active session
+  useEffect(() => {
+    if (analysisResult) {
+      const currentSession = loadActiveSession();
+      saveActiveSession({
+        ...currentSession,
+        mode: 'analysis',
+        analysisState: {
+          result: analysisResult,
+          activeTab,
+          lastInput,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+  }, [analysisResult, activeTab, lastInput]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const timerIntervalRef = useRef<any>(null);
@@ -363,6 +392,27 @@ export function useAnalysis() {
         data = generateClientSideDynamicAnalysis(enrichedInput);
       }
 
+      // Guarantee product parsing quality: if productList is empty or collapsed into 1 generic umbrella item (e.g., "Офисная мебель"),
+      // extract the actual individual items from the provided documents and specifications.
+      if (
+        data &&
+        (!data.productList ||
+          data.productList.length === 0 ||
+          (data.productList.length === 1 &&
+            (isGenericUmbrellaName(data.productList[0]?.name || '') ||
+              data.productList[0]?.name === data.summary?.procurementTitle)))
+      ) {
+        const fullCorpus = `${input.tzText || ''}\n\n${input.contractText || ''}\n\n${input.documentationText || ''}`;
+        const recoveredProducts = extractIndividualProductsFromText(
+          fullCorpus,
+          is44FZ,
+          data.summary?.procurementTitle || 'Офисная мебель'
+        );
+        if (recoveredProducts.length > 0) {
+          data.productList = recoveredProducts;
+        }
+      }
+
       setAnalysisResult(data);
       setActiveTab('all');
 
@@ -439,6 +489,11 @@ export function useAnalysis() {
 
   const resetAnalysis = () => {
     setAnalysisResult(null);
+    setError(null);
+    setLastInput(null);
+    setActiveTab('all');
+    clearExternalFilters();
+    clearActiveSession();
   };
 
   return {

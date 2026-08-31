@@ -79,6 +79,8 @@ interface AppModalsProps {
   isExportingPdf: boolean;
   isExportingGoogleDocs: boolean;
   isExportingGoogleSheets: boolean;
+  googleDocsSuccessUrl?: string | null;
+  googleSheetsSuccessUrl?: string | null;
   onDownloadPdf: () => Promise<void> | void;
   onExportTxt: () => void;
   onExportGoogleDocs: () => Promise<void> | void;
@@ -128,6 +130,8 @@ export const AppModals: React.FC<AppModalsProps> = ({
   isExportingPdf,
   isExportingGoogleDocs,
   isExportingGoogleSheets,
+  googleDocsSuccessUrl,
+  googleSheetsSuccessUrl,
   onDownloadPdf,
   onExportTxt,
   onExportGoogleDocs,
@@ -216,7 +220,7 @@ export const AppModals: React.FC<AppModalsProps> = ({
         initialNmck={analysisResult ? 4250000 : 3500000}
       />
 
-      {/* PDF Report Preview Modal */}
+      {/* PDF & Multi-format Report Preview Modal */}
       <PdfReportPreviewModal
         isOpen={isPdfPreviewOpen}
         onClose={onClosePdfPreview}
@@ -228,6 +232,8 @@ export const AppModals: React.FC<AppModalsProps> = ({
         isExportingPdf={isExportingPdf}
         isExportingGoogleDocs={isExportingGoogleDocs}
         isExportingGoogleSheets={isExportingGoogleSheets}
+        googleDocsSuccessUrl={googleDocsSuccessUrl}
+        googleSheetsSuccessUrl={googleSheetsSuccessUrl}
       />
 
       {/* Customer Reliability INN Verification Modal */}

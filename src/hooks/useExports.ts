@@ -1,26 +1,34 @@
 import { useState } from 'react';
 import { AnalysisResult } from '../types';
-import { generatePdfReport } from '../utils/pdfGenerator';
+import { generatePdfReport, captureAndDownloadElementPdf } from '../utils/pdfGenerator';
 import { exportReportToGoogleDocs } from '../lib/googleDocsExport';
 import { exportReportToGoogleSheets } from '../lib/googleSheetsExport';
 
 export function useExports(analysisResult: AnalysisResult | null) {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfSuccessMessage, setPdfSuccessMessage] = useState<string | null>(null);
   const [isExportingGoogleDocs, setIsExportingGoogleDocs] = useState(false);
   const [googleDocsSuccessUrl, setGoogleDocsSuccessUrl] = useState<string | null>(null);
   const [isExportingGoogleSheets, setIsExportingGoogleSheets] = useState(false);
   const [googleSheetsSuccessUrl, setGoogleSheetsSuccessUrl] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  const handleExportPdf = async () => {
+  const handleExportPdf = async (captureDom = false) => {
     if (!analysisResult) return;
     setIsExportingPdf(true);
     setExportError(null);
+    setPdfSuccessMessage(null);
     try {
-      await generatePdfReport(analysisResult, 'Отчет_223_ФЗ');
+      if (captureDom) {
+        await captureAndDownloadElementPdf('analysis-results-section', analysisResult, 'Аудит_Закупки');
+      } else {
+        await generatePdfReport(analysisResult, 'Аудит_Закупки');
+      }
+      setPdfSuccessMessage('PDF-отчет успешно сформирован и загружен!');
+      setTimeout(() => setPdfSuccessMessage(null), 5000);
     } catch (err: any) {
       console.error('PDF export error:', err);
-      setExportError('Ошибка при формировании PDF файла. Попробуйте еще раз.');
+      setExportError(`Ошибка при формировании PDF файла: ${err.message || err}`);
     } finally {
       setIsExportingPdf(false);
     }
@@ -64,9 +72,11 @@ export function useExports(analysisResult: AnalysisResult | null) {
     if (!analysisResult) return;
 
     const summary = analysisResult.summary;
-    const reportText = `ОТЧЕТ ПО АНАЛИЗУ ЗАКУПКИ ПО 223-ФЗ
+    const reportText = `ОТЧЕТ ПО АНАЛИЗУ ЗАКУПКИ (${summary.is223FZ ? '223-ФЗ' : '44-ФЗ'})
 =========================================
 Наименование: ${summary.procurementTitle}
+Заказчик: ${summary.customerName || '—'}
+НМЦК: ${summary.procurementSum || '—'}
 Индекс риска: ${summary.overallRiskScore} / 100
 Уровень риска: ${summary.riskLevel}
 Резюме: ${summary.keyTakeaway}
@@ -102,7 +112,7 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Отчет_223_ФЗ_${new Date().toISOString().slice(0, 10)}.txt`;
+    link.download = `Аудит_${summary.is223FZ ? '223_ФЗ' : '44_ФЗ'}_${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -111,6 +121,8 @@ ${i + 1}. [${r.severity}] ${r.title} (${r.clauseNumber || 'Б/Н'})
 
   return {
     isExportingPdf,
+    pdfSuccessMessage,
+    setPdfSuccessMessage,
     isExportingGoogleDocs,
     isExportingGoogleSheets,
     googleDocsSuccessUrl,
